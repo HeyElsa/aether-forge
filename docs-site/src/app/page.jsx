@@ -1,6 +1,42 @@
 import Link from "next/link";
 
 function WaveBackground() {
+  // Generate 14 wave lines. Each line uses SMIL <animate> on its `d`
+  // attribute to actually morph the wave shape over time (peaks shift
+  // along the curve), producing organic flow rather than slide-translate.
+  const lines = Array.from({ length: 14 }, (_, i) => {
+    const baseY = 80 + i * 50;
+    const amp = 12 + (i % 4) * 4;     // small amplitudes — 12 to 24px
+    const dur = 22 + (i % 6) * 4;     // long durations — 22 to 42s
+    const phase = (i * 1.7) % 6.28;   // distribute phase
+    return { baseY, amp, dur, phase, idx: i };
+  });
+
+  // Build a list of d-frames per line by rotating the peak/trough
+  // positions through the wave, creating a flowing-water effect.
+  const buildPath = (baseY, amp, t) => {
+    // 5 control points across the width, each oscillating with t
+    const w = 1440;
+    const segs = 6;
+    const pts = [];
+    for (let s = 0; s <= segs; s++) {
+      const x = (s * w) / segs;
+      const y = baseY + amp * Math.sin(t + (s * Math.PI) / 2);
+      pts.push([x, y]);
+    }
+    // smooth quadratic bezier through control points
+    let d = `M${pts[0][0]} ${pts[0][1].toFixed(2)}`;
+    for (let s = 1; s < pts.length; s++) {
+      const [x, y] = pts[s];
+      const [px, py] = pts[s - 1];
+      const cx = (px + x) / 2;
+      const cy = (py + y) / 2;
+      d += ` Q${px.toFixed(2)} ${py.toFixed(2)} ${cx.toFixed(2)} ${cy.toFixed(2)}`;
+    }
+    d += ` T${pts[segs][0]} ${pts[segs][1].toFixed(2)}`;
+    return d;
+  };
+
   return (
     <svg
       aria-hidden="true"
@@ -13,49 +49,44 @@ function WaveBackground() {
         height: "100%",
         zIndex: 0,
         pointerEvents: "none",
-        opacity: 0.6,
       }}
     >
       <defs>
         <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="currentColor" stopOpacity="0" />
-          <stop offset="50%" stopColor="currentColor" stopOpacity="0.5" />
+          <stop offset="50%" stopColor="currentColor" stopOpacity="1" />
           <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
       <g
         stroke="url(#waveGrad)"
         fill="none"
-        strokeWidth="1"
-        style={{ color: "var(--af-wave, #4a4a52)" }}
+        strokeWidth="0.6"
+        strokeLinecap="round"
+        style={{ color: "var(--af-wave, #6a6a72)", opacity: 0.18 }}
       >
-        {Array.from({ length: 18 }).map((_, i) => {
-          const baseY = 180 + i * 32;
-          const amplitude = 18 + (i % 3) * 6;
-          const phase = i * 30;
-          const dur = 14 + (i % 5) * 3;
-          const reverse = i % 2 === 0 ? "normal" : "reverse";
+        {lines.map(({ baseY, amp, dur, phase, idx }) => {
+          // 6 keyframes spread evenly across one full sine cycle
+          const frames = Array.from({ length: 7 }, (_, k) =>
+            buildPath(baseY, amp, phase + (k * 2 * Math.PI) / 6),
+          );
           return (
-            <path
-              key={i}
-              d={`M0 ${baseY} Q360 ${baseY - amplitude} 720 ${baseY} T1440 ${baseY}`}
-              style={{
-                animation: `af-wave-${i % 5} ${dur}s ease-in-out infinite ${reverse}`,
-                transformOrigin: "center",
-                animationDelay: `${-phase * 0.05}s`,
-              }}
-            />
+            <path key={idx} d={frames[0]}>
+              <animate
+                attributeName="d"
+                values={frames.join(";")}
+                dur={`${dur}s`}
+                repeatCount="indefinite"
+                calcMode="spline"
+                keySplines={frames.slice(1).map(() => "0.42 0 0.58 1").join(";")}
+              />
+            </path>
           );
         })}
       </g>
       <style>{`
-        @keyframes af-wave-0 { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-40px); } }
-        @keyframes af-wave-1 { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(50px); } }
-        @keyframes af-wave-2 { 0%, 100% { transform: translateX(-20px); } 50% { transform: translateX(30px); } }
-        @keyframes af-wave-3 { 0%, 100% { transform: translateX(15px); } 50% { transform: translateX(-45px); } }
-        @keyframes af-wave-4 { 0%, 100% { transform: translateX(-30px); } 50% { transform: translateX(20px); } }
-        @media (prefers-color-scheme: dark) { svg[aria-hidden] g { color: #2a2a2e !important; } }
-        @media (prefers-reduced-motion: reduce) { svg[aria-hidden] path { animation: none !important; } }
+        @media (prefers-color-scheme: dark) { svg[aria-hidden] g { color: #3a3a42 !important; opacity: 0.22 !important; } }
+        @media (prefers-reduced-motion: reduce) { svg[aria-hidden] animate { display: none; } }
       `}</style>
     </svg>
   );
