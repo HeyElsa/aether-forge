@@ -549,6 +549,18 @@ class AgentRunner:
 
         class HealthHandler(BaseHTTPRequestHandler):
             def do_GET(self):
+                try:
+                    self._handle()
+                except Exception as error:
+                    try:
+                        self.send_response(500)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"error": str(error)}).encode())
+                    except Exception:
+                        pass
+
+            def _handle(self):
                 path = self.path.split("?")[0]
                 if path == "/health":
                     # Liveness — process responsive
@@ -628,7 +640,7 @@ class AgentRunner:
         - Agent has been started but no tick has run yet (warming up)
         """
         # Halt file
-        halt_path = self.agent_directory / "halt"
+        halt_path = self.artifact_directory / "halt"
         if halt_path.exists():
             return (False, "kill switch active")
 
@@ -648,7 +660,10 @@ class AgentRunner:
     def _prometheus_metrics(self) -> str:
         """Render runner state as Prometheus text exposition format."""
         lines = []
-        artifact = self.bundle.spec.artifact_set_id if self.bundle else "unknown"
+        try:
+            artifact = self.artifacts.agent_spec.get("metadata", {}).get("artifactSetId", "unknown")
+        except Exception:
+            artifact = "unknown"
         env = self.config.environment
         labels = f'{{agent="{artifact}",env="{env}"}}'
 
