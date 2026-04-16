@@ -1,0 +1,203 @@
+# Deploy to Production
+
+Three deployment paths: Docker, Kubernetes, and serverless platforms.
+
+## Docker
+
+Every generated agent has a production-ready `Dockerfile` (multi-stage, non-root user, deep healthcheck on `/ready`).
+
+### Build & run
+
+```bash
+cd my-agent
+docker build -t my-agent:latest .
+
+docker run -d \
+  --name my-agent \
+  -p 8080:8080 \
+  -v $(pwd)/.ows:/app/.ows:ro \
+  -v $(pwd)/memory.db:/app/memory.db \
+  -v $(pwd)/replays:/app/replays \
+  -v $(pwd)/logs:/app/logs \
+  -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  -e OWS_API_KEY=$OWS_API_KEY \
+  my-agent:latest
+```
+
+### docker-compose
+
+The generated `docker-compose.yml` already wires volumes and env vars. Just edit the env block and run:
+
+```bash
+docker-compose up -d
+docker-compose logs -f
+```
+
+### Health check
+
+```bash
+curl localhost:8080/ready
+# {"ready": true, "reason": "ok"}
+
+curl localhost:8080/metrics
+# Prometheus text format
+```
+
+## Kubernetes
+
+Minimal deployment manifest (StatefulSet because we need persistent memory):
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: eth-swing
+spec:
+  serviceName: eth-swing
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eth-swing
+  template:
+    metadata:
+      labels:
+        app: eth-swing
+    spec:
+      containers:
+      - name: agent
+        image: ghcr.io/yourorg/eth-swing:latest
+        ports:
+        - containerPort: 8080
+          name: health
+        - containerPort: 9001
+          name: a2a
+        env:
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agent-secrets
+              key: openrouter-api-key
+        - name: OWS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agent-secrets
+              key: ows-api-key
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        volumeMounts:
+        - name: state
+          mountPath: /app/.ows
+          subPath: ows
+        - name: state
+          mountPath: /app/memory.db
+          subPath: memory.db
+        - name: state
+          mountPath: /app/replays
+          subPath: replays
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+  volumeClaimTemplates:
+  - metadata:
+      name: state
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+```
+
+### Prometheus scrape config
+
+```yaml
+- job_name: aether-agents
+  kubernetes_sd_configs:
+  - role: pod
+  relabel_configs:
+  - source_labels: [__meta_kubernetes_pod_label_app]
+    regex: (.+)
+    action: keep
+  - source_labels: [__meta_kubernetes_pod_container_port_name]
+    regex: health
+    action: keep
+  metrics_path: /metrics
+```
+
+### Secrets
+
+```bash
+kubectl create secret generic agent-secrets \
+  --from-literal=openrouter-api-key=$OPENROUTER_API_KEY \
+  --from-literal=ows-api-key=$OWS_API_KEY
+```
+
+## Serverless
+
+Most serverless platforms (Vercel, Lambda) don't support long-running stateful processes. Options:
+
+### Cron-triggered (Lambda, Vercel Cron)
+
+Run one tick per cron invocation. Persist memory.db to S3/blob storage between runs.
+
+```python
+# lambda_handler.py
+from pathlib import Path
+import boto3
+from aether_forge.runner import AgentRunner, RunnerConfig
+
+s3 = boto3.client("s3")
+
+def handler(event, context):
+    # Pull state
+    s3.download_file("agent-state", "memory.db", "/tmp/memory.db")
+
+    runner = AgentRunner(Path("/var/task/agent"), RunnerConfig(
+        environment="live",
+        memory_db_path="/tmp/memory.db",
+        auto_approve=True,
+    ))
+    runner._initialize()
+    result = runner.tick()
+
+    # Push state back
+    s3.upload_file("/tmp/memory.db", "agent-state", "memory.db")
+
+    return {"statusCode": 200, "body": str(result)}
+```
+
+### Always-on (Railway, Fly.io, Render)
+
+These support long-running containers. Use the standard Dockerfile:
+
+```bash
+fly deploy
+railway up
+```
+
+## Production Checklist
+
+Before going live:
+
+- [ ] `forge security-check . --harden` passes
+- [ ] `OWS_API_KEY` and LLM API keys in secret manager (not env files)
+- [ ] `x402_budget` caps set conservatively
+- [ ] `tick_timeout_seconds` and `circuit_breaker_threshold` configured
+- [ ] `/metrics` scraped by Prometheus
+- [ ] `/ready` wired into load balancer / K8s probe
+- [ ] Encrypted wallet backup stored securely (`forge wallet-backup`)
+- [ ] Alerts on `aether_agent_ready=0` and `aether_ticks_failed_total` rate
+- [ ] PagerDuty / Slack hook for kill switch trigger

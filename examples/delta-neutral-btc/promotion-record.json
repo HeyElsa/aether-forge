@@ -1,0 +1,75 @@
+{
+  "artifactType": "promotion-record",
+  "schemaVersion": "1.0.0",
+  "artifactId": "promo_delta_neutral_btc_paper",
+  "artifactVersion": "0.1.0",
+  "artifactSetId": "aset_delta_neutral_btc_v001",
+  "title": "Promotion Record for Delta Neutral BTC Basis Agent",
+  "generator": {
+    "name": "aether-forge",
+    "version": "0.1.0",
+    "inputDigest": "sha256:delta-neutral-btc-v001"
+  },
+  "compatibility": {
+    "status": "backward-compatible",
+    "previousArtifactVersion": null,
+    "migrationRef": null
+  },
+  "provenance": {
+    "createdAt": "2026-04-06T12:00:00Z",
+    "sourceMode": "manual"
+  },
+  "artifactRefs": [
+    {
+      "artifactType": "agent-spec",
+      "artifactId": "agt_delta_neutral_btc",
+      "artifactVersion": "0.1.0"
+    },
+    {
+      "artifactType": "capability-manifest",
+      "artifactId": "capm_delta_neutral_btc",
+      "artifactVersion": "0.1.0"
+    },
+    {
+      "artifactType": "policy-bundle",
+      "artifactId": "policy_delta_neutral_btc_core",
+      "artifactVersion": "0.1.0"
+    },
+    {
+      "artifactType": "scenario-pack",
+      "artifactId": "scen_delta_neutral_btc",
+      "artifactVersion": "0.1.0"
+    },
+    {
+      "artifactType": "scaffold-manifest",
+      "artifactId": "scaffold_delta_neutral_btc",
+      "artifactVersion": "0.1.0"
+    }
+  ],
+  "evaluationSummary": {
+    "sandbox": "pass",
+    "paperReadiness": "approved"
+  },
+  "promotionDecision": {
+    "sourceEnvironment": "sandbox",
+    "targetEnvironment": "paper",
+    "decisionOutcome": "approved",
+    "approvers": [
+      "founder"
+    ],
+    "policyBundleVersion": "0.1.0",
+    "scenarioPackVersion": "0.1.0",
+    "rolloutLimits": {
+      "maxCapitalExposureUsd": 5000,
+      "allowedVenues": [
+        "binance"
+      ]
+    }
+  },
+  "residualRisks": [],
+  "rolloutPlan": {
+    "steps": [
+      "paper-7d-observation"
+    ]
+  }
+}

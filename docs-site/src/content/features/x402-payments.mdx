@@ -1,0 +1,197 @@
+# x402 Payments
+
+Agents pay each other with real USDC on Base mainnet. **Bidirectional** — agents can both send and receive money.
+
+<video src="/videos/09-x402-payments.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## How x402 Works
+
+The [x402 protocol](https://x402.org) uses HTTP 402 status codes for pay-per-call APIs:
+
+1. Client calls a paid endpoint
+2. Server returns **402** with a price
+3. Client signs an **EIP-3009** `transferWithAuthorization` for USDC
+4. Client retries with `X-PAYMENT` header containing the signed authorization
+5. Server verifies and settles on-chain
+6. Server returns the result
+
+## Sending Payments
+
+```bash
+forge x402-call ./my-agent \
+  --url https://x402-api.heyelsa.ai/api/get_token_price \
+  --confirm-live
+```
+
+```
+Signed EIP-3009 transferWithAuthorization
+Amount: $0.002 USDC on Base
+Status: payment_settled
+Result: {"price_usd": 2249.63}
+```
+
+## Receiving Payments
+
+Agents can gate their capabilities behind prices using `X402PaymentGate`:
+
+```
+POST /premium-analysis (no payment)
+→ 402: $0.005 USDC required
+
+POST /premium-analysis (with X-PAYMENT header)
+→ Verified: address ✓ amount ✓ signature ✓
+→ 200: premium data delivered
+```
+
+## Budget Controls
+
+All payments — to Elsa, to other agents, to anyone — share the same budget system:
+
+```json
+{
+  "x402_budget": {
+    "max_per_call_usd": 0.01,
+    "max_session_usd": 1.00,
+    "max_daily_usd": 5.00
+  }
+}
+```
+
+Budget checks use **atomic file locking** to prevent race conditions.
+
+## Three Payment Channels
+
+| Channel | Use case |
+|---|---|
+| **x402 pay-per-call** | Micropayments per API request |
+| **Direct USDC transfer** | Tips, bounties, flat fees |
+| **ERC-8183 escrow** | Complex jobs with evaluator sign-off |
+
+## Elsa DeFi Endpoints
+
+21 pay-per-call DeFi endpoints on Base:
+
+```bash
+forge elsa-list
+forge elsa-list --category perpetuals
+```
+
+Categories: portfolio, trading, staking, perpetuals, airdrops, gas.
+
+## Payment Flow in Detail
+
+Here's exactly what happens when your agent makes a paid API call:
+
+### 1. Preflight checks
+
+```
+_preflight():
+  ✓ Halt file not present
+  ✓ On-chain USDC balance: 1.991 (sufficient)
+  ✓ Session spent: $0.004 < $1.00 session cap
+  ✓ Daily spent: $0.004 < $5.00 daily cap
+  ✓ --confirm-live flag set
+```
+
+### 2. Initial request (gets 402)
+
+```
+GET https://x402-api.heyelsa.ai/api/get_token_price?token=ETH
+
+HTTP/1.1 402 Payment Required
+X-Payment-Scheme: exact
+X-Payment-Network: eip155:8453
+X-Payment-Amount: 2000          (0.002 USDC in 6-decimal units)
+X-Payment-Address: 0x1234...    (Elsa's wallet)
+X-Payment-Asset: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  (USDC on Base)
+```
+
+### 3. Budget check
+
+```
+Per-call: $0.002 ≤ $0.01 max_per_call ✓
+Session:  $0.006 ≤ $1.00 max_session  ✓
+Daily:    $0.006 ≤ $5.00 max_daily    ✓
+```
+
+### 4. Sign EIP-3009
+
+The agent's OWS wallet signs a `transferWithAuthorization`:
+
+```
+EIP-3009 transferWithAuthorization:
+  from:       0xE8D0...081d5    (agent's wallet)
+  to:         0x1234...         (Elsa's wallet)
+  value:      2000              (0.002 USDC)
+  validAfter: 1713100800        (now)
+  validBefore: 1713104400       (now + 1 hour)
+  nonce:      0x7a2b...9f1e     (random)
+  signature:  0xab12...         (EIP-712 signed)
+```
+
+### 5. Retry with payment
+
+```
+GET https://x402-api.heyelsa.ai/api/get_token_price?token=ETH
+X-PAYMENT: base64(signed_authorization)
+
+HTTP/1.1 200 OK
+{"price_usd": 2249.63, "trend": "bullish", "volume_24h": "12.4B"}
+```
+
+### 6. Audit log
+
+Every payment is appended to `x402_audit.jsonl`:
+
+```json
+{
+  "timestamp": "2026-04-14T10:30:00Z",
+  "url": "https://x402-api.heyelsa.ai/api/get_token_price",
+  "amount_usd": 0.002,
+  "asset": "USDC",
+  "chain": "base",
+  "from": "0xE8D0...081d5",
+  "to": "0x1234...",
+  "status": "settled"
+}
+```
+
+## Setting Up a Payment Gate
+
+To make your agent accept payments from other agents:
+
+```python
+from aether_forge.x402_server import X402PaymentGate
+
+gate = X402PaymentGate(
+    wallet_address="0xE8D0...081d5",
+    prices={
+        "premium-analysis": 0.005,     # $0.005 USDC
+        "get-swap-quote": 0.002,       # $0.002 USDC
+        "basic-price": 0.0,            # Free
+    },
+    chain="base",
+)
+
+# In your A2A task handler:
+if gate.requires_payment("premium-analysis"):
+    if not payment_header:
+        return gate.payment_required_response("premium-analysis")
+    ok, msg = gate.verify_payment(payment_header, "premium-analysis")
+    if not ok:
+        return {"error": msg}
+    gate.record_payment("premium-analysis", 0.005)
+
+# Execute capability and return result
+```
+
+## Supported Chains
+
+| Chain | USDC Contract |
+|---|---|
+| Base | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| Base Sepolia | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| Ethereum | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` |
+| Polygon | `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359` |
+| Arbitrum | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` |
+| Optimism | `0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85` |

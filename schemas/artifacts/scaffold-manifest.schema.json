@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/scaffold-manifest.schema.json",
+  "allOf": [
+    {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "paths",
+        "ownershipZones",
+        "regenerationModes"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "scaffold-manifest"
+        },
+        "paths": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "ownershipZones": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pathPattern",
+              "zoneType",
+              "regenerationMode"
+            ],
+            "properties": {
+              "pathPattern": {
+                "type": "string"
+              },
+              "zoneType": {
+                "type": "string",
+                "enum": [
+                  "generated",
+                  "user-owned",
+                  "protected"
+                ]
+              },
+              "regenerationMode": {
+                "type": "string",
+                "enum": [
+                  "safe-update",
+                  "propose-patch",
+                  "blocked"
+                ]
+              }
+            }
+          }
+        },
+        "regenerationModes": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "safe-update",
+            "propose-patch",
+            "blocked"
+          ],
+          "properties": {
+            "safe-update": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "propose-patch": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "blocked": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,195 @@
+# Memory Architecture
+
+Aether Forge agents have **four typed memory layers** with distinct lifetimes and purposes. The LLM reads three of them in the planning prompt on every tick.
+
+<video src="/videos/06-memory.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## The Four Layers
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Layer 4: KnowledgeStore (MemPalace)    long-term    │
+│  ChromaDB vectors + SQLite temporal knowledge graph  │
+├──────────────────────────────────────────────────────┤
+│  Layer 3: SqliteMemoryStore             durable      │
+│  Typed MemoryRecord rows in memory.db                │
+├──────────────────────────────────────────────────────┤
+│  Layer 2: working_set                   one tick     │
+│  In-process dict: prices, balances, signals          │
+├──────────────────────────────────────────────────────┤
+│  Layer 1: replays/                      forever      │
+│  One JSON file per tick: full step ledger            │
+└──────────────────────────────────────────────────────┘
+```
+
+| Layer | Backend | Lifetime | LLM reads it? | Purpose |
+|---|---|---|---|---|
+| **1 — Replays** | JSON files | Forever | No | Audit trail, replay, crash recovery |
+| **2 — Working set** | In-process dict | One tick | Yes (`## Runtime State`) | "What's true right now?" |
+| **3 — SQLite memory** | `memory.db` | Forever | Yes (`## Memory Context`) | "What did I do and remember?" |
+| **4 — Knowledge** | ChromaDB + SQLite KG | Forever | Yes (`## Knowledge`) | "What have I learned across sessions?" |
+
+## Why All Four?
+
+A swing trader's strategy might contain clauses like:
+
+- *"did not stop out in the last hour"* — needs **Layer 3** (memory of past ticks)
+- *"if RSI > 70, sell"* — needs **Layer 2** (current tick data)
+- *"if I've seen this regime before, weight my decision"* — needs **Layer 4** (cross-session knowledge)
+- *"replay tick 5 to understand what happened"* — needs **Layer 1** (audit log)
+
+Layer 2 alone gets you a stateless reflex agent. Layer 3 adds persistence. Layer 4 adds learning.
+
+## Layer 3 — SQLite Memory
+
+The agent's diary. Tick summaries, observations, anything the LLM chose to remember.
+
+```sql
+SELECT memory_type, summary FROM memory_records;
+-- decision-history | Tick 8: bought 0.001 ETH at $2,249
+-- decision-history | Tick 7: stop-loss not triggered
+-- observation      | ETH momentum shifting bearish
+```
+
+## Layer 4 — MemPalace Knowledge
+
+Semantic vectors + temporal knowledge graph. Cross-session learning.
+
+```sql
+-- Temporal triples with validity windows
+SELECT * FROM triples WHERE subject = 'eth';
+-- eth | price_usd | 2249.63 | 2026-04-10
+-- eth | trend     | bullish | 2026-04-10
+```
+
+**Layer 4 is optional** — install with `pip install 'aether-forge[knowledge]'`. Without it, agents run on Layers 1–3.
+
+## Enabling
+
+```bash
+# With memory only (Layers 1-3)
+forge run ./my-agent --mode paper
+
+# With knowledge layer (all 4 layers)
+forge run ./my-agent --mode paper --knowledge
+```
+
+## How Memory Appears in the LLM Prompt
+
+On every tick, the planner assembles memory into the prompt:
+
+```
+## Runtime State (Layer 2)
+  eth_price: $2,249.63
+  eth_trend: bullish
+  momentum: +0.22%
+  portfolio_balance_usd: $10,127.45
+  open_positions: 1
+
+## Memory Context (Layer 3 — last 10 records)
+  [decision-history] Tick 7: Holding. Position up +1.4%.
+  [decision-history] Tick 6: Tightened stop to $2,175.
+  [decision-history] Tick 5: BUY 0.001 ETH at $2,219.
+  [observation] ETH has been in uptrend for 3 days.
+
+## Knowledge (Layer 4 — MemPalace)
+  eth: trend=bullish since 2026-04-10 (confidence: 0.85)
+  eth: avg_daily_volume=12.4B (updated 2026-04-14)
+  eth: support=2180, resistance=2290
+```
+
+## Writing to Memory
+
+The LLM can write to memory by calling `cap-memory-write`:
+
+```json
+{
+  "tool_calls": [{
+    "name": "cap-memory-write",
+    "arguments": {
+      "content": "Trade #5 closed: +$0.09 profit. Win streak at 3.",
+      "memory_type": "decision-history"
+    }
+  }]
+}
+```
+
+Your strategy can instruct the agent when to write:
+
+```markdown
+## Memory
+- After every trade, record entry/exit prices, P&L, and reasoning
+- If win rate drops below 40%, note this observation
+- Track daily cumulative P&L
+```
+
+## Memory Store Internals
+
+The SQLite schema:
+
+```sql
+CREATE TABLE memory_records (
+  memory_id       TEXT PRIMARY KEY,
+  memory_type     TEXT NOT NULL,     -- decision-history, observation, etc.
+  scope           TEXT,              -- agent, session, global
+  environment     TEXT,              -- sandbox, paper, live
+  content         TEXT NOT NULL,     -- JSON blob
+  summary         TEXT,              -- Human-readable summary
+  source          TEXT,              -- planner, capability, user
+  confidence      REAL DEFAULT 1.0,
+  sensitivity     TEXT DEFAULT 'normal',
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  expires_at      TEXT,              -- Optional TTL
+  tags            TEXT,              -- JSON array
+  metadata        TEXT               -- JSON blob
+);
+```
+
+### Query memory programmatically
+
+```python
+from aether_forge.storage import SqliteMemoryStore, MemoryQuery
+
+store = SqliteMemoryStore("./my-agent/memory.db")
+records = store.read(MemoryQuery(
+    memory_type="decision-history",
+    limit=10,
+    order_by="created_at DESC",
+))
+for r in records:
+    print(f"[{r.created_at}] {r.summary}")
+```
+
+## Knowledge Layer (MemPalace) Internals
+
+Layer 4 combines two backends:
+
+1. **ChromaDB vectors** — semantic similarity search across all stored facts
+2. **SQLite temporal knowledge graph** — subject-predicate-object triples with validity windows
+
+```sql
+-- Temporal triples
+SELECT subject, predicate, object, valid_from, valid_to
+FROM triples
+WHERE subject = 'eth' AND valid_to IS NULL;
+
+-- Results:
+-- eth | price_usd  | 2249.63  | 2026-04-14T10:30:00 | NULL
+-- eth | trend      | bullish  | 2026-04-10T08:00:00 | NULL
+-- eth | support    | 2180     | 2026-04-12T14:00:00 | NULL
+```
+
+**Bitemporal**: facts have both `valid_from`/`valid_to` (when the fact was true) and `recorded_at` (when we learned it). This lets the agent distinguish "ETH was bullish on April 10" from "I learned on April 14 that ETH was bullish on April 10."
+
+## Optional Encryption
+
+Memory records can be encrypted at rest:
+
+```python
+from aether_forge.storage import SqliteMemoryStore, MemoryEncryption
+
+encryption = MemoryEncryption(key="your-fernet-key")
+store = SqliteMemoryStore("./my-agent/memory.db", encryption=encryption)
+# All reads/writes are now AES-encrypted transparently
+```

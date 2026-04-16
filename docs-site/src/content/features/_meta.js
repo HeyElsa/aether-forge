@@ -1,0 +1,15 @@
+export default {
+  "llm-planner": "LLM Planner",
+  "data-layer": "Data Layer",
+  memory: "Memory Architecture",
+  autoresearch: "Autoresearch",
+  "a2a-communication": "A2A Communication",
+  "x402-payments": "x402 Payments",
+  "mcp-integration": "MCP Integration",
+  wallets: "Wallets",
+  "onchain-registry": "On-Chain Registry",
+  attestation: "Attestation & Trust",
+  security: "Security",
+  observability: "Observability",
+  "defi-safety": "DeFi Safety",
+};

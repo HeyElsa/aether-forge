@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType",
+    "artifactId",
+    "artifactVersion"
+  ],
+  "properties": {
+    "artifactType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  }
+}

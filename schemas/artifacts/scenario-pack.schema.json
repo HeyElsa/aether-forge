@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/scenario-pack.schema.json",
+  "allOf": [
+    {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "scenarios",
+        "thresholds"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "scenario-pack"
+        },
+        "scenarios": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "scenarioId",
+              "category",
+              "environmentKind",
+              "inputs",
+              "expectedOutcome",
+              "blockingReasonIds",
+              "metrics",
+              "replayClass"
+            ],
+            "properties": {
+              "scenarioId": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "baseline",
+                  "edge",
+                  "policy-violation",
+                  "incident-regression",
+                  "stress"
+                ]
+              },
+              "environmentKind": {
+                "type": "string"
+              },
+              "inputs": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "expectedOutcome": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "blockingReasonIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "metrics": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "replayClass": {
+                "type": "string",
+                "enum": [
+                  "exactly-replayable",
+                  "approximately-replayable",
+                  "audit-only"
+                ]
+              }
+            }
+          }
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  ]
+}

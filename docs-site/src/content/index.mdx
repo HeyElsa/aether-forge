@@ -1,0 +1,74 @@
+# Aether Forge
+
+Spec-first agent builder framework. **Idea to governed, testable, production-capable agent in one CLI.**
+
+<video src="/videos/17-intro-overview.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+```bash
+# Install from GitHub (not yet on PyPI)
+pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
+
+# Or clone and install locally
+git clone https://github.com/HeyElsa/aether-forge.git
+cd aether-forge
+pip install -e '.[all]'
+```
+
+## What is Aether Forge?
+
+Building autonomous agents today means scattered configs, no policy enforcement, untested deployments, and zero auditability. Moving to production is a leap of faith.
+
+Aether Forge gives every agent a **governed lifecycle**: typed specs, policy-checked execution, scenario-driven evaluation, and evidence-backed promotion from sandbox to production.
+
+Every tick, an LLM re-reads your plain-English strategy, picks from declared capabilities, and emits typed steps the runtime executes against **four layers of memory**.
+
+## Key Features
+
+| Feature | What it does |
+|---|---|
+| **LLM-Driven** | Auto-detect Ollama, Claude, GPT, Gemini, or OpenRouter. Any model, hot-swappable. |
+| **Real Wallets** | OWS across 9 chain families with encrypted AES-256-GCM backups |
+| **A2A Protocol** | Agent-to-agent task delegation via Google's A2A (JSON-RPC over HTTP) |
+| **x402 Payments** | Agents send AND receive USDC on Base mainnet via EIP-3009 |
+| **MCP Tools** | Consume any Model Context Protocol server — filesystem, GitHub, messaging |
+| **On-Chain ID** | ERC-8004 Agent NFT on Base mainnet. 61,000+ agents in the registry |
+| **4-Layer Memory** | Replays, working set, SQLite diary, MemPalace knowledge graph |
+| **Security** | AES-256-GCM backups, prompt injection scanning, kill switch, 8-point audit |
+| **Autoresearch** | Karpathy keep-or-discard loop for runtime strategy self-improvement |
+
+## Quick Example
+
+```bash
+# Generate an agent with a strategy file
+forge generate-fast \
+  --name "ETH Swing Trader" \
+  --strategy-file strategy.md \
+  --wallet --autonomous \
+  --output ./my-agent
+
+# Validate all artifacts
+forge validate ./my-agent
+
+# Paper trade with real prices
+forge run ./my-agent --mode paper --auto-approve --autoresearch
+
+# Go live on Base mainnet
+forge run ./my-agent --mode live --chain base
+```
+
+## Architecture
+
+Every agent action flows through the same governed pipeline:
+
+```
+Planner ──▶ Policy Gate ──▶ Execute ──▶ Step Ledger
+   ^                                        │
+   └──────── loop (max 20 steps) ───────────┘
+```
+
+- **Planner** proposes next steps (LLM-driven by default)
+- **Policy Gate** evaluates rules: environment, notional limits, wallet chains, approvals
+- **Execute** runs the capability via the appropriate router
+- **Ledger** records every step for audit, replay, and resumption
+
+Side-effecting capabilities default to **deny** until policy explicitly allows.

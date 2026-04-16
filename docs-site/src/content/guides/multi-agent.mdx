@@ -1,0 +1,92 @@
+# Multi-Agent Teams
+
+Run multiple agents that coordinate via A2A protocol.
+
+<video src="/videos/15-multi-agent.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Architecture
+
+```
+price-oracle  (port 9001) ──── provides market data
+risk-engine   (port 9002) ──── computes risk scores
+alpha-trader  (port 9003) ──── orchestrates decisions
+```
+
+Each agent has its own wallet, memory, LLM planner, and A2A server.
+
+## Launch a Team
+
+```bash
+# Terminal 1 — Price Oracle
+forge run ./price-oracle --mode paper --a2a-port 9001
+
+# Terminal 2 — Risk Engine
+forge run ./risk-engine --mode paper --a2a-port 9002
+
+# Terminal 3 — Alpha Trader (orchestrator)
+forge run ./alpha-trader --mode paper --a2a-port 9003
+```
+
+Or use a launch script:
+
+```python
+import subprocess
+
+agents = [
+    ("./price-oracle", 9001),
+    ("./risk-engine", 9002),
+    ("./alpha-trader", 9003),
+]
+
+procs = []
+for path, port in agents:
+    p = subprocess.Popen([
+        "forge", "run", path,
+        "--mode", "paper",
+        "--auto-approve",
+        "--a2a-port", str(port),
+    ])
+    procs.append(p)
+
+for p in procs:
+    p.wait()
+```
+
+## Agent Communication
+
+The alpha-trader queries peers via A2A:
+
+```bash
+# Get price from oracle
+forge agent-send http://localhost:9001 \
+  --capability get-token-price \
+  --payload '{"token":"ETH"}'
+
+# Get risk score
+forge agent-send http://localhost:9002 \
+  --capability risk-score \
+  --payload '{"token":"ETH","side":"buy"}'
+```
+
+Each message is **EIP-712 signed** — the receiver verifies the sender's wallet address.
+
+## Paid Inter-Agent Queries
+
+Agents can charge for premium capabilities using x402:
+
+```
+alpha-trader → price-oracle: GET /x402/premium-analysis
+  → 402: $0.005 USDC required
+  → Signs EIP-3009, pays on Base
+  → 200: premium data delivered
+```
+
+See [Accept Payments](/docs/guides/accept-payments) for setup details.
+
+## Discovery
+
+Agents discover each other through:
+
+1. **Direct URL** — `http://localhost:9001`
+2. **Local registry** — `forge agent-list`
+3. **On-chain registry** — `forge agent-discover --capability get-token-price`

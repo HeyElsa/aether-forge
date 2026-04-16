@@ -1,0 +1,249 @@
+# Build a Custom Agent
+
+This guide walks through building a fully customized agent from scratch — choosing your LLM, writing a strategy, configuring data sources, adding MCP tools, and tuning risk.
+
+<video src="/videos/03-agent-generation.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+> **Note:** Aether Forge is not yet on PyPI. Install from GitHub first:
+> ```bash
+> pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
+> ```
+
+## 1. Write Your Strategy
+
+Create a `strategy.md` file in plain English. The LLM re-reads this on **every tick**.
+
+```markdown
+# SOL Momentum Scalper
+
+## Objective
+Scalp SOL on 1-minute momentum bursts.
+Use Elsa for premium price data.
+
+## Entry (all must be true)
+- 1-min candle closes bullish
+- Volume > 1.5x 20-period average
+- RSI between 40 and 70
+
+## Exit
+- +1.5% take profit (tight scalp)
+- -0.8% hard stop
+
+## Risk
+- Max 15% portfolio per trade
+- 4-loss streak -> halt & notify
+```
+
+No DSL. No code. Write what you'd tell a human trader.
+
+## 2. Generate with Custom Flags
+
+```bash
+forge generate-fast \
+  --name sol-scalper \
+  --idea "SOL momentum scalper" \
+  --strategy-file strategy.md \
+  --wallet --autonomous \
+  --planner-mode openrouter \
+  --model deepseek/deepseek-r1 \
+  --output ./sol-scalper
+```
+
+Key flags:
+- `--planner-mode` — force a specific LLM provider (`ollama`, `anthropic`, `openai`, `google`, `openrouter`)
+- `--model` — specify the exact model name
+- `--wallet` — provision a real OWS wallet (9 chains)
+- `--autonomous` — enable autonomous decision-making
+- `--no-registry` — skip local registry if you want zero tracking
+
+## 3. Customize `aether-forge.json`
+
+This is your agent's cockpit. Every runtime knob lives here.
+
+```json
+{
+  "planner": {
+    "mode": "openrouter",
+    "model": "deepseek/deepseek-r1",
+    "temperature": 0.3
+  },
+  "tick_interval_seconds": 30,
+  "chain": "base",
+  "x402_budget": {
+    "max_per_call_usd": 0.01,
+    "max_session_usd": 1.00,
+    "max_daily_usd": 5.00
+  },
+  "autoresearch": true
+}
+```
+
+### Swap models without rebuilding
+
+Edit the `planner` block or pass flags at runtime:
+
+```bash
+# Use Claude for complex decisions
+forge run . --planner-mode anthropic --model claude-sonnet-4.5
+
+# Switch to local Ollama (free, private)
+forge run . --planner-mode ollama --model gemma4:latest
+
+# Use any OpenRouter model
+forge run . --planner-mode openrouter --model meta-llama/llama-4-maverick
+```
+
+Same agent. Same strategy. Different brain.
+
+## 4. Add Data Sources
+
+Configure the DataRouter fallback chain. First success wins.
+
+```json
+{
+  "data_sources": [
+    {
+      "name": "elsa",
+      "type": "x402",
+      "priority": 1
+    },
+    {
+      "name": "binance",
+      "type": "http",
+      "url": "https://api.binance.com",
+      "priority": 2
+    },
+    {
+      "name": "coingecko",
+      "type": "http",
+      "url": "https://api.coingecko.com/api/v3",
+      "priority": 3
+    }
+  ]
+}
+```
+
+- **Elsa** (x402) — richest data, costs $0.002/call
+- **Binance** (HTTP) — free, high availability
+- **CoinGecko** (HTTP) — free backup
+
+Cost is tracked per source: `router.cost_summary()`.
+
+## 5. Wire MCP Servers
+
+Add any MCP-compatible tool server. One config line per server.
+
+```json
+{
+  "mcp_servers": {
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" }
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": { "DATABASE_URL": "${DATABASE_URL}" }
+    }
+  }
+}
+```
+
+Verify with `forge doctor` — it probes each server and reports tool counts.
+
+### Tool Filtering
+
+Scope an agent to exactly the tools it needs:
+
+```json
+{
+  "mcp_servers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "tools": {
+        "include": ["list_issues", "create_issue"]
+      }
+    }
+  }
+}
+```
+
+Filtered tools are invisible to the planner.
+
+## 6. Tune Policy & Risk
+
+Edit `policy-bundle.json` to set guardrails:
+
+```json
+{
+  "risk_limits": {
+    "max_position_pct": 15,
+    "max_drawdown_pct": 5,
+    "loss_streak_halt": 4,
+    "max_daily_trades": 20
+  },
+  "environment_gates": {
+    "paper": ["market-read", "order-sim"],
+    "live":  ["market-read", "order-real"]
+  },
+  "approval_required": [
+    "order-real"
+  ]
+}
+```
+
+- **Environment gates** — restrict which capabilities are available per mode
+- **Approval required** — specific capabilities need human sign-off
+- **Risk limits** — position sizing, drawdown, loss streak halts
+
+## 7. Paper Trade
+
+```bash
+forge run ./sol-scalper --mode paper \
+  --auto-approve --autoresearch \
+  --knowledge --a2a-port 9001
+```
+
+```
+sol-scalper
+Planner: openrouter / deepseek-r1
+Environment: paper | A2A: :9001
+
+[  ok] Tick 1: RSI=55, vol=1.8x → BUY
+[  ok] Tick 2: +0.6%, holding
+[  ok] Tick 3: +1.5% target hit → SELL
+
+Portfolio: $10,148.20 (+$148.20)
+```
+
+## 8. Review & Iterate
+
+```bash
+forge strategy view ./sol-scalper
+```
+
+The agent grades itself on win rate, drawdown, and avg win/loss. With `--autoresearch`, it proposes parameter changes:
+
+```bash
+# Accept an improvement proposal
+forge strategy accept prop_d4e5f6
+
+# Or reject it
+forge strategy reject prop_d4e5f6
+```
+
+Safety bounds are enforced — the agent can't propose position sizes above 25% or stop losses above 20%.
+
+## 9. Go Live
+
+```bash
+forge run ./sol-scalper --mode live --chain base --a2a-port 9001
+```
+
+Same strategy, same LLM, same risk limits. Now with real USDC on Base.

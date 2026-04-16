@@ -1,0 +1,56 @@
+{
+  "artifactType": "scaffold-manifest",
+  "schemaVersion": "1.0.0",
+  "artifactId": "scaffold_delta_neutral_btc",
+  "artifactVersion": "0.1.0",
+  "artifactSetId": "aset_delta_neutral_btc_v001",
+  "title": "Delta Neutral BTC Scaffold Manifest",
+  "generator": {
+    "name": "aether-forge",
+    "version": "0.1.0",
+    "inputDigest": "sha256:delta-neutral-btc-v001"
+  },
+  "compatibility": {
+    "status": "backward-compatible",
+    "previousArtifactVersion": null,
+    "migrationRef": null
+  },
+  "provenance": {
+    "createdAt": "2026-04-06T12:00:00Z",
+    "sourceMode": "fast"
+  },
+  "paths": {
+    "root": ".",
+    "generated": "src/generated",
+    "policies": "src/policies",
+    "docs": "docs"
+  },
+  "ownershipZones": [
+    {
+      "pathPattern": "src/generated/**",
+      "zoneType": "generated",
+      "regenerationMode": "safe-update"
+    },
+    {
+      "pathPattern": "src/policies/**",
+      "zoneType": "user-owned",
+      "regenerationMode": "propose-patch"
+    },
+    {
+      "pathPattern": "src/runtime/**",
+      "zoneType": "protected",
+      "regenerationMode": "blocked"
+    }
+  ],
+  "regenerationModes": {
+    "safe-update": [
+      "src/generated/**"
+    ],
+    "propose-patch": [
+      "src/policies/**"
+    ],
+    "blocked": [
+      "src/runtime/**"
+    ]
+  }
+}

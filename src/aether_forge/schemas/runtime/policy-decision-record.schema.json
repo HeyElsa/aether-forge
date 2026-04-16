@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/runtime/policy-decision-record.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decisionId",
+    "policyBundleVersion",
+    "inputScope",
+    "ruleMatches",
+    "severity",
+    "approvalPath",
+    "finalDisposition"
+  ],
+  "properties": {
+    "decisionId": {
+      "type": "string"
+    },
+    "policyBundleVersion": {
+      "type": "string"
+    },
+    "inputScope": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "ruleMatches": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ]
+    },
+    "approvalPath": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "finalDisposition": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny",
+        "hold"
+      ]
+    }
+  }
+}

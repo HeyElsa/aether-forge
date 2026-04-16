@@ -1,0 +1,150 @@
+# Build a Discord Bot Agent
+
+Combine an Aether Forge agent with the Hermes MCP server to build a Discord bot that responds with LLM-driven decisions.
+
+## Architecture
+
+```
+User → Discord → Hermes Agent → MCP server → Aether Forge agent
+```
+
+Hermes Agent is a messaging gateway that exposes Discord (and 14 other platforms) as MCP tools. Your agent declares Hermes as an MCP server and calls `messages_send` / `messages_list` tools.
+
+## 1. Install Hermes
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+hermes login discord
+hermes accounts list
+```
+
+## 2. Create the agent
+
+```bash
+forge generate-fast \
+  --name discord-helper \
+  --idea "Discord bot that answers crypto questions using market data" \
+  --strategy-file strategy.md \
+  --planner-mode openrouter \
+  --planner-model anthropic/claude-sonnet-4 \
+  --output ./discord-helper
+```
+
+## 3. Wire Hermes as MCP
+
+Edit `discord-helper/aether-forge.json`:
+
+```json
+{
+  "planner": {
+    "mode": "openrouter",
+    "model": "anthropic/claude-sonnet-4"
+  },
+  "mcp_servers": {
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+## 4. Strategy: respond to mentions
+
+`discord-helper/strategy.md`:
+
+```markdown
+# Discord Crypto Helper
+
+## Mission
+Monitor my Discord channel #crypto. When someone mentions @me or asks a question
+about ETH/BTC/SOL prices, respond with current market data.
+
+## Workflow each tick
+1. Call `messages_list` with platform=discord, channel=#crypto, since=last_tick
+2. For each new message that mentions me OR contains "?":
+   - Identify the token mentioned (ETH, BTC, SOL)
+   - Call `cap-market-btc-price` to get current data
+   - Compose a helpful response
+   - Call `messages_send` to reply
+
+## Rules
+- Never send more than 5 messages per minute
+- Never respond to bots
+- If price data is unavailable, say "data not available right now"
+- Keep responses under 280 characters
+
+## Memory
+- Track which messages I've already responded to (don't double-reply)
+- Remember user preferences (e.g., "@user prefers prices in EUR")
+```
+
+## 5. Run
+
+```bash
+forge run ./discord-helper --mode paper --auto-approve --interval 30 \
+  --planner-mode openrouter --planner-model anthropic/claude-sonnet-4
+```
+
+The agent now polls Discord every 30 seconds and responds to mentions.
+
+## 6. Verify with `forge doctor`
+
+```bash
+forge doctor ./discord-helper/aether-forge.json
+```
+
+```
+[  ok] MCP server [hermes]: 10 tools available (stdio)
+```
+
+## Adding cost control
+
+If responses use a paid LLM, cap daily spend. Edit `aether-forge.json`:
+
+```json
+{
+  "x402_budget": {
+    "max_per_call_usd": 0.01,
+    "max_session_usd": 1.00,
+    "max_daily_usd": 5.00
+  }
+}
+```
+
+The framework tracks LLM cost in `x402_state.json` and refuses calls past the cap.
+
+## Adding personality
+
+Add to `strategy.md`:
+
+```markdown
+## Voice
+- Friendly but concise
+- Use emojis sparingly (one per message max)
+- Quote actual numbers, not "high" or "low"
+- Sign off with "—" if the conversation feels done
+```
+
+## Production deploy
+
+1. Wrap Hermes credentials and OPENROUTER_API_KEY as secrets
+2. Use the generated `Dockerfile`
+3. Set `--health-port 8080` and monitor `/ready`
+4. Add a kill switch alert: if `forge halt` triggers, page someone
+
+```bash
+docker run -d \
+  -e HERMES_TOKEN=$HERMES_TOKEN \
+  -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  -p 8080:8080 \
+  -v $(pwd)/.ows:/app/.ows \
+  -v $(pwd)/memory.db:/app/memory.db \
+  discord-helper
+```
+
+## Variants
+
+- **Telegram trading alerts** — same pattern, swap `discord` → `telegram` in strategy
+- **Slack ops bot** — respond to `/incident` slash commands
+- **Whatsapp DCA reminder** — daily ping when it's time to buy

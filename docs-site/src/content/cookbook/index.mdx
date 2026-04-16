@@ -1,0 +1,61 @@
+# Cookbook
+
+Practical recipes for common tasks. Each recipe is self-contained — copy, adapt, run.
+
+## Recipes
+
+- [**Deploy to Production**](/docs/cookbook/deployment) — Docker, Vercel, K8s
+- [**Test a Strategy**](/docs/cookbook/test-strategy) — Replay scenarios without real ticks
+- [**Add a Custom Data Source**](/docs/cookbook/custom-data-source) — Wire your own API or feed
+- [**Trigger from a Webhook**](/docs/cookbook/webhook-trigger) — Run an agent on external events
+- [**Build a Discord Bot Agent**](/docs/cookbook/discord-bot) — Full example using Hermes MCP
+
+## Quick Snippets
+
+### Run an agent for one tick from Python
+
+```python
+from pathlib import Path
+from aether_forge.runner import AgentRunner, RunnerConfig
+
+runner = AgentRunner(Path("./my-agent"), RunnerConfig(environment="paper", auto_approve=True))
+runner._initialize()
+result = runner.tick()
+print(result)
+```
+
+### Read the last 10 decisions
+
+```bash
+sqlite3 my-agent/memory.db \
+  "SELECT created_at, summary FROM memory_records WHERE memory_type='decision-history' ORDER BY created_at DESC LIMIT 10"
+```
+
+### Halt all agents instantly
+
+```bash
+for d in agents/*/; do forge halt "$d"; done
+```
+
+### Get current wallet balance
+
+```bash
+ETH_ADDRESS=$(jq -r '.addresses.evm' my-agent/wallet.json)
+curl -s "https://mainnet.base.org" \
+  -H "Content-Type: application/json" \
+  -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBalance\",\"params\":[\"$ETH_ADDRESS\",\"latest\"],\"id\":1}" \
+  | jq -r '.result' | xargs printf "%d wei\n"
+```
+
+### Watch agent live
+
+```bash
+# Terminal 1
+forge run ./my-agent --mode paper --health-port 8080 --json-log /tmp/agent.jsonl
+
+# Terminal 2
+watch -n 1 'curl -s localhost:8080/status | jq'
+
+# Terminal 3
+tail -f /tmp/agent.jsonl | jq -c '{ts:.timestamp, lvl:.level, msg:.message}'
+```

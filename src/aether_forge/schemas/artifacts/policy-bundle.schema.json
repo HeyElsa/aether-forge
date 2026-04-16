@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/policy-bundle.schema.json",
+  "allOf": [
+    {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "bundleName",
+        "defaultAction",
+        "rules"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "policy-bundle"
+        },
+        "bundleName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defaultAction": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny",
+            "hold"
+          ]
+        },
+        "rules": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "maxNotionalUsd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "walletAllowedChains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "maxWalletTransferAmount": {
+              "type": "number",
+              "minimum": 0
+            },
+            "requireApprovalEnvironments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requireWalletApprovalEnvironments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "enforceStalenessChecks": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

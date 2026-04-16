@@ -1,0 +1,109 @@
+# DeFi Safety
+
+For agents handling real money on-chain, Aether Forge ships safety primitives in `aether_forge.defi_safety`.
+
+## Transaction Simulation
+
+Before signing any tx, simulate it via `eth_call` to catch reverts:
+
+```python
+from aether_forge.defi_safety import simulate_tx
+
+result = simulate_tx(
+    rpc_url="https://mainnet.base.org",
+    from_address="0xE8D0...081d5",
+    to_address="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # USDC
+    data="0xa9059cbb...",  # transfer calldata
+)
+
+if not result.success:
+    print(f"Tx would revert: {result.revert_reason}")
+    # Don't sign!
+```
+
+Catches: reverts, out-of-gas, broken contract state, incorrect calldata.
+
+## Slippage Protection
+
+Verify swap quotes before executing:
+
+```python
+from aether_forge.defi_safety import SwapQuote, check_slippage
+
+quote = SwapQuote(
+    token_in="ETH", token_out="USDC",
+    amount_in=10**18, amount_out=2_300_000_000,
+    min_amount_out=2_277_000_000,  # 1% slippage
+    price_impact_pct=0.5,
+)
+
+result = check_slippage(quote, max_slippage_pct=1.0, max_price_impact_pct=3.0)
+if not result.safe:
+    print(f"Refusing swap: {result.reason}")
+```
+
+Two checks:
+1. **min_amount_out tolerance** — quoted vs minimum acceptable
+2. **price_impact** — how much this trade moves the market
+
+## Exposure Tracking
+
+Limit concentration risk across protocols and tokens:
+
+```python
+from aether_forge.defi_safety import ExposureTracker
+
+tracker = ExposureTracker(
+    max_per_protocol_pct=30.0,
+    max_per_token_pct=50.0,
+)
+
+tracker.record_position("aave", 5000)
+tracker.record_position("compound", 3000)
+tracker.record_position("ETH", 4000)
+tracker.record_position("USDC", 4000)
+
+# Before opening a new position
+allowed, reason = tracker.check_concentration("aave", 2000, is_protocol=True)
+if not allowed:
+    print(reason)  # "would put 50.0% in aave, exceeds 30.0% limit"
+```
+
+## Lending Position Health
+
+Monitor liquidation risk on lending positions:
+
+```python
+from aether_forge.defi_safety import check_position_health
+
+health = check_position_health(
+    collateral_usd=10_000,
+    debt_usd=7_500,
+    liquidation_threshold=0.83,  # Aave-style
+)
+
+print(f"Health factor: {health.health_factor:.2f}")
+# Health factor: 1.11
+
+if health.critical:
+    # Within 5% of liquidation — repay debt or add collateral NOW
+    ...
+elif health.at_risk:
+    # Within 20% of liquidation — schedule rebalance
+    ...
+```
+
+## Best Practices
+
+1. **Always simulate before signing** — adds under 100ms but catches the obvious failures
+2. **Set min_amount_out conservatively** — 0.5–1% is reasonable for liquid pairs
+3. **Cap concentration** — never put > 30% in any single protocol
+4. **Monitor health factor every tick** — for any borrowing position
+5. **Combine with kill switch** — `forge halt .` blocks everything regardless
+
+## Future Work
+
+- Native MEV protection (Flashbots Protect, Eden, MEV Blocker)
+- Multisig support (Safe integration)
+- Account abstraction (ERC-4337) for gasless tx + session keys
+- Hardware wallet support (Ledger / Trezor via OWS)

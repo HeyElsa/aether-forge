@@ -1,0 +1,112 @@
+{
+  "artifactType": "agent-spec",
+  "schemaVersion": "1.0.0",
+  "artifactId": "agt_delta_neutral_btc",
+  "artifactVersion": "0.1.0",
+  "artifactSetId": "aset_delta_neutral_btc_v001",
+  "title": "Delta Neutral BTC Basis Agent",
+  "generator": {
+    "name": "aether-forge",
+    "version": "0.1.0",
+    "inputDigest": "sha256:delta-neutral-btc-v001"
+  },
+  "compatibility": {
+    "status": "backward-compatible",
+    "previousArtifactVersion": null,
+    "migrationRef": null
+  },
+  "provenance": {
+    "createdAt": "2026-04-06T12:00:00Z",
+    "sourceMode": "slow",
+    "sourcePromptDigest": "sha256:user-idea-delta-neutral-btc"
+  },
+  "metadata": {
+    "name": "Delta Neutral BTC Basis Agent",
+    "summary": "Capture positive BTC spot and perp basis while respecting venue exposure and unwind policies.",
+    "domain": "crypto-trading",
+    "owners": [
+      "founder"
+    ],
+    "tags": [
+      "crypto",
+      "basis",
+      "delta-neutral"
+    ],
+    "status": "draft"
+  },
+  "objective": {
+    "primaryGoal": "Capture delta-neutral BTC basis opportunities across spot and perpetual venues without violating policy constraints.",
+    "successMetrics": [
+      {
+        "metric": "netBasisCaptureBps",
+        "target": "> 0"
+      },
+      {
+        "metric": "policyViolationRate",
+        "target": "== 0"
+      }
+    ],
+    "nonGoals": [
+      "Directional BTC exposure",
+      "Unbounded leverage"
+    ],
+    "constraintsSummary": [
+      "Cap notional per venue",
+      "Unwind on volatility spike",
+      "Stay inside approved venues"
+    ],
+    "failureModes": [
+      "Stale market data",
+      "Partial hedge fills",
+      "Venue outage"
+    ]
+  },
+  "environmentContract": {
+    "allowedEnvironments": [
+      "local",
+      "sandbox",
+      "paper",
+      "canary-live"
+    ],
+    "defaultEnvironment": "sandbox",
+    "promotionPath": [
+      "sandbox",
+      "paper",
+      "canary-live",
+      "production"
+    ]
+  },
+  "capabilityRefs": [
+    "cap-market-btc-price",
+    "cap-market-basis",
+    "cap-exchange-order",
+    "cap-exchange-balance",
+    "memory.read",
+    "memory.write"
+  ],
+  "policyRefs": [
+    "policy_delta_neutral_btc_core"
+  ],
+  "evaluation": {
+    "scenarioPackRef": {
+      "artifactType": "scenario-pack",
+      "artifactId": "scen_delta_neutral_btc",
+      "artifactVersion": "0.1.0"
+    },
+    "requiredOutcomes": [
+      "pass"
+    ],
+    "successThresholds": {
+      "policyViolationRate": 0,
+      "minimumPositiveBasisCaptureBps": 1,
+      "maxReplayDriftBps": 5
+    }
+  },
+  "promotion": {
+    "allowedTargets": [
+      "paper",
+      "canary-live"
+    ],
+    "requiredApprovals": 1
+  }
+}

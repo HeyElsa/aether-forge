@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/agent-spec.schema.json",
+  "allOf": [
+    {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "metadata",
+        "objective",
+        "environmentContract",
+        "capabilityRefs",
+        "policyRefs",
+        "evaluation",
+        "promotion"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "agent-spec"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "name",
+            "summary",
+            "domain"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "domain": {
+              "type": "string"
+            },
+            "owners": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "type": "string"
+            }
+          }
+        },
+        "objective": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "primaryGoal",
+            "successMetrics"
+          ],
+          "properties": {
+            "primaryGoal": {
+              "type": "string"
+            },
+            "successMetrics": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "nonGoals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "constraintsSummary": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "failureModes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "environmentContract": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "allowedEnvironments",
+            "defaultEnvironment"
+          ],
+          "properties": {
+            "allowedEnvironments": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "defaultEnvironment": {
+              "type": "string"
+            },
+            "environmentNotes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "promotionPath": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "capabilityRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json"
+              }
+            ]
+          }
+        },
+        "policyRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evaluation": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "scenarioPackRef",
+            "requiredOutcomes",
+            "successThresholds"
+          ],
+          "properties": {
+            "scenarioPackRef": {
+              "$ref": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json"
+            },
+            "requiredOutcomes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "successThresholds": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "promotion": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "allowedTargets",
+            "requiredApprovals"
+          ],
+          "properties": {
+            "allowedTargets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requiredApprovals": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  ]
+}

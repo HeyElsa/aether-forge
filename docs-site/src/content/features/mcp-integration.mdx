@@ -1,0 +1,196 @@
+# MCP Integration
+
+Aether Forge is an **MCP client**. Generated agents can discover and call tools from any [Model Context Protocol](https://modelcontextprotocol.io) server — local subprocess or remote HTTP — just by declaring them in `aether-forge.json`.
+
+<video src="/videos/10-mcp-integration.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Declare MCP Servers
+
+```json
+{
+  "mcp_servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "${GH_TOKEN}" },
+      "tools": { "include": ["list_issues", "create_issue"] }
+    },
+    "internal": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": { "Authorization": "Bearer ${API_KEY}" }
+    }
+  }
+}
+```
+
+## Supported Transports
+
+| Transport | Example |
+|---|---|
+| **Stdio** | Spawn subprocess, talk over stdin/stdout |
+| **HTTP** | POST JSON-RPC to a remote endpoint |
+
+## Runtime Flow
+
+1. `forge run` reads the `mcp_servers` block
+2. Builds one `McpDataSource` per declared server
+3. On first tool lookup, lazily connects: spawns server, runs `initialize` + `tools/list`
+4. Planner proposes a capability → DataRouter dispatches to the right MCP source
+5. Client emits `tools/call` → result flows into the working set
+
+## Tool Filtering
+
+Scope agents to exactly the tools they need:
+
+```json
+{
+  "tools": {
+    "include": ["list_issues", "create_issue"]
+  }
+}
+```
+
+Filtered tools are invisible to the planner — the LLM never learns they exist.
+
+## Verification
+
+```bash
+forge doctor
+```
+
+```
+[  ok] MCP server [filesystem]: 14 tools (stdio)
+[  ok] MCP server [hermes]: 10 tools (stdio)
+```
+
+## Security
+
+- **Env var filtering** — only safe baseline vars (`PATH`, `HOME`, etc.) plus explicitly declared `env` are passed to subprocess
+- **Policy gate** — MCP tool calls go through the same policy gate as every other capability
+- **Kill switch** — `forge halt .` blocks MCP calls alongside x402 and everything else
+
+## Hermes Messaging Bridge
+
+Use [Hermes Agent](https://hermes-agent.nousresearch.com) as an MCP server to send messages on Telegram, Discord, Slack, WhatsApp, Signal, Matrix, and more:
+
+```json
+{
+  "mcp_servers": {
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+Your agent gets 10+ messaging tools without maintaining any platform integrations.
+
+## Complete Example: Custom MCP Server
+
+You can write your own MCP server in Python and connect it to your agent:
+
+```python
+#!/usr/bin/env python3
+"""Minimal MCP server with 3 tools, communicating over stdio."""
+import sys, json
+
+def handle_request(req):
+    method = req.get("method", "")
+    if method == "initialize":
+        return {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}}
+    elif method == "tools/list":
+        return {"tools": [
+            {"name": "ping", "description": "Health check", "inputSchema": {"type": "object"}},
+            {"name": "weather", "description": "Get weather", "inputSchema": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"]
+            }},
+        ]}
+    elif method == "tools/call":
+        name = req["params"]["name"]
+        args = req["params"].get("arguments", {})
+        if name == "ping":
+            return {"content": [{"type": "text", "text": "pong"}]}
+        elif name == "weather":
+            return {"content": [{"type": "text", "text": f"Sunny in {args['city']}, 72°F"}]}
+    return {"error": {"code": -32601, "message": "Method not found"}}
+
+for line in sys.stdin:
+    req = json.loads(line)
+    result = handle_request(req)
+    resp = {"jsonrpc": "2.0", "id": req.get("id"), "result": result}
+    sys.stdout.write(json.dumps(resp) + "\n")
+    sys.stdout.flush()
+```
+
+Save as `my-mcp-server.py`, then declare it:
+
+```json
+{
+  "mcp_servers": {
+    "my-tools": {
+      "command": "python3",
+      "args": ["my-mcp-server.py"]
+    }
+  }
+}
+```
+
+## Programmatic API
+
+Use the MCP client directly in Python:
+
+```python
+from aether_forge.mcp_client import McpServerConfig, build_mcp_client
+
+config = McpServerConfig.from_dict("hermes", {
+    "command": "hermes",
+    "args": ["mcp", "serve"],
+})
+
+with build_mcp_client(config) as client:
+    client.initialize()
+    tools = client.list_tools()
+    print(f"Available tools: {[t['name'] for t in tools]}")
+
+    result = client.call_tool("messages_send", {
+        "platform": "telegram",
+        "message": "Agent alert: position closed at +4%"
+    })
+    print(result)
+```
+
+## Troubleshooting
+
+### Server won't start
+
+```bash
+# Test the server manually:
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | hermes mcp serve
+```
+
+### Tools not showing up
+
+Check that the server responds to `tools/list`:
+
+```bash
+forge doctor  # probes all declared MCP servers
+```
+
+### Timeout errors
+
+Default timeout is 30 seconds. For slow servers, the client uses `select()` with timeout before `readline()` to prevent hanging.
+
+### Environment variable leaks
+
+The MCP subprocess only receives: `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `LC_ALL`, `TERM`, plus whatever you explicitly declare in `env`. Your `OWS_API_KEY`, `ANTHROPIC_API_KEY`, and other secrets are **never** passed to MCP subprocesses.

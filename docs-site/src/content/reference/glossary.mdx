@@ -1,0 +1,171 @@
+# Glossary
+
+Every term that appears in Aether Forge docs, defined in one place.
+
+## A
+
+**A2A (Agent-to-Agent)** — Google's open protocol for agent collaboration. JSON-RPC 2.0 over HTTP. Each agent exposes an Agent Card and can `message/send` tasks to peers.
+
+**Agent Card** — JSON document describing an agent's name, skills, endpoint, and protocol version. Served at `/.well-known/a2a-card`.
+
+**Agent NFT** — An ERC-8004 NFT representing an agent on-chain. Each NFT has a metadata URI pointing to the agent's capabilities.
+
+**Approval** — A side-effecting capability that requires human sign-off before execution. Configured via `policy-bundle.json`'s `approvalRequired` array.
+
+**Artifact** — A typed JSON file describing one aspect of an agent. There are 8 artifact types: `agent-spec`, `capability-manifest`, `policy-bundle`, `scenario-pack`, `scaffold.manifest`, `research-record`, `promotion-record`, `memory-record`.
+
+**Artifact Set** — All artifacts for one agent, identified by `artifactSetId` (e.g., `aset_eth-swing_abc123`).
+
+**Attestation** — An EIP-712 signed claim about an agent's identity. Two layers: self-attestation (agent's wallet signs) and framework attestation (HeyElsa attestor wallet signs).
+
+**Attestor** — A well-known wallet address controlled by the Aether Forge project that signs verified agents on-chain.
+
+**Autoresearch** — Karpathy-style keep-or-discard loop where the agent self-evaluates performance and the LLM proposes parameter changes. Enabled with `--autoresearch`.
+
+## C
+
+**Capability** — A typed action an agent can perform (e.g., `cap-market-btc-price`, `cap-exchange-order`). Declared in `capability-manifest.json` with kind, risk level, and effect semantics.
+
+**Circuit Breaker** — Auto-pauses the agent for a cooldown after N consecutive failures. Default: 5 failures → 60s cooldown.
+
+**Credential Handle** — A label connecting a capability to its credentials (e.g., `binance-trade`). Resolves to a real API key at runtime.
+
+**Crypto Router** — How capabilities are executed: `mock`, `paper`, `live`, `ows`, `sim`, `public-market-data`, `authenticated-paper`.
+
+## D
+
+**DataRouter** — Unified dispatch surface for data sources (HTTP, x402, MCP, WebSocket). Tries sources in priority order; first success wins.
+
+**Deep Health Check** — Readiness check (`/ready`) that returns 503 if planner is failing or kill switch is active. Distinct from liveness (`/health`) which always returns 200.
+
+## E
+
+**EIP-3009** — Ethereum standard for gasless USDC transfers via signed authorizations. Used by x402 for pay-per-call APIs.
+
+**EIP-712** — Ethereum standard for typed structured data signing. Used by Aether Forge for attestations and A2A message authentication.
+
+**ERC-8004** — On-chain Agent Identity Registry standard. Deployed at `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` on Base mainnet. 61,000+ agents registered.
+
+**ERC-8126** — Trust scoring standard. Five risk tiers (low → critical), four verification types.
+
+**ERC-8183** — Escrowed jobs standard. Three roles: client, provider, evaluator. Lifecycle: OPEN → FUNDED → SUBMITTED → COMPLETED/REJECTED.
+
+**Environment** — Execution context: `sandbox` (mock), `paper` (real prices, sim orders), `canary-live` (small real money), `production` (full live).
+
+**Environment Gate** — `policy-bundle.json` rule restricting which capabilities are allowed per environment.
+
+**Exposure Tracker** — Tracks portfolio concentration per protocol/token. Refuses positions that breach configured limits.
+
+## F
+
+**Fallback Chain** — DataRouter mode where sources are tried in priority order until one succeeds.
+
+**FunctionCallPlanner** — Planner that prompts the LLM for JSON function-call output and validates each call against declared capabilities.
+
+## H
+
+**Halt File** — Filesystem-level kill switch. When `halt` exists in agent dir, all side-effecting capabilities are blocked. Set via `forge halt .`, cleared via `forge resume .`.
+
+**Health Factor** — Lending position metric. Below 1.0 = liquidatable. Aether Forge treats under 1.2 as "at risk" and under 1.05 as "critical".
+
+**HeyElsa** — The team behind Aether Forge. See [heyelsa.ai](https://heyelsa.ai).
+
+## K
+
+**Kill Switch** — See *Halt File*.
+
+**Knowledge Layer** — Memory layer 4. Long-term semantic + temporal memory backed by MemPalace (ChromaDB vectors + SQLite triple store).
+
+## L
+
+**Liveness** — `/health` endpoint check that the process is responsive. Always 200 if alive.
+
+## M
+
+**MCP (Model Context Protocol)** — Open standard for exposing tools to AI agents. Aether Forge is an MCP client; agents declare MCP servers in `aether-forge.json`.
+
+**MemPalace** — External Python package providing the Layer 4 knowledge store. Optional (`pip install 'aether-forge[knowledge]'`).
+
+**Memory Layer 1 — Replays** — JSON files written per tick. Audit trail, never read by LLM.
+
+**Memory Layer 2 — Working Set** — In-process dict. Current tick state. Read by LLM as `## Runtime State`.
+
+**Memory Layer 3 — SQLite** — Persistent typed records. Read by LLM as `## Memory Context`.
+
+**Memory Layer 4 — Knowledge** — MemPalace vectors + temporal triples. Read by LLM as `## Knowledge`.
+
+## N
+
+**Notional Limit** — `policy-bundle.json` rule capping per-step USD value (e.g., max $100K per trade).
+
+## O
+
+**OWS (Open Wallet Standard)** — Multi-chain wallet SDK. 9 chain families: EVM, Solana, Bitcoin, Cosmos, Tron, TON, Sui, Filecoin, XRPL.
+
+## P
+
+**Pagefind** — Static search engine used by the docs site. Runs as `postbuild`.
+
+**Planner** — The component that proposes steps each tick. Modes: `heuristic`, `static`, `function-call`, `openai-compatible`, `anthropic`, `gemini`, `openai`, `openrouter`, `ollama`.
+
+**Policy Gate** — Runtime component that evaluates each proposed step against `policy-bundle.json` rules. Default-deny for side effects.
+
+**Policy Bundle** — `policy-bundle.json`. Safety rules: notional limits, environment gates, approval requirements, wallet chain restrictions.
+
+**Prometheus Metrics** — Text-format metrics exported at `/metrics`. Includes tick counts, failures, agent state.
+
+**Promotion** — Moving an agent from one environment to a higher one (sandbox → paper → canary-live → production). Evidence-backed: scenario results, policy compliance, approver sign-off.
+
+## R
+
+**Readiness** — `/ready` endpoint check that the agent can do work. 503 if not.
+
+**Replay** — JSON file written per tick containing the full step ledger, state before/after, and LLM reasoning. Inspect with `forge replay-show`.
+
+## S
+
+**Scaffold** — The generated agent directory: artifacts + `aether-forge.json` + `wallet.json` + `Dockerfile` + `src/strategy/router.py`.
+
+**Scenario Pack** — `scenario-pack.json`. Test scenarios with initial state, stimuli, and expected behavior.
+
+**Self-Attestation** — Layer 1 of attestation. Agent's own wallet signs an EIP-712 message linking artifactSetId + capabilitiesHash + agentAddress.
+
+**Side Effect** — Any capability that changes external state (e.g., `cap-exchange-order` writes to an exchange). Default-denied by policy gate.
+
+**SKILL.md** — Open standard for describing skills (`agentskills.io`). Aether Forge auto-maps skills to capabilities.
+
+**Skills.sh / Bankr / Elsa** — Three skill registries Aether Forge consumes.
+
+**Slippage** — Difference between expected and actual swap output. Aether Forge ships `check_slippage()` for both tolerance and price-impact validation.
+
+**Step** — A single proposed action in a tick. Has `kind` (reason / use-capability / request-approval / replan / report-gap), optional `capabilityId`, optional `payload`.
+
+**Step Ledger** — The complete record of all steps in a tick, with proposals, decisions, and results.
+
+**Strategy** — Plain-English markdown file describing what the agent should do. Read by the LLM on every tick.
+
+## T
+
+**Tick** — One iteration of the agent loop: planner → policy → execute → ledger → memory. Default interval: 30s.
+
+**Tick Timeout** — Per-tick maximum execution time. Default 120s. Prevents hung LLM calls.
+
+**Token Budget** — Maximum tokens per LLM prompt for a given model. Aether Forge auto-truncates prompts that exceed the budget.
+
+**Trust Tier** — Classification of a discovered agent: verified (framework signed) > self-attested (wallet signed) > unverified (metadata only).
+
+## V
+
+**Verified Agent** — Agent whose `aether_forge_verified` metadata key contains a valid signature from the framework attestor address.
+
+## W
+
+**Wallet Vault** — `.ows/` directory containing encrypted wallet data. Permissions 0700.
+
+**Working Set** — See *Memory Layer 2*.
+
+## X
+
+**x402** — Open protocol for HTTP 402 micropayments. Aether Forge uses it for paid API calls (Elsa) and agent-to-agent payments.
+
+**X402PaymentGate** — Server-side component that gates capabilities behind x402 payments. Returns 402 with price; verifies signed payments before delivering results.

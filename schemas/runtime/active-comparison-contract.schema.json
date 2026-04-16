@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/runtime/active-comparison-contract.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "comparisonId",
+    "evaluatorVersion",
+    "policyThresholdsDigest",
+    "scenarioPackRef",
+    "normalizationRules",
+    "allowedMutationSurfaces",
+    "budgetRules",
+    "artifactSetId"
+  ],
+  "properties": {
+    "comparisonId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluatorVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policyThresholdsDigest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenarioPackRef": {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json"
+    },
+    "normalizationRules": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "allowedMutationSurfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactType",
+          "pathPattern"
+        ],
+        "properties": {
+          "artifactType": {
+            "type": "string"
+          },
+          "pathPattern": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "budgetRules": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "artifactSetId": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

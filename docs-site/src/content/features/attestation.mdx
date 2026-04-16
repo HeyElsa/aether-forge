@@ -1,0 +1,69 @@
+# Attestation & Trust
+
+Two-layer anti-impersonation system using EIP-712 typed data signing.
+
+<video src="/videos/13-attestation.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## The Problem
+
+ERC-8004 is a public registry. Anyone can register an agent claiming `framework=aether-forge`. We need to distinguish genuine agents from copycats.
+
+## Layer 1 — Self-Attestation
+
+At generation time, the agent signs an **EIP-712 `AetherForgeAttestation`** using its own OWS wallet:
+
+```json
+{
+  "domain": {
+    "name": "AetherForge",
+    "version": "1",
+    "chainId": 8453
+  },
+  "types": {
+    "AetherForgeAttestation": [
+      { "name": "artifactSetId", "type": "string" },
+      { "name": "capabilitiesHash", "type": "bytes32" },
+      { "name": "agentAddress", "type": "address" },
+      { "name": "timestamp", "type": "uint256" }
+    ]
+  }
+}
+```
+
+The signature is saved as `attestation.json` in the agent directory.
+
+**What this proves**: "The owner of this wallet authorized the creation of this specific agent with these specific capabilities."
+
+## Layer 2 — Framework Attestation
+
+The Aether Forge project maintains a well-known **attestor address** (published in `ATTESTOR.md`).
+
+After registration, an agent can request verification:
+1. Attestor checks the metadata URI resolves to valid Aether Forge artifacts
+2. Attestor runs `forge validate` on the manifest
+3. Attestor verifies the A2A endpoint serves a valid Agent Card
+4. If all pass, attestor signs and publishes on-chain
+
+**What this proves**: "This agent was built with Aether Forge and passes structural validation."
+
+## Three Trust Tiers
+
+| Tier | Meaning | How verified |
+|---|---|---|
+| **Verified** | Framework attestor signed it | `aether_forge_verified` metadata has valid attestor signature |
+| **Self-attested** | Agent wallet signed it | `self_attestation` metadata is present and valid |
+| **Unverified** | Claims to be Aether Forge | No valid signatures |
+
+## Discovery with Trust Filtering
+
+```bash
+# Show all agents with trust tier labels
+forge agent-discover --capability get-token-price
+
+# Only show verified agents
+forge agent-discover --capability get-token-price --verified-only
+```
+
+## Automatic at Generation
+
+Self-attestation happens automatically when you run `forge generate-fast --wallet`. No extra flags needed.

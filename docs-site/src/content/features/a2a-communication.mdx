@@ -1,0 +1,189 @@
+# A2A Communication
+
+Agents communicate via [Google's A2A protocol](https://github.com/google/A2A) — an open standard (Apache 2.0, Linux Foundation) for agent-to-agent collaboration using JSON-RPC 2.0 over HTTP.
+
+<video src="/videos/08-a2a-communication.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Why A2A?
+
+- **JSON-RPC 2.0 over HTTP** — same protocol family as MCP
+- **Python SDK** — `pip install a2a-sdk`, pure Python
+- **Agent Cards** — maps to our ERC-8004 Agent Cards
+- **Task lifecycle** — maps to our ERC-8183 jobs
+- **Complements MCP** — MCP is for tool use, A2A is for agent delegation
+
+## Agent Card
+
+Every running agent exposes an Agent Card at `/.well-known/a2a-card`:
+
+```json
+{
+  "name": "price-oracle",
+  "skills": [
+    { "name": "get-token-price" },
+    { "name": "get-swap-quote" }
+  ],
+  "protocolVersion": "2024-11-05"
+}
+```
+
+## Send a Task
+
+```bash
+forge agent-send http://localhost:9001 \
+  --capability get-token-price \
+  --payload '{"token":"ETH"}'
+```
+
+```
+Remote agent: price-oracle
+Skills: get-token-price, get-swap-quote
+Task status: completed
+Artifacts:
+  [0] {"price_usd": 2249.63, "trend": "bullish"}
+```
+
+## EIP-712 Message Signing
+
+Every A2A message carries an **EIP-712 signature** in its metadata:
+
+```json
+{
+  "domain": {
+    "name": "AetherAgentProtocol",
+    "version": "1",
+    "chainId": 8453
+  }
+}
+```
+
+The receiver verifies the signature against the sender's known EVM address before processing.
+
+## Start an A2A Server
+
+```bash
+forge run ./my-agent --a2a-port 9001
+```
+
+This exposes:
+- `GET /.well-known/a2a-card` — Agent Card
+- `POST /` — JSON-RPC endpoint (`message/send`, `tasks/get`, `tasks/list`)
+
+## Rate Limiting
+
+The A2A server enforces:
+- 60 requests/minute per IP
+- 1000 max concurrent tasks
+- Automatic cleanup of completed tasks (1 hour after terminal state)
+
+## Full Agent Card Example
+
+```json
+{
+  "name": "price-oracle",
+  "description": "Real-time cryptocurrency price data and trend analysis",
+  "url": "http://localhost:9001",
+  "version": "0.1.0",
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false
+  },
+  "skills": [
+    {
+      "name": "get-token-price",
+      "description": "Get current price for a token",
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "name": "get-swap-quote",
+      "description": "Get a swap quote between two tokens",
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    }
+  ],
+  "defaultInputModes": ["application/json", "text/plain"],
+  "defaultOutputModes": ["application/json", "text/plain"],
+  "provider": {
+    "organization": "Aether Forge",
+    "url": "https://github.com/HeyElsa/aether-forge"
+  }
+}
+```
+
+## Task Lifecycle
+
+```
+submitted ──→ working ──→ completed
+                    └──→ failed
+                    └──→ canceled
+```
+
+Each task has a unique ID, creation timestamp, and message history. Tasks in terminal states (completed/failed/canceled) are automatically purged after 1 hour.
+
+## Sending Tasks with Payment
+
+Include payment metadata in A2A messages:
+
+```json
+{
+  "role": "user",
+  "parts": [{
+    "mimeType": "application/json",
+    "data": {
+      "capability": "get-swap-quote",
+      "arguments": { "from": "ETH", "to": "USDC", "amount": 1.0 }
+    }
+  }],
+  "metadata": {
+    "payment": {
+      "method": "x402",
+      "budget_usd": 0.05,
+      "asset": "USDC",
+      "chain": "base"
+    },
+    "signature": "0xab12..."
+  }
+}
+```
+
+## Python Client Example
+
+```python
+from aether_forge.a2a_client import A2AForgeClient
+
+client = A2AForgeClient("http://localhost:9001")
+
+# Discover capabilities
+card = client.get_agent_card()
+print(f"Agent: {card.name}")
+print(f"Skills: {[s.name for s in card.skills]}")
+
+# Send a task
+result = client.send_task(
+    capability="get-token-price",
+    arguments={"token": "ETH"},
+    metadata={"requester": "alpha-trader"},
+)
+print(f"Status: {result['status']}")
+print(f"Price: {result['artifacts'][0]}")
+```
+
+## How the Planner Handles Incoming Tasks
+
+When another agent sends a task to your agent via A2A:
+
+1. The A2A server receives the JSON-RPC `message/send` request
+2. A task is created in the `_TaskStore`
+3. The task handler injects it into the next planner tick as context:
+   ```
+   ## Incoming A2A Task
+   From: alpha-trader (0xA3F1...7c2e)
+   Capability: get-token-price
+   Arguments: {"token": "ETH"}
+   ```
+4. The planner processes it as a regular step proposal
+5. The result is returned as a task artifact
+
+Your agent's policy gate still applies — if the requested capability isn't allowed in the current environment, the task is rejected.

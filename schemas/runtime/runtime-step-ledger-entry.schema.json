@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/runtime/runtime-step-ledger-entry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stepId",
+    "stateSnapshotRef",
+    "plannedAction",
+    "policyDecisionRef",
+    "approvalOutcome",
+    "effectResult",
+    "postActionInvariantResult",
+    "resultingStateSnapshotRef"
+  ],
+  "properties": {
+    "stepId": {
+      "type": "string"
+    },
+    "stateSnapshotRef": {
+      "type": "string"
+    },
+    "plannedAction": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "policyDecisionRef": {
+      "type": "string"
+    },
+    "approvalOutcome": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "effectResult": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "postActionInvariantResult": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "resultingStateSnapshotRef": {
+      "type": "string"
+    }
+  }
+}

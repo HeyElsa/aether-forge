@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json",
+  "type": "object",
+  "required": [
+    "artifactType",
+    "schemaVersion",
+    "artifactId",
+    "artifactVersion",
+    "artifactSetId",
+    "title",
+    "generator",
+    "compatibility",
+    "provenance"
+  ],
+  "properties": {
+    "artifactType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "artifactSetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "inputDigest"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "inputDigest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "templateVersion": {
+          "type": "string"
+        },
+        "normalizerVersion": {
+          "type": "string"
+        },
+        "importerVersions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "compatibility": {
+      "$ref": "https://schemas.aether-forge.dev/common/compatibility.schema.json"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "createdAt",
+        "sourceMode"
+      ],
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceMode": {
+          "type": "string",
+          "enum": [
+            "fast",
+            "slow",
+            "manual",
+            "imported"
+          ]
+        },
+        "sourcePromptDigest": {
+          "type": "string"
+        },
+        "importSource": {
+          "type": "string"
+        },
+        "derivedFrom": {
+          "type": "array",
+          "items": {
+            "$ref": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

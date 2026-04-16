@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/promotion-record.schema.json",
+  "allOf": [
+    {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "artifactRefs",
+        "evaluationSummary",
+        "promotionDecision",
+        "residualRisks",
+        "rolloutPlan"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "promotion-record"
+        },
+        "artifactRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json"
+          }
+        },
+        "evaluationSummary": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "promotionDecision": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "sourceEnvironment",
+            "targetEnvironment",
+            "decisionOutcome",
+            "approvers",
+            "policyBundleVersion",
+            "scenarioPackVersion",
+            "rolloutLimits"
+          ],
+          "properties": {
+            "sourceEnvironment": {
+              "type": "string"
+            },
+            "targetEnvironment": {
+              "type": "string"
+            },
+            "decisionOutcome": {
+              "type": "string",
+              "enum": [
+                "approved",
+                "approved-with-limits",
+                "held",
+                "rejected"
+              ]
+            },
+            "approvers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "policyBundleVersion": {
+              "type": "string"
+            },
+            "scenarioPackVersion": {
+              "type": "string"
+            },
+            "rolloutLimits": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "residualRisks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "rolloutPlan": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  ]
+}

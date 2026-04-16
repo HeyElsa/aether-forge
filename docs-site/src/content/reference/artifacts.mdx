@@ -1,0 +1,293 @@
+# Artifact System
+
+Every agent is defined by typed, versioned, machine-validatable JSON artifacts.
+
+<video src="/videos/22-artifacts.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Required Artifacts
+
+| Artifact | Purpose |
+|---|---|
+| `agent-spec.json` | Agent contract — objective, capabilities, eval criteria |
+| `capability-manifest.json` | Declared capabilities, credential handles, effect semantics |
+| `policy-bundle.json` | Safety rules — notional limits, wallet chains, approvals |
+| `scenario-pack.json` | Test scenarios with expected outcomes |
+| `scaffold.manifest.json` | Project structure, ownership zones |
+
+## Optional Artifacts
+
+| Artifact | Purpose |
+|---|---|
+| `research-record.json` | Slow-mode iteration ledger and findings |
+| `promotion-record.json` | Evidence-backed promotion decision |
+| `memory-record.json` | Typed persistent memory records |
+| `aether-forge.json` | Runtime config (planner, MCP, data sources, budget) |
+| `wallet.json` | Wallet addresses, policy ID, vault path |
+| `attestation.json` | EIP-712 self-attestation signature |
+
+## `agent-spec.json`
+
+Defines the agent's contract:
+
+```json
+{
+  "schemaVersion": "0.7.0",
+  "artifactSetId": "aset_eth-swing_abc123",
+  "name": "ETH Swing Trader",
+  "objective": "Trade ETH using momentum signals",
+  "capabilities": ["cap-market-btc-price", "cap-exchange-order"],
+  "evaluationCriteria": {
+    "winRate": { "target": 0.45 },
+    "maxDrawdown": { "target": 0.05 }
+  }
+}
+```
+
+## `capability-manifest.json`
+
+Declares what the agent can do:
+
+```json
+{
+  "capabilities": [
+    {
+      "id": "cap-market-btc-price",
+      "kind": "read",
+      "riskLevel": "low",
+      "effectSemantics": "none"
+    },
+    {
+      "id": "cap-exchange-order",
+      "kind": "write",
+      "riskLevel": "high",
+      "effectSemantics": "external-state-change",
+      "requiredApproval": true
+    }
+  ]
+}
+```
+
+## `policy-bundle.json`
+
+Safety rules the runtime enforces:
+
+```json
+{
+  "environmentGates": {
+    "paper": ["cap-market-btc-price", "cap-exchange-order-sim"],
+    "live": ["cap-market-btc-price", "cap-exchange-order"]
+  },
+  "notionalLimits": {
+    "cap-exchange-order": { "maxPerStep": 100 }
+  },
+  "approvalRequired": ["cap-exchange-order"]
+}
+```
+
+## Validation
+
+```bash
+forge validate ./my-agent
+# Validated 5 artifacts in ./my-agent
+```
+
+All artifacts are validated against JSON Schema. Cross-references between artifacts (e.g., capabilities referenced in policy must exist in manifest) are also checked.
+
+## Complete Example: Delta-Neutral BTC Agent
+
+This is a real agent from the `examples/` directory.
+
+### `agent-spec.json`
+
+```json
+{
+  "schemaVersion": "0.7.0",
+  "artifactSetId": "aset_delta-neutral-btc_v1",
+  "name": "Delta-Neutral BTC Basis Trader",
+  "objective": "Capture BTC basis spread between spot and perpetual futures",
+  "autonomyLevel": "supervised",
+  "capabilities": [
+    "cap-market-btc-price",
+    "cap-market-btc-basis",
+    "cap-exchange-order",
+    "cap-portfolio-balance",
+    "cap-memory-read",
+    "cap-memory-write"
+  ],
+  "evaluationCriteria": {
+    "sharpeRatio": { "target": 1.5, "operator": ">=" },
+    "maxDrawdownPct": { "target": 5.0, "operator": "<=" },
+    "winRate": { "target": 0.6, "operator": ">=" }
+  },
+  "environmentContract": {
+    "requiredState": ["btc_price", "btc_basis_spread", "portfolio_balance"],
+    "sideEffects": ["exchange-order-placed"]
+  },
+  "promotionPath": ["sandbox", "paper", "canary-live", "production"]
+}
+```
+
+### `capability-manifest.json`
+
+```json
+{
+  "schemaVersion": "0.6.0",
+  "capabilities": [
+    {
+      "id": "cap-market-btc-price",
+      "name": "BTC Spot Price",
+      "kind": "read",
+      "riskLevel": "low",
+      "effectSemantics": "none",
+      "credentialHandle": "market-data",
+      "description": "Fetch current BTC spot price from exchange"
+    },
+    {
+      "id": "cap-market-btc-basis",
+      "name": "BTC Basis Spread",
+      "kind": "read",
+      "riskLevel": "low",
+      "effectSemantics": "none",
+      "credentialHandle": "market-data",
+      "description": "Fetch current basis spread between spot and perp"
+    },
+    {
+      "id": "cap-exchange-order",
+      "name": "Place Exchange Order",
+      "kind": "write",
+      "riskLevel": "high",
+      "effectSemantics": "external-state-change",
+      "credentialHandle": "binance-trade",
+      "requiredApproval": true,
+      "description": "Place a buy or sell order on the exchange"
+    },
+    {
+      "id": "cap-portfolio-balance",
+      "name": "Portfolio Balance",
+      "kind": "read",
+      "riskLevel": "low",
+      "effectSemantics": "none",
+      "description": "Read current portfolio balances"
+    },
+    {
+      "id": "cap-memory-read",
+      "name": "Read Memory",
+      "kind": "read",
+      "riskLevel": "low",
+      "effectSemantics": "none",
+      "description": "Read from the agent's persistent memory"
+    },
+    {
+      "id": "cap-memory-write",
+      "name": "Write Memory",
+      "kind": "write",
+      "riskLevel": "low",
+      "effectSemantics": "internal-state-change",
+      "description": "Write to the agent's persistent memory"
+    }
+  ],
+  "credentials": [
+    {
+      "handle": "market-data",
+      "provider": "binance",
+      "scope": "read-only"
+    },
+    {
+      "handle": "binance-trade",
+      "provider": "binance",
+      "scope": "trade",
+      "requiredEnvironments": ["paper", "canary-live", "production"]
+    }
+  ]
+}
+```
+
+### `policy-bundle.json`
+
+```json
+{
+  "schemaVersion": "0.5.0",
+  "rules": [
+    {
+      "id": "rule-notional-limit",
+      "type": "notional-limit",
+      "capability": "cap-exchange-order",
+      "maxNotionalUsd": 100000
+    },
+    {
+      "id": "rule-wallet-chain",
+      "type": "wallet-allowed-chains",
+      "allowedChains": ["eip155:8453"]
+    },
+    {
+      "id": "rule-live-approval",
+      "type": "require-approval",
+      "capability": "cap-exchange-order",
+      "environments": ["canary-live", "production"]
+    }
+  ],
+  "environmentGates": {
+    "sandbox": ["cap-market-btc-price", "cap-market-btc-basis", "cap-portfolio-balance", "cap-memory-read", "cap-memory-write"],
+    "paper": ["cap-market-btc-price", "cap-market-btc-basis", "cap-exchange-order", "cap-portfolio-balance", "cap-memory-read", "cap-memory-write"],
+    "production": ["cap-market-btc-price", "cap-market-btc-basis", "cap-exchange-order", "cap-portfolio-balance", "cap-memory-read", "cap-memory-write"]
+  },
+  "defaultDeny": true
+}
+```
+
+### `scenario-pack.json`
+
+```json
+{
+  "schemaVersion": "0.5.0",
+  "scenarios": [
+    {
+      "id": "basis-widening",
+      "name": "Basis Spread Widens",
+      "description": "Basis spread increases from 0.5% to 2.0%",
+      "initialState": {
+        "btc_price": 65000,
+        "btc_basis_spread": 0.005,
+        "portfolio_balance": 100000
+      },
+      "stimuli": [
+        { "tick": 1, "set": { "btc_basis_spread": 0.02 } }
+      ],
+      "expectedBehavior": {
+        "shouldExecute": ["cap-exchange-order"],
+        "assertion": "Agent should open a basis position when spread is attractive"
+      }
+    },
+    {
+      "id": "basis-collapse",
+      "name": "Basis Spread Collapses",
+      "description": "Basis spread narrows to near zero while agent has a position",
+      "initialState": {
+        "btc_price": 65000,
+        "btc_basis_spread": 0.02,
+        "portfolio_balance": 100000,
+        "open_position": true
+      },
+      "stimuli": [
+        { "tick": 1, "set": { "btc_basis_spread": 0.001 } }
+      ],
+      "expectedBehavior": {
+        "shouldExecute": ["cap-exchange-order"],
+        "assertion": "Agent should close the position as profit target is reached"
+      }
+    }
+  ]
+}
+```
+
+## Migration Between Schema Versions
+
+When Aether Forge releases a new schema version, use:
+
+```bash
+# Check compatibility
+forge artifact-compat --previous ./v1-agent --current ./v2-agent
+
+# Generate a migration plan
+forge artifact-migration-plan --artifact-type agent-spec --output ./migration.json
+```

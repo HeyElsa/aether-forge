@@ -1,0 +1,99 @@
+{
+  "artifactType": "scenario-pack",
+  "schemaVersion": "1.0.0",
+  "artifactId": "scen_delta_neutral_btc",
+  "artifactVersion": "0.1.0",
+  "artifactSetId": "aset_delta_neutral_btc_v001",
+  "title": "Delta Neutral BTC Scenario Pack",
+  "generator": {
+    "name": "aether-forge",
+    "version": "0.1.0",
+    "inputDigest": "sha256:delta-neutral-btc-v001"
+  },
+  "compatibility": {
+    "status": "backward-compatible",
+    "previousArtifactVersion": null,
+    "migrationRef": null
+  },
+  "provenance": {
+    "createdAt": "2026-04-06T12:00:00Z",
+    "sourceMode": "slow"
+  },
+  "scenarios": [
+    {
+      "scenarioId": "scen-baseline-basis-wide",
+      "category": "baseline",
+      "environmentKind": "sandbox",
+      "inputs": {
+        "basisBps": 25,
+        "volatilityRegime": "normal"
+      },
+      "expectedOutcome": {
+        "stageOutcome": "pass"
+      },
+      "blockingReasonIds": [],
+      "metrics": {
+        "minimumBasisCaptureBps": 5
+      },
+      "replayClass": "approximately-replayable"
+    },
+    {
+      "scenarioId": "scen-volatility-unwind",
+      "category": "edge",
+      "environmentKind": "sandbox",
+      "inputs": {
+        "basisBps": 18,
+        "volatilityRegime": "spike"
+      },
+      "expectedOutcome": {
+        "stageOutcome": "pass"
+      },
+      "blockingReasonIds": [],
+      "metrics": {
+        "mustUnwind": true
+      },
+      "replayClass": "approximately-replayable"
+    },
+    {
+      "scenarioId": "scen-policy-exposure-breach",
+      "category": "policy-violation",
+      "environmentKind": "sandbox",
+      "inputs": {
+        "requestedNotionalUsd": 250000
+      },
+      "expectedOutcome": {
+        "stageOutcome": "hold"
+      },
+      "blockingReasonIds": [
+        "exposure-limit"
+      ],
+      "metrics": {
+        "mustDeny": true
+      },
+      "replayClass": "exactly-replayable"
+    },
+    {
+      "scenarioId": "scen-stale-data-halt",
+      "category": "stress",
+      "environmentKind": "shadow",
+      "inputs": {
+        "marketDataAgeMs": 120000
+      },
+      "expectedOutcome": {
+        "stageOutcome": "hold"
+      },
+      "blockingReasonIds": [
+        "stale-market-data"
+      ],
+      "metrics": {
+        "mustSkipExecution": true
+      },
+      "replayClass": "audit-only"
+    }
+  ],
+  "thresholds": {
+    "policyViolationRate": 0,
+    "maxReplayDriftBps": 5,
+    "requiredPasses": 3
+  }
+}

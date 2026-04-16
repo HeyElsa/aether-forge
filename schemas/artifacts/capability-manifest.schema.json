@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/capability-manifest.schema.json",
+  "allOf": [
+    {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "credentialHandles",
+        "capabilities"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "capability-manifest"
+        },
+        "credentialHandles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "handleId",
+              "kind",
+              "allowedEnvironments",
+              "maximumAccessScope",
+              "rotationExpectation"
+            ],
+            "properties": {
+              "handleId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "allowedEnvironments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "maximumAccessScope": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "rotationExpectation": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              },
+              "ttlPolicy": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "capabilityId",
+              "kind",
+              "provider",
+              "riskLevel",
+              "allowedEnvironments",
+              "requiredApproval",
+              "providerConstraints"
+            ],
+            "properties": {
+              "capabilityId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "tool",
+                  "model",
+                  "wallet-action",
+                  "exchange-action",
+                  "onchain-action",
+                  "data-source"
+                ]
+              },
+              "provider": {
+                "type": "string"
+              },
+              "riskLevel": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ]
+              },
+              "allowedEnvironments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requiredApproval": {
+                "type": "boolean"
+              },
+              "credentialHandleId": {
+                "type": "string"
+              },
+              "providerConstraints": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "effectSemantics": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "idempotencyClass",
+                  "duplicateSubmitBehavior",
+                  "retryPolicy",
+                  "compensationClass"
+                ],
+                "properties": {
+                  "idempotencyClass": {
+                    "type": "string",
+                    "enum": [
+                      "idempotent",
+                      "conditionally-idempotent",
+                      "non-idempotent"
+                    ]
+                  },
+                  "duplicateSubmitBehavior": {
+                    "type": "string"
+                  },
+                  "retryPolicy": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "compensationClass": {
+                    "type": "string",
+                    "enum": [
+                      "revertible",
+                      "compensatable",
+                      "irreversible"
+                    ]
+                  }
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "wallet-action",
+                        "exchange-action",
+                        "onchain-action"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "credentialHandleId",
+                    "effectSemantics"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

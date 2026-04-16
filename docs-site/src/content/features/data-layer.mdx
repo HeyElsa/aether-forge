@@ -1,0 +1,61 @@
+# Data Layer
+
+The DataRouter provides a **unified dispatch surface** for all data sources — HTTP APIs, x402 paid endpoints, WebSocket feeds, and MCP servers.
+
+<video src="/videos/05-data-layer.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Fallback Chain
+
+Configure sources in priority order. First success wins.
+
+```json
+{
+  "data_sources": [
+    { "name": "elsa", "type": "x402", "priority": 1 },
+    { "name": "binance", "type": "http", "priority": 2 },
+    { "name": "coingecko", "type": "http", "priority": 3 },
+    { "name": "mcp-tools", "type": "mcp", "priority": 4 }
+  ]
+}
+```
+
+```python
+router.fetch("spot-price", symbol="ETHUSDT")
+# → source: binance, cost: $0.00
+
+router.fetch("get-token-price", token="ETH")
+# → source: elsa, cost: $0.002
+```
+
+## Source Types
+
+| Type | Example | Cost |
+|---|---|---|
+| **x402** | Elsa DeFi endpoints | $0.001–0.01/call |
+| **HTTP** | Binance, CoinGecko | Free |
+| **WebSocket** | Live price feeds | Free |
+| **MCP** | Any MCP server tool | Free |
+
+## Token Registry
+
+Symbols map to contract addresses per chain:
+
+| Chain | Token | Address |
+|---|---|---|
+| Base | ETH (WETH) | `0x4200...0006` |
+| Base | USDC | `0x8335...2913` |
+| Ethereum | ETH (WETH) | `0xC02a...6Cc2` |
+| Ethereum | USDC | `0xA0b8...eB48` |
+
+## Cost Tracking
+
+Every source independently tracks fetches, errors, and cumulative cost:
+
+```python
+router.cost_summary()
+# total_cost_usd: $0.006
+# sources:
+#   elsa:      $0.006, 3 calls, 0 errors
+#   binance:   $0.000, 47 calls, 2 errors
+#   coingecko: $0.000, 5 calls, 0 errors
+```

@@ -1,0 +1,228 @@
+# Python SDK
+
+Aether Forge is fully importable. You can run agents, build prompts, query memory, and verify attestations from your own Python code without the CLI.
+
+## Install
+
+```bash
+pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
+```
+
+Requires Python 3.12+.
+
+## Run an Agent Programmatically
+
+```python
+from pathlib import Path
+from aether_forge.runner import AgentRunner, RunnerConfig
+
+runner = AgentRunner(
+    agent_directory=Path("./my-agent"),
+    config=RunnerConfig(
+        interval_seconds=30.0,
+        max_ticks=10,
+        environment="paper",
+        auto_approve=True,
+        enable_autoresearch=True,
+        health_port=8080,
+        a2a_port=9001,
+        tick_timeout_seconds=120.0,
+        circuit_breaker_threshold=5,
+    ),
+)
+
+results = runner.run()
+for tick in results:
+    print(f"Tick {tick.tick_number}: {tick.session_status} ({tick.steps_executed} steps)")
+```
+
+## Generate an Agent
+
+```python
+from pathlib import Path
+from aether_forge.generator import generate_fast, FastGenerateRequest
+
+result = generate_fast(FastGenerateRequest(
+    name="my-agent",
+    idea="ETH swing trader using momentum signals",
+    output_directory=Path("./my-agent"),
+    create_wallet=True,
+    autonomous=True,
+    strategy_file="strategy.md",
+    planner_mode="openrouter",
+    planner_model="anthropic/claude-sonnet-4",
+))
+print(f"Generated at {result.output_directory}")
+print(f"Wallet: {result.wallet_address}")
+```
+
+## Run a Single Tick
+
+```python
+from aether_forge.runner import AgentRunner, RunnerConfig
+
+runner = AgentRunner(
+    agent_directory=Path("./my-agent"),
+    config=RunnerConfig(environment="paper", auto_approve=True),
+)
+runner._initialize()  # one-time setup
+
+result = runner.tick()
+print(f"Status: {result.session_status}")
+print(f"Steps: {result.steps_executed}")
+print(f"Working set keys: {result.working_set_keys}")
+```
+
+## Query Memory
+
+```python
+from aether_forge.storage import SqliteMemoryStore, MemoryQuery
+
+store = SqliteMemoryStore("./my-agent/memory.db")
+
+records = store.read(MemoryQuery(
+    memory_type="decision-history",
+    scope="session",
+    environment="paper",
+    limit=20,
+))
+
+for r in records:
+    print(f"[{r.created_at}] {r.summary}")
+
+store.close()
+```
+
+## Build a Planning Prompt
+
+```python
+from aether_forge.prompting import (
+    build_function_call_prompt_from_session,
+    estimate_tokens,
+    truncate_to_budget,
+)
+
+# Inside a tick handler...
+prompt = build_function_call_prompt_from_session(
+    session,
+    declared_capability_ids={"cap-market-btc-price", "cap-exchange-order"},
+    model="claude-sonnet-4",  # for token budget
+)
+print(f"Prompt size: {estimate_tokens(prompt)} tokens")
+```
+
+## Use the A2A Client
+
+```python
+from aether_forge.a2a_client import A2AForgeClient
+
+client = A2AForgeClient("http://localhost:9001")
+card = client.get_agent_card()
+print(f"Connected to: {card.name}")
+
+result = client.send_task(
+    capability="get-token-price",
+    arguments={"token": "ETH"},
+)
+print(f"Status: {result['status']}")
+print(f"Artifacts: {result['artifacts']}")
+```
+
+## DeFi Safety Helpers
+
+```python
+from aether_forge.defi_safety import (
+    simulate_tx, check_slippage, ExposureTracker,
+    check_position_health, SwapQuote,
+)
+
+# Simulate before signing
+sim = simulate_tx(
+    rpc_url="https://mainnet.base.org",
+    from_address="0xE8D0...",
+    to_address="0x8335...",
+    data="0xa9059cbb...",
+)
+if not sim.success:
+    raise RuntimeError(f"Tx would revert: {sim.revert_reason}")
+```
+
+## Pay via x402
+
+```python
+from aether_forge.x402_client import X402Client, X402Config
+from aether_forge.wallet import load_wallet
+
+wallet = load_wallet("./my-agent")
+
+client = X402Client(
+    wallet=wallet,
+    config=X402Config(
+        max_per_call_usd=0.01,
+        max_session_usd=1.00,
+        max_daily_usd=5.00,
+        chain="base",
+        confirmed=True,
+    ),
+)
+
+result = client.get("https://x402-api.heyelsa.ai/api/get_token_price?token=ETH")
+print(result)
+```
+
+## Verify Attestation
+
+```python
+from pathlib import Path
+from aether_forge.attestation import (
+    Attestation, verify_self_attestation, determine_trust_tier,
+)
+
+attestation = Attestation.load(Path("./my-agent/attestation.json"))
+ok = verify_self_attestation(attestation)
+tier = determine_trust_tier(attestation)
+
+print(f"Valid: {ok}, Tier: {tier}")  # e.g., "self-attested"
+```
+
+## Run an A2A Server in Your App
+
+```python
+from aether_forge.a2a_server import A2AServer, build_agent_card
+
+# Build card from your agent's spec/manifest
+card = build_agent_card(agent_spec, capability_manifest, port=9001)
+
+def my_task_handler(message: dict) -> dict:
+    capability = message["params"]["message"]["parts"][0]["data"]["capability"]
+    # ... your logic ...
+    return {"status": "completed", "artifacts": [{"type": "text", "value": "done"}]}
+
+server = A2AServer(port=9001, agent_card=card, task_handler=my_task_handler)
+server.start()
+# ... server runs in background daemon thread ...
+server.stop()
+```
+
+## Type Hints
+
+All public APIs use Python 3.12+ type hints. Your IDE (Pyright, mypy) gets full autocomplete:
+
+```python
+from aether_forge.runtime import StepProposal, StepKind, ExecutionResult
+from aether_forge.policy import PolicyDecision
+```
+
+## Stable vs Experimental
+
+| Module | Stability |
+|---|---|
+| `runner` | Stable |
+| `generator` | Stable |
+| `storage` | Stable |
+| `prompting` | Stable |
+| `defi_safety` | Beta — API may evolve |
+| `agent_payments` | Beta |
+| `protocols.erc8183` | Experimental — contract not deployed |
+
+See [CHANGELOG.md](https://github.com/HeyElsa/aether-forge/blob/main/CHANGELOG.md) for breaking changes.

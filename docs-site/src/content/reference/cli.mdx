@@ -1,0 +1,173 @@
+# CLI Reference
+
+All commands are available via the `forge` CLI after installing `aether-forge`.
+
+<video src="/videos/21-cli.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Agent Lifecycle
+
+### `forge generate-fast`
+
+Generate an agent instantly from an idea.
+
+```bash
+forge generate-fast \
+  --name "My Agent" \
+  --idea "ETH swing trader" \
+  --output ./my-agent \
+  --strategy-file ./strategy.md \
+  --wallet \
+  --autonomous \
+  --skills elsa:trading \
+  --planner-mode openrouter \
+  --model deepseek/deepseek-r1 \
+  --no-registry
+```
+
+| Flag | Description |
+|---|---|
+| `--name` | Agent name |
+| `--idea` | Plain-language description |
+| `--output` | Output directory |
+| `--strategy-file` | Path to strategy markdown file |
+| `--wallet` | Provision a real OWS wallet |
+| `--autonomous` | Enable autonomous mode |
+| `--skills` | Skills from registries (e.g., `elsa:trading`) |
+| `--planner-mode` | LLM provider (`ollama`, `anthropic`, `openai`, `google`, `openrouter`) |
+| `--model` | Specific model name |
+| `--no-registry` | Skip local registry |
+
+### `forge generate-slow`
+
+Autoresearch refinement loop.
+
+```bash
+forge generate-slow --name "My Agent" --idea "basis capture" \
+  --output ./my-agent --max-iterations 5
+```
+
+### `forge validate`
+
+Validate all JSON artifacts in an agent directory.
+
+```bash
+forge validate ./my-agent
+```
+
+### `forge eval-pack`
+
+Run scenario-based evaluation.
+
+```bash
+forge eval-pack ./my-agent
+```
+
+### `forge run`
+
+Run an agent continuously.
+
+```bash
+forge run ./my-agent \
+  --mode paper \
+  --interval 30 \
+  --auto-approve \
+  --autoresearch \
+  --knowledge \
+  --a2a-port 9001 \
+  --health-port 8080 \
+  --json-log ./logs/agent.jsonl \
+  --pid-file ./agent.pid
+```
+
+| Flag | Description |
+|---|---|
+| `--mode` | `paper` or `live` |
+| `--interval` | Seconds between ticks |
+| `--auto-approve` | Skip human approval prompts |
+| `--autoresearch` | Enable self-improvement loop |
+| `--knowledge` | Enable Layer 4 MemPalace |
+| `--a2a-port` | Start A2A server on this port |
+| `--health-port` | Health check HTTP server |
+| `--json-log` | Path for structured JSON logs |
+| `--planner-mode` | Override LLM provider |
+| `--model` | Override model |
+
+### `forge promote-draft`
+
+Promote agent to next stage.
+
+```bash
+forge promote-draft ./my-agent --target paper --approver "ops-team"
+```
+
+## Strategy
+
+```bash
+forge strategy view ./my-agent        # Show parameters + performance
+forge strategy accept <proposal-id>   # Apply improvement proposal
+forge strategy reject <proposal-id>   # Discard proposal
+```
+
+## Wallet
+
+```bash
+forge wallet-create --name agent-wallet
+forge wallet-list
+forge wallet-account --name wallet --chain evm
+forge wallet-sign-message --name wallet --chain evm --message "hello"
+forge wallet-sign-tx --name wallet --chain evm --tx-hex 0x...
+forge wallet-send-tx --name wallet --chain evm --tx-hex 0x...
+forge wallet-import --name imported --mnemonic "word1 word2 ..."
+forge wallet-export --name wallet
+forge wallet-delete --name old-wallet
+forge wallet-backup .
+forge wallet-restore backup.json
+```
+
+## Agent Registry
+
+```bash
+forge agent-list                      # List all agents
+forge agent-info <id>                 # Show details
+forge agent-remove <id>              # Archive agent
+forge agent-register <id>           # Register on Base mainnet
+forge agent-discover --capability X  # Find agents on-chain
+forge agent-send <url> --capability X --payload '{}'
+```
+
+## Security
+
+```bash
+forge security-check . --harden     # Run 8-point audit
+forge halt .                         # Activate kill switch
+forge resume .                       # Clear kill switch
+```
+
+## Skills
+
+```bash
+forge skills-search "trading"
+forge skills-add elsa:trading --project ./my-agent
+forge elsa-list
+forge elsa-list --category perpetuals
+```
+
+## Replay Debugging
+
+```bash
+forge replays ./my-agent             # List all replay files
+forge replays ./my-agent --limit 50  # Last 50
+
+forge replay-show ./my-agent/replays/tick_0001.json
+forge replay-show ./my-agent/replays/tick_0001.json --full     # Show payloads
+forge replay-show ./my-agent/replays/tick_0001.json --steps-only
+```
+
+Shows what the LLM proposed, policy decisions, and results per step.
+
+## Diagnostics
+
+```bash
+forge doctor                         # Full system check
+forge doctor ./aether-forge.json     # Check specific config
+```

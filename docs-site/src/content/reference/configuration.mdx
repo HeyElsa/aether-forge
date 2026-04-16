@@ -1,0 +1,234 @@
+# Configuration Reference
+
+Every agent's runtime behavior is controlled by `aether-forge.json` in the agent directory.
+
+---
+
+## Full Example
+
+```json
+{
+  "planner": {
+    "mode": "openrouter",
+    "model": "deepseek/deepseek-r1",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "apiKeyEnv": "OPENROUTER_API_KEY",
+    "temperature": 0.3
+  },
+  "runtime": {
+    "cryptoRouter": "paper"
+  },
+  "tick_interval_seconds": 30,
+  "chain": "base",
+  "data_sources": [
+    {
+      "name": "elsa",
+      "type": "x402",
+      "priority": 1
+    },
+    {
+      "name": "binance",
+      "type": "http",
+      "url": "https://api.binance.com",
+      "priority": 2
+    },
+    {
+      "name": "coingecko",
+      "type": "http",
+      "url": "https://api.coingecko.com/api/v3",
+      "priority": 3
+    }
+  ],
+  "mcp_servers": {
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve"]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" },
+      "tools": { "include": ["list_issues", "create_issue"] }
+    },
+    "internal-api": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": { "Authorization": "Bearer ${API_KEY}" }
+    }
+  },
+  "x402_budget": {
+    "max_per_call_usd": 0.01,
+    "max_session_usd": 1.00,
+    "max_daily_usd": 5.00
+  },
+  "autoresearch": true
+}
+```
+
+---
+
+## `planner` — LLM Configuration
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `mode` | string | `"heuristic"` | LLM provider. See modes below. |
+| `model` | string | auto | Model name (e.g., `"gemma4:latest"`, `"claude-sonnet-4.5"`) |
+| `baseUrl` | string | auto | API endpoint URL |
+| `apiKeyEnv` | string | auto | Environment variable name containing the API key |
+| `temperature` | float | varies | LLM temperature (lower = more deterministic) |
+
+### Planner Modes
+
+| Mode | Provider | Default model | Default endpoint |
+|---|---|---|---|
+| `ollama` | Ollama (local) | `gemma4:latest` | `http://localhost:11434/v1` |
+| `anthropic` | Anthropic | `claude-sonnet-4-20250514` | `https://api.anthropic.com` |
+| `openai` | OpenAI | `gpt-4o` | `https://api.openai.com/v1` |
+| `google` / `gemini` | Google | `gemini-2.5-flash` | `https://generativelanguage.googleapis.com` |
+| `openrouter` | OpenRouter | `anthropic/claude-sonnet-4.5` | `https://openrouter.ai/api/v1` |
+| `openai-compatible` | Any | — | Custom `baseUrl` |
+| `function-call` | Any (JSON mode) | — | Uses function-call adapter |
+| `heuristic` | None (rule-based) | — | No LLM needed |
+| `static` | Test fixture | — | Reads from `staticResponseFile` |
+
+### Auto-Detection Priority
+
+When no `planner.mode` is specified, Aether Forge probes in order:
+
+1. Ollama at `localhost:11434` → if running, use it
+2. `ANTHROPIC_API_KEY` env var → Anthropic
+3. `OPENAI_API_KEY` env var → OpenAI
+4. `GEMINI_API_KEY` / `GOOGLE_API_KEY` → Google
+5. `OPENROUTER_API_KEY` → OpenRouter
+6. Heuristic fallback (no LLM)
+
+---
+
+## `runtime` — Execution Mode
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `cryptoRouter` | string | `"mock"` | Execution mode for capabilities |
+
+### Crypto Router Modes
+
+| Mode | Description |
+|---|---|
+| `mock` | All capabilities return mock data |
+| `paper` | Real market data, simulated orders |
+| `live` | Real market data, real orders |
+| `ows` | Use OWS wallet for all signing |
+| `sim` | Simulated wallet |
+| `public-market-data` | Real read-only market data, no orders |
+| `authenticated-paper` | Real APIs with auth, simulated orders |
+
+---
+
+## `data_sources` — DataRouter Configuration
+
+Array of data source objects. The DataRouter tries them in priority order.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Unique source name |
+| `type` | string | Yes | `"http"`, `"x402"`, `"mcp"`, `"websocket"` |
+| `url` | string | For HTTP | API base URL |
+| `priority` | number | Yes | Lower = tried first |
+
+---
+
+## `mcp_servers` — MCP Tool Servers
+
+Object where keys are server names and values are server configs.
+
+### Stdio Transport
+
+```json
+{
+  "my-server": {
+    "command": "npx",
+    "args": ["-y", "@mcp/server-something"],
+    "env": { "API_KEY": "${MY_API_KEY}" },
+    "tools": {
+      "include": ["tool_a", "tool_b"],
+      "exclude": ["dangerous_tool"]
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `command` | string | Executable to spawn |
+| `args` | string[] | Command arguments |
+| `env` | object | Additional environment variables (supports `${VAR}` expansion) |
+| `tools.include` | string[] | Whitelist of tools (if set, only these are visible) |
+| `tools.exclude` | string[] | Blacklist of tools |
+
+### HTTP Transport
+
+```json
+{
+  "remote-server": {
+    "url": "https://mcp.example.com/mcp",
+    "headers": { "Authorization": "Bearer ${TOKEN}" }
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `url` | string | MCP endpoint URL |
+| `headers` | object | HTTP headers (supports `${VAR}` expansion) |
+
+---
+
+## `x402_budget` — Payment Caps
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `max_per_call_usd` | float | `0.10` | Maximum per individual x402 call |
+| `max_session_usd` | float | `1.00` | Maximum per session (one `forge run`) |
+| `max_daily_usd` | float | `5.00` | Maximum per calendar day |
+
+These caps apply to **all** x402 payments — Elsa endpoints, agent-to-agent payments, everything.
+
+Budget state is tracked atomically in `x402_state.json` with file locking.
+
+---
+
+## Top-Level Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `tick_interval_seconds` | number | `30` | Seconds between ticks |
+| `chain` | string | `"base"` | Default blockchain for on-chain operations |
+| `autoresearch` | boolean | `false` | Enable self-improvement loop |
+
+---
+
+## Environment Variables
+
+These are read at runtime and can override config:
+
+| Variable | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Google API key |
+| `OWS_API_KEY` | Open Wallet Standard API key |
+| `AETHER_FORGE_REGISTRY_PATH` | Override local registry database path |
+
+---
+
+## Validate Configuration
+
+```bash
+forge config-validate ./aether-forge.json
+# or
+forge doctor  # also validates config
+```

@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aether-forge"
+version = "0.1.0"
+description = "Spec-first agent builder framework for the open agent economy"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+  {name = "HeyElsa", email = "x402@heyelsa.ai"},
+]
+keywords = [
+  "agent", "ai", "framework", "spec-first", "policy",
+  "crypto", "defi", "x402", "erc-8004", "wallet",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "jsonschema>=4.23.0",
+]
+
+[project.optional-dependencies]
+# Framework contributors: pip install -e .[dev]
+dev = [
+  "pytest>=8.3.5",
+  "ruff>=0.6.0",
+  "build",
+  "twine",
+]
+# Real OWS wallets across 9 chains. Without this, agents fall back to
+# the simulated wallet provider.
+wallet = [
+  "open-wallet-standard>=1.2.4",
+]
+# Long-term semantic + temporal memory layer (Layer 4). Without this,
+# agents run on operational SQLite memory only (Layer 3).
+knowledge = [
+  "mempalace>=3.1.0",
+]
+# Encrypted wallet backups (AES-256-GCM + scrypt) and encrypted memory
+# records. Without this, ``forge wallet-backup`` requires --unencrypted.
+security = [
+  "cryptography>=42.0.0",
+]
+# Agent-to-agent communication via Google's A2A protocol.
+a2a = [
+  "a2a-sdk>=0.3.0",
+]
+# Everything an end user needs for a production agent.
+all = [
+  "open-wallet-standard>=1.2.4",
+  "mempalace>=3.1.0",
+  "cryptography>=42.0.0",
+  "a2a-sdk>=0.3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/HeyElsa/aether-forge"
+Documentation = "https://github.com/HeyElsa/aether-forge#readme"
+Repository = "https://github.com/HeyElsa/aether-forge"
+Issues = "https://github.com/HeyElsa/aether-forge/issues"
+
+[project.scripts]
+forge = "aether_forge.cli:main_cli"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aether_forge = ["schemas/**/*.json"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

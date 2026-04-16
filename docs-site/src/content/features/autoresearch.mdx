@@ -1,0 +1,77 @@
+# Autoresearch
+
+Karpathy-style keep-or-discard loop for **runtime strategy self-improvement**.
+
+<video src="/videos/07-autoresearch.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## How It Works
+
+1. Agent runs for N ticks
+2. Evaluates performance: win rate, P&L, drawdown, avg win/loss
+3. LLM proposes parameter changes based on results
+4. Safety bounds are checked
+5. Human approves or rejects
+
+## Self-Evaluation
+
+```bash
+forge strategy view ./my-agent
+```
+
+```
+version: 1
+parameters:
+  spread_pct: 1.0
+  position_size_pct: 1.0
+  momentum_threshold: 0.5
+
+performance:
+  Win rate:     62% (target: >45%)
+  Max drawdown: 3.2% (target: <5%)
+  Avg win/loss: 1.8 (target: >1.5)
+```
+
+## Mutation Proposals
+
+The LLM analyzes performance and proposes changes:
+
+```
+IMPROVEMENT PROPOSAL [prop_a1b2c3]
+
+Hypothesis: Relax entry confirmations
+Change: momentum_threshold 0.5 → 0.3
+Expected: +15% more trades
+
+Safety check:
+  position_size ≤ 25% ✓
+  stop_loss ≤ 20% ✓
+```
+
+## Safety Bounds
+
+The agent **cannot** propose unsafe parameters:
+
+| Parameter | Max allowed |
+|---|---|
+| `position_size` | 25% |
+| `stop_loss` | 20% |
+| `leverage` | 5x |
+| `max_daily_trades` | 100 |
+
+## Accept or Reject
+
+```bash
+# Accept the proposal — strategy advances to v2
+forge strategy accept prop_a1b2c3
+
+# Reject — keep current version
+forge strategy reject prop_a1b2c3
+```
+
+## Enable
+
+```bash
+forge run ./my-agent --autoresearch --eval-interval 6
+```
+
+`--eval-interval` controls how many ticks between self-evaluations (default: 10).

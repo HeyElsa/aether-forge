@@ -1,0 +1,209 @@
+# LLM Planner
+
+Every Aether Forge agent is **LLM-driven by default**. On each tick, the planner assembles a prompt from six sections, sends it to your chosen model, and validates the structured JSON response.
+
+<video src="/videos/04-llm-planner.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Prompt Assembly
+
+Every tick, the planner builds a prompt from:
+
+| Section | Source | Purpose |
+|---|---|---|
+| **Objective** | `agent-spec.json` | What the agent is trying to do |
+| **Capabilities** | `capability-manifest.json` | What tools are available |
+| **Runtime State** | Layer 2 working set | Current prices, balances, signals |
+| **Memory** | Layer 3 SQLite | Recent tick summaries, observations |
+| **Knowledge** | Layer 4 MemPalace | Cross-session learned facts |
+| **Instructions** | `strategy.md` | Your plain-English strategy |
+
+## Typed Output
+
+The LLM returns structured JSON — not chat text:
+
+```json
+{
+  "reasoning": "Momentum confirmed, volume normal.",
+  "tool_calls": [{
+    "name": "cap-exchange-order",
+    "arguments": {
+      "side": "buy",
+      "token": "ETH",
+      "amount": 0.001,
+      "limit_price": 2249.18
+    }
+  }],
+  "final_message": "Order placed."
+}
+```
+
+The runtime validates every field. Invalid proposals are logged and skipped.
+
+## Auto-Detection
+
+When you run `forge generate-fast`, the planner auto-detects the best available LLM:
+
+| Priority | Provider | Example model |
+|---|---|---|
+| 1 | Ollama (local) | `gemma4:latest` |
+| 2 | Anthropic | `claude-sonnet-4.5` |
+| 3 | OpenAI | `gpt-4o` |
+| 4 | Google | `gemini-2.5-flash` |
+| 5 | OpenRouter | Any of 200+ models |
+| 6 | Heuristic | Rule-based fallback |
+
+The detected config is baked into `aether-forge.json` so anyone running the agent later gets the same model.
+
+## Override at Runtime
+
+```bash
+# Use a different model without changing config
+forge run . --planner-mode anthropic --model claude-sonnet-4.5
+forge run . --planner-mode ollama --model gemma4:latest
+forge run . --planner-mode openrouter --model meta-llama/llama-4-maverick
+```
+
+## Runtime Loop
+
+Each tick follows a strict pipeline:
+
+1. **Planner** proposes steps (LLM)
+2. **Policy gate** checks each step (environment, limits, approval)
+3. **Execute** via DataRouter
+4. **Record** in step ledger
+5. **Persist** to memory + replay
+
+## What the LLM Actually Sees
+
+Here's a real prompt assembled by the planner on tick 8 of an ETH swing trader:
+
+```
+## Objective
+ETH swing trader — buy when bullish momentum confirmed, sell on profit target or stop-loss.
+
+## Capabilities (14 declared)
+  cap-market-btc-price    (read, low risk)
+  cap-market-volatility   (read, low risk)
+  cap-exchange-order      (write, high risk, requires approval)
+  cap-portfolio-balance   (read, low risk)
+  cap-memory-read         (read, low risk)
+  cap-memory-write        (write, low risk)
+  ...
+
+## Runtime State
+  eth_price: $2,249.63
+  eth_trend: bullish (+0.22% momentum)
+  volatility: 1.5%
+  portfolio_balance_usd: $10,127.45
+  open_positions: 1 (0.001 ETH at $2,219)
+
+## Memory Context (last 10 decisions)
+  Tick 7: Holding. Position up +1.4%. Stop at $2,175.
+  Tick 6: Holding. Tightened stop to $2,175.
+  Tick 5: BUY 0.001 ETH at $2,219. Bullish candle + volume 1.3x.
+  Tick 4: Skipped. RSI=72, overbought.
+  Tick 3: SELL 0.0005 ETH at $2,205. Stop-loss hit.
+
+## Knowledge (MemPalace)
+  eth: trend=bullish since 2026-04-10
+  eth: avg_daily_volume=12.4B
+  eth: support_level=2180, resistance_level=2290
+
+## Strategy (from strategy.md)
+  [Your full strategy file is included here verbatim]
+```
+
+The LLM responds with structured JSON:
+
+```json
+{
+  "reasoning": "Position at +1.38%. Approaching +4% target at $2,307. Momentum still positive. Volume normal. Holding with tightened stop at $2,204.",
+  "tool_calls": [
+    {
+      "name": "cap-memory-write",
+      "arguments": {
+        "content": "Tick 8: Holding 0.001 ETH. Entry $2,219, current $2,249. P&L +$0.03."
+      }
+    }
+  ],
+  "final_message": "Holding position. Stop at $2,204.",
+  "requires_approval": false
+}
+```
+
+## Policy Gate Examples
+
+The policy gate evaluates every proposed step:
+
+```
+Step: cap-exchange-order (BUY 0.001 ETH)
+  ✓ Environment: paper allows cap-exchange-order
+  ✓ Notional: $2.25 < $100,000 limit
+  ✓ Wallet chain: base is allowed
+  ✓ Approval: auto-approve enabled
+  → APPROVED
+
+Step: cap-exchange-order (BUY 50 ETH)
+  ✓ Environment: paper allows cap-exchange-order
+  ✗ Notional: $112,481 > $100,000 limit
+  → DENIED (notional limit exceeded)
+```
+
+## Planner Configuration Examples
+
+### Local Ollama (free, private)
+
+```json
+{
+  "planner": {
+    "mode": "ollama",
+    "model": "gemma4:latest"
+  }
+}
+```
+
+### Anthropic Claude
+
+```json
+{
+  "planner": {
+    "mode": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "apiKeyEnv": "ANTHROPIC_API_KEY"
+  }
+}
+```
+
+### OpenRouter (any model)
+
+```json
+{
+  "planner": {
+    "mode": "openrouter",
+    "model": "deepseek/deepseek-r1",
+    "apiKeyEnv": "OPENROUTER_API_KEY"
+  }
+}
+```
+
+### Custom OpenAI-compatible endpoint
+
+```json
+{
+  "planner": {
+    "mode": "openai-compatible",
+    "model": "my-custom-model",
+    "baseUrl": "https://my-llm-proxy.example.com/v1",
+    "apiKeyEnv": "MY_API_KEY"
+  }
+}
+```
+
+## Error Handling
+
+If the LLM returns invalid JSON, the planner:
+
+1. Logs the raw response and parse error
+2. Strips markdown fences (`` ```json ... ``` ``) and retries parsing
+3. If still invalid, falls back to a no-op tick (no steps executed)
+4. The agent continues on the next tick — one bad response doesn't crash the loop

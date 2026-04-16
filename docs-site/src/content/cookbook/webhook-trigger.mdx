@@ -1,0 +1,137 @@
+# Trigger an Agent from a Webhook
+
+Out-of-the-box, Aether Forge agents run on a tick interval. To run them on external events (webhook, queue message, cron), use one of these patterns.
+
+## Pattern 1: HTTP server + per-request tick
+
+```python
+# webhook_server.py
+from pathlib import Path
+from flask import Flask, request, jsonify
+from aether_forge.runner import AgentRunner, RunnerConfig
+
+app = Flask(__name__)
+runner = AgentRunner(
+    Path("./my-agent"),
+    RunnerConfig(environment="paper", auto_approve=True, persist_memory=True),
+)
+runner._initialize()
+
+@app.post("/trigger")
+def trigger():
+    # Inject the webhook payload into working set so the planner sees it
+    payload = request.get_json()
+    runner._session_seed = {"webhook_event": payload}
+    result = runner.tick()
+    return jsonify({
+        "tick": result.tick_number,
+        "status": result.session_status,
+        "steps": result.steps_executed,
+    })
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
+```
+
+```bash
+curl -X POST http://localhost:8000/trigger \
+  -H "Content-Type: application/json" \
+  -d '{"event":"price_alert","token":"ETH","threshold":2500}'
+```
+
+## Pattern 2: Queue consumer (RabbitMQ, Redis, SQS)
+
+```python
+import json, redis
+from pathlib import Path
+from aether_forge.runner import AgentRunner, RunnerConfig
+
+r = redis.Redis(host="localhost", port=6379)
+runner = AgentRunner(Path("./my-agent"), RunnerConfig(environment="paper", auto_approve=True))
+runner._initialize()
+
+while True:
+    _, raw = r.blpop("agent-events", timeout=0)
+    event = json.loads(raw)
+    runner._session_seed = {"event": event}
+    result = runner.tick()
+    r.rpush("agent-results", json.dumps({
+        "event": event,
+        "result": {"status": result.session_status, "steps": result.steps_executed},
+    }))
+```
+
+## Pattern 3: GitHub webhook → agent action
+
+```python
+from flask import Flask, request
+import hmac, hashlib
+
+app = Flask(__name__)
+SECRET = "your-webhook-secret"
+
+@app.post("/github")
+def github_webhook():
+    # Verify signature
+    sig = request.headers.get("X-Hub-Signature-256", "").replace("sha256=", "")
+    expected = hmac.new(SECRET.encode(), request.data, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return "Forbidden", 403
+
+    event = request.headers.get("X-GitHub-Event")
+    payload = request.get_json()
+
+    if event == "push":
+        # Trigger agent to run tests / deploy / notify
+        runner._session_seed = {"github_push": payload}
+        runner.tick()
+
+    return "ok"
+```
+
+## Pattern 4: A2A as the "webhook"
+
+Other agents call your agent via A2A — same idea, but with cryptographic auth and built-in payment.
+
+```bash
+forge run ./my-agent --a2a-port 9001 --auto-approve
+```
+
+Then anyone can:
+
+```bash
+forge agent-send http://your-host:9001 --capability your-cap --payload '{"event":"x"}'
+```
+
+The receiving agent's planner sees the task as an incoming step proposal. Built-in EIP-712 signing means you can verify who sent it.
+
+## Pattern 5: Scheduled (cron / Lambda)
+
+```yaml
+# AWS Lambda EventBridge schedule
+- schedule: rate(5 minutes)
+  function: trigger_agent_tick
+```
+
+```python
+# lambda_handler.py
+def handler(event, context):
+    runner = AgentRunner(Path("/var/task/agent"), RunnerConfig(environment="paper"))
+    runner._initialize()
+    result = runner.tick()
+    return {"statusCode": 200, "tick": result.tick_number}
+```
+
+## Important: handle concurrency
+
+If multiple events arrive at once, sequential ticks are safest. The SQLite memory store is single-threaded. Either:
+- Use a queue + single consumer (Pattern 2)
+- Use a lock around `runner.tick()` calls
+- Run separate agent instances per event stream
+
+## Don't forget
+
+- Validate webhook signatures
+- Rate limit incoming requests
+- Set conservative `tick_timeout_seconds`
+- Monitor `/ready` — if the agent enters circuit breaker, your webhook handler should return 503

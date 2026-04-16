@@ -1,0 +1,115 @@
+{
+  "artifactType": "research-record",
+  "schemaVersion": "1.0.0",
+  "artifactId": "research_delta_neutral_btc",
+  "artifactVersion": "0.1.0",
+  "artifactSetId": "aset_delta_neutral_btc_v001",
+  "title": "Delta Neutral BTC Research Record",
+  "generator": {
+    "name": "aether-forge",
+    "version": "0.1.0",
+    "inputDigest": "sha256:delta-neutral-btc-v001"
+  },
+  "compatibility": {
+    "status": "backward-compatible",
+    "previousArtifactVersion": null,
+    "migrationRef": null
+  },
+  "provenance": {
+    "createdAt": "2026-04-06T12:00:00Z",
+    "sourceMode": "slow"
+  },
+  "researchPlan": {
+    "goal": "Refine a governed BTC basis-capture agent.",
+    "tracks": [
+      "venue selection",
+      "risk policy defaults",
+      "scenario design"
+    ]
+  },
+  "evidenceLog": [
+    {
+      "source": "internal-research",
+      "claim": "Basis opportunities should be compared with volatility-aware unwind rules."
+    }
+  ],
+  "findings": [
+    {
+      "summary": "Spot and perp delta-neutral structure remains the baseline strategy shape.",
+      "confidence": "medium"
+    }
+  ],
+  "blockers": [],
+  "activeComparisonContract": {
+    "comparisonId": "cmp_delta_neutral_btc_v001",
+    "evaluatorVersion": "prq-1.0.0",
+    "policyThresholdsDigest": "sha256:policy-thresholds-v1",
+    "scenarioPackRef": {
+      "artifactType": "scenario-pack",
+      "artifactId": "scen_delta_neutral_btc",
+      "artifactVersion": "0.1.0"
+    },
+    "normalizationRules": {
+      "fixedBudget": "yes"
+    },
+    "allowedMutationSurfaces": [
+      {
+        "artifactType": "agent-spec",
+        "pathPattern": "/objective/**"
+      },
+      {
+        "artifactType": "scenario-pack",
+        "pathPattern": "/scenarios/*/metrics/**"
+      }
+    ],
+    "budgetRules": {
+      "maxIterations": 3
+    },
+    "artifactSetId": "aset_delta_neutral_btc_v001"
+  },
+  "iterationLedger": [
+    {
+      "candidateId": "cand_baseline",
+      "parentCandidateId": null,
+      "hypothesis": "A basis-capture baseline with unwind rules is viable.",
+      "changedSurfaces": [
+        "baseline-artifact-set"
+      ],
+      "budgetConsumed": {
+        "iterations": 1
+      },
+      "evaluationConditions": {
+        "mode": "sandbox"
+      },
+      "measuredOutcomes": {
+        "result": "usable baseline"
+      },
+      "decisionStatus": "keep",
+      "decisionRationale": "Established the baseline artifact package."
+    },
+    {
+      "candidateId": "cand_unwind_rules",
+      "parentCandidateId": "cand_baseline",
+      "hypothesis": "Explicit unwind triggers improve safety coverage.",
+      "changedSurfaces": [
+        "agent-spec:/objective",
+        "scenario-pack:/scenarios"
+      ],
+      "budgetConsumed": {
+        "iterations": 1
+      },
+      "evaluationConditions": {
+        "mode": "sandbox"
+      },
+      "measuredOutcomes": {
+        "policyGapReduction": "improved"
+      },
+      "decisionStatus": "keep",
+      "decisionRationale": "Improved unwind clarity without expanding scope."
+    }
+  ],
+  "stopRationale": {
+    "reason": "materially-complete",
+    "note": "Enough structure exists to generate and validate the artifact set."
+  }
+}

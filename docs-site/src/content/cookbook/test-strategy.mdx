@@ -1,0 +1,112 @@
+# Test a Strategy
+
+Three ways to test a strategy.md without burning real money or waiting for live ticks.
+
+## 1. Scenario evaluation (no LLM cost)
+
+`forge eval-pack` runs your `scenario-pack.json` against the strategy with synthetic data:
+
+```bash
+forge eval-pack ./my-agent
+```
+
+```
+Scenario pack: total=2 matched=2 pass=1 hold=1 fail=0
+  ✓ baseline-momentum   pass
+  ~ edge-high-volatility hold (needs review)
+```
+
+Edit `scenario-pack.json` to add edge cases:
+
+```json
+{
+  "scenarios": [
+    {
+      "id": "flash-crash",
+      "initialState": { "btc_price": 65000 },
+      "stimuli": [{ "tick": 1, "set": { "btc_price": 50000 } }],
+      "expectedBehavior": {
+        "shouldExecute": ["cap-exchange-order"],
+        "assertion": "Stop loss must trigger on -23% drop"
+      }
+    }
+  ]
+}
+```
+
+## 2. Paper mode with real prices
+
+Real Binance/Elsa prices, simulated orders. Best smoke test:
+
+```bash
+forge run ./my-agent --mode paper --auto-approve --max-ticks 20 --interval 5
+```
+
+## 3. Replay debugging (post-hoc)
+
+After paper running, inspect every decision:
+
+```bash
+forge replays ./my-agent
+forge replay-show ./my-agent/replays/tick_0010.json --full
+```
+
+## 4. Unit testing your strategy logic
+
+If you have custom logic in `src/strategy/router.py`, test it:
+
+```python
+# tests/test_my_strategy.py
+import pytest
+from my_agent.src.strategy.router import handle_tick
+
+def test_buy_on_bullish_momentum():
+    state = {"eth_price": 2000, "momentum": {"trend": "bullish"}}
+    decisions = handle_tick(state)
+    assert any(d["capability"] == "cap-exchange-order" and d["payload"]["side"] == "buy" for d in decisions)
+
+def test_no_trade_when_volatility_extreme():
+    state = {"eth_price": 2000, "momentum": {"trend": "bullish", "volatility": 0.08}}
+    decisions = handle_tick(state)
+    assert not any(d["capability"] == "cap-exchange-order" for d in decisions)
+```
+
+```bash
+pytest tests/test_my_strategy.py -v
+```
+
+## 5. Validate the spec
+
+Always run before going live:
+
+```bash
+forge validate ./my-agent
+```
+
+Catches missing capabilities, broken policy refs, schema violations.
+
+## 6. Pre-flight security audit
+
+```bash
+forge security-check ./my-agent --harden
+```
+
+8 checks: wallet, perms, secrets, vault, halt, audit log, attestation, gitignore.
+
+## CI pipeline
+
+```yaml
+# .github/workflows/agent-ci.yml
+on: [push, pull_request]
+jobs:
+  test-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
+      - run: forge validate ./my-agent
+      - run: forge eval-pack ./my-agent
+      - run: forge security-check ./my-agent
+```

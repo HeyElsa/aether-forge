@@ -1,0 +1,226 @@
+# Troubleshooting
+
+Common errors when running Aether Forge agents and how to fix them.
+
+## Install & Setup
+
+### `forge: command not found`
+
+The `forge` CLI installs to your Python env's `bin/`. Activate the venv:
+
+```bash
+source .venv/bin/activate
+which forge
+```
+
+If still missing: `pip install -e .` from the repo root.
+
+### `forge doctor` shows skipped optional checks
+
+The `[skip]` lines mean the optional package isn't installed. Add it:
+
+```bash
+pip install 'aether-forge[wallet]'      # OWS
+pip install 'aether-forge[knowledge]'   # MemPalace
+pip install 'aether-forge[security]'    # cryptography
+pip install 'aether-forge[a2a]'         # a2a-sdk
+pip install 'aether-forge[all]'         # everything
+```
+
+## LLM / Planner
+
+### `Error: openai-compatible planner mode is missing required settings: api_key`
+
+Your provider's API key env var isn't set. Set the right one for your `--planner-mode`:
+
+| Mode | Env var |
+|---|---|
+| `openrouter` | `OPENROUTER_API_KEY` |
+| `anthropic` | `ANTHROPIC_API_KEY` |
+| `openai` | `OPENAI_API_KEY` |
+| `gemini` / `google` | `GEMINI_API_KEY` |
+| `ollama` | (none — needs `ollama serve` running) |
+
+```bash
+export OPENROUTER_API_KEY=sk-or-v1-...
+forge run . --mode paper
+```
+
+### Planner times out
+
+DeepSeek R1 and reasoning models can take 1-3 minutes per response. Either:
+- Increase `tick_timeout_seconds` in `aether-forge.json`
+- Switch to a faster model: `--planner-mode openrouter --planner-model anthropic/claude-sonnet-4`
+
+### `Could not convert string to float: '50%'`
+
+A numeric field somewhere has `%` in it. Check `strategy.json` and `aether-forge.json` — values should be raw numbers (`0.5` not `"50%"`).
+
+### Ollama: `Connection refused`
+
+Ollama isn't running. Start it:
+
+```bash
+ollama serve     # in one terminal
+ollama pull gemma4:latest
+```
+
+## Memory & Storage
+
+### `sqlite3.OperationalError: database is locked`
+
+Two processes are writing to the same `memory.db`. Use one runner per agent dir, or set `--memory-db /tmp/different-path.db`.
+
+### `no such table: memory_records`
+
+Memory database is missing or corrupted:
+
+```bash
+rm memory.db memory.db-wal memory.db-shm
+forge run . --mode paper
+```
+
+### Memory keeps growing
+
+Memory has no auto-eviction. To trim:
+
+```bash
+sqlite3 memory.db "DELETE FROM memory_records WHERE created_at < datetime('now', '-7 days')"
+sqlite3 memory.db "VACUUM"
+```
+
+Or set `expires_at` when writing memory records.
+
+## Wallet & Crypto
+
+### `OWS_API_KEY not found`
+
+Either install OWS (`pip install 'aether-forge[wallet]'`) or run with the simulated wallet provider (default if OWS isn't installed).
+
+### `BalanceCheckFailed: insufficient ETH for gas`
+
+The agent's wallet needs ~$0.003 in ETH on Base for transaction gas. Check wallet:
+
+```bash
+cat wallet.json | jq '.addresses.evm'
+# Send small amount of ETH to that address on Base mainnet
+```
+
+### `forge agent-register` fails with RPC error
+
+Public Base RPC may be rate-limited. Use your own:
+
+```bash
+forge agent-register <id> --rpc-url https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
+```
+
+## A2A & Multi-Agent
+
+### `Connection refused` when calling another agent
+
+The peer agent isn't running, or its `--a2a-port` doesn't match your `agent-send` URL. Verify:
+
+```bash
+curl http://localhost:9001/.well-known/a2a-card
+```
+
+### A2A task stays in `submitted` forever
+
+The peer agent's planner errored. Check the peer's logs / replay files:
+
+```bash
+forge replay-show ./peer-agent/replays/$(ls -1t ./peer-agent/replays | head -1)
+```
+
+### `429 Too Many Requests` on A2A
+
+Hit the rate limit (60 req/min per IP). Slow down or run multiple instances.
+
+## x402 Payments
+
+### `Payment required: $0.005 USDC`
+
+Caller didn't include the X-PAYMENT header. Either:
+- Use `forge x402-call ...` which handles this automatically
+- Manually sign EIP-3009 and add the X-PAYMENT header
+
+### `Budget exceeded: session_spent_usd 1.05 > max_session_usd 1.00`
+
+You hit your configured cap. Either:
+- Wait for next session
+- Increase `max_session_usd` in `aether-forge.json` `x402_budget`
+- Run with `--confirm-live --max-session-usd 5.00`
+
+### Tx reverts on Base
+
+Use `simulate_tx()` from `aether_forge.defi_safety` before signing. Check the revert reason for clues (insufficient balance, slippage, deadline).
+
+## Runtime / Production
+
+### Agent stuck on a tick (no output)
+
+The LLM call is hanging. The default `tick_timeout_seconds=120` should cut it off after 2 min. Check logs:
+
+```bash
+tail -f logs/agent.jsonl | jq -c 'select(.level=="ERROR" or .level=="WARNING")'
+```
+
+### `/ready` returns 503
+
+Check the reason in the response body:
+
+```bash
+curl localhost:8080/ready
+# {"ready": false, "reason": "kill switch active"}
+```
+
+Common reasons:
+- `kill switch active` → `forge resume .`
+- `last 5 ticks failed` → check planner config and LLM availability
+- `warming up` → just wait for the first tick to complete
+
+### Circuit breaker tripped
+
+After 5 consecutive failures, the agent enters a 60-second cooldown. Check what's failing:
+
+```bash
+forge replays . --limit 5
+forge replay-show ./replays/<latest-failed>.json
+```
+
+### Docker container exits immediately
+
+Check logs:
+
+```bash
+docker logs <container-id>
+```
+
+Common causes: missing env vars (`OPENROUTER_API_KEY`), missing wallet vault (`.ows/` not mounted), wrong working dir.
+
+## Docs Site
+
+### `npm run dev` fails with peer dep warnings
+
+Use `--legacy-peer-deps`:
+
+```bash
+cd docs-site
+npm install --legacy-peer-deps
+```
+
+### Videos don't load
+
+Videos live in `docs-site/public/videos/`. If cloning fresh, ensure they downloaded (89MB total). Check:
+
+```bash
+ls -lh docs-site/public/videos/*.mp4 | wc -l
+# Should be 25
+```
+
+## Still stuck?
+
+1. Run `forge doctor` — most issues show up here
+2. Run with `-v` for full traceback
+3. Check `replays/` for the last tick's step ledger
+4. [Open an issue](https://github.com/HeyElsa/aether-forge/issues/new/choose) with `forge doctor` output and the failing replay

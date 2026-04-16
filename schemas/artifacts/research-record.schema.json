@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/research-record.schema.json",
+  "allOf": [
+    {
+      "$ref": "https://schemas.aether-forge.dev/common/artifact-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "researchPlan",
+        "evidenceLog",
+        "findings",
+        "blockers",
+        "activeComparisonContract",
+        "iterationLedger",
+        "stopRationale"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "research-record"
+        },
+        "researchPlan": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "evidenceLog": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "activeComparisonContract": {
+          "$ref": "https://schemas.aether-forge.dev/runtime/active-comparison-contract.schema.json"
+        },
+        "iterationLedger": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "candidateId",
+              "parentCandidateId",
+              "hypothesis",
+              "changedSurfaces",
+              "budgetConsumed",
+              "evaluationConditions",
+              "measuredOutcomes",
+              "decisionStatus",
+              "decisionRationale"
+            ],
+            "properties": {
+              "candidateId": {
+                "type": "string"
+              },
+              "parentCandidateId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hypothesis": {
+                "type": "string"
+              },
+              "changedSurfaces": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "budgetConsumed": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "evaluationConditions": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "measuredOutcomes": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "decisionStatus": {
+                "type": "string",
+                "enum": [
+                  "keep",
+                  "discard",
+                  "blocked",
+                  "execution-failure"
+                ]
+              },
+              "decisionRationale": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "stopRationale": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  ]
+}

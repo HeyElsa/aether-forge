@@ -1,0 +1,117 @@
+# Observability
+
+Production agents need observability. Aether Forge exposes deep health checks, Prometheus metrics, structured JSON logs, and replay-based debugging.
+
+## Health Server
+
+Run with `--health-port 8080` to expose:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Liveness — process is responsive |
+| `GET /ready` | Readiness — agent is in a healthy state to do work |
+| `GET /status` | Current agent state (status, ticks, errors) |
+| `GET /ticks` | Last 20 tick summaries |
+| `GET /metrics` | Prometheus text format |
+
+### Liveness vs Readiness
+
+- **`/health`** always returns 200 if the process is alive — for K8s liveness probes
+- **`/ready`** returns 503 when:
+  - Kill switch is active (`halt` file present)
+  - Last 5 consecutive ticks have failed
+  - Agent is warming up (no tick completed yet)
+
+```bash
+curl localhost:8080/ready
+# {"ready": false, "reason": "last 5 ticks failed (last status: timeout)"}
+```
+
+## Prometheus Metrics
+
+`/metrics` returns Prometheus text exposition format:
+
+```
+# HELP aether_ticks_total Total ticks completed
+# TYPE aether_ticks_total counter
+aether_ticks_total{agent="aset_eth-swing_abc",env="paper"} 47
+
+# HELP aether_ticks_failed_total Tick failures
+# TYPE aether_ticks_failed_total counter
+aether_ticks_failed_total{agent="aset_eth-swing_abc",env="paper"} 2
+
+# HELP aether_steps_per_tick_avg Average steps per recent tick
+# TYPE aether_steps_per_tick_avg gauge
+aether_steps_per_tick_avg{agent="aset_eth-swing_abc",env="paper"} 4.32
+
+# HELP aether_agent_running 1 if agent is running, 0 otherwise
+# TYPE aether_agent_running gauge
+aether_agent_running{agent="aset_eth-swing_abc",env="paper"} 1
+
+# HELP aether_agent_ready 1 if agent is ready to do work
+# TYPE aether_agent_ready gauge
+aether_agent_ready{agent="aset_eth-swing_abc",env="paper"} 1
+
+# HELP aether_pending_approvals Steps waiting for human approval
+# TYPE aether_pending_approvals gauge
+aether_pending_approvals{agent="aset_eth-swing_abc",env="paper"} 0
+```
+
+Scrape with Prometheus, visualize in Grafana.
+
+## Per-Tick Timeout
+
+Each tick is bounded by `tick_timeout_seconds` (default 120s). If the LLM hangs, the tick is marked `timeout` and the loop continues.
+
+## Circuit Breaker
+
+After `circuit_breaker_threshold` consecutive failures (default 5), the agent enters a cooldown for `circuit_breaker_cooldown_seconds` (default 60s) before retrying. Prevents cost runaway when the LLM provider is down.
+
+## Replay Debugging
+
+Every tick writes a replay file with the full step ledger:
+
+```bash
+forge replays ./my-agent
+#   TICK    STATUS        STEPS   TIME
+#   ----------------------------------------------------------
+#   1       complete      10      2026-04-15T14:30:01
+#   2       complete      20      2026-04-15T14:30:35
+#   3       failed        3       2026-04-15T14:31:12
+
+forge replay-show ./my-agent/replays/tick_0003.json
+#   Replay: tick_0003.json
+#   Tick: 3
+#   Status: failed
+#
+#   Step Ledger (3 steps):
+#
+#   [ 1] reason             —
+#        desc: Checking ETH price before placing order
+#        result: complete
+#
+#   [ 2] use-capability     cap-market-btc-price
+#        desc: Get current ETH price
+#        result: failed
+```
+
+Add `--full` to see complete payloads and outputs.
+
+## Structured JSON Logs
+
+`--json-log /path/to/agent.jsonl` writes one JSON object per log record. RotatingFileHandler caps at 50MB with 3 backups.
+
+```bash
+tail -f agent.jsonl | jq -c 'select(.level=="ERROR") | {ts, msg}'
+```
+
+## Production Deploy
+
+The generated `Dockerfile` is multi-stage with a non-root user and uses `/ready` for the healthcheck:
+
+```bash
+docker build -t my-agent .
+docker run -p 8080:8080 \
+  -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  my-agent
+```

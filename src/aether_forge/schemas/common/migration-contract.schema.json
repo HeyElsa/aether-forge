@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/common/migration-contract.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fromVersion",
+    "toVersion",
+    "transformSteps",
+    "lossyFields",
+    "validationChecks"
+  ],
+  "properties": {
+    "fromVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "toVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "transformSteps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "lossyFields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validationChecks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "artifactType": "capability-manifest",
+  "schemaVersion": "1.0.0",
+  "artifactId": "capm_delta_neutral_btc",
+  "artifactVersion": "0.1.0",
+  "artifactSetId": "aset_delta_neutral_btc_v001",
+  "title": "Delta Neutral BTC Capability Manifest",
+  "generator": {
+    "name": "aether-forge",
+    "version": "0.1.0",
+    "inputDigest": "sha256:delta-neutral-btc-v001"
+  },
+  "compatibility": {
+    "status": "backward-compatible",
+    "previousArtifactVersion": null,
+    "migrationRef": null
+  },
+  "provenance": {
+    "createdAt": "2026-04-06T12:00:00Z",
+    "sourceMode": "slow"
+  },
+  "credentialHandles": [
+    {
+      "handleId": "cred_market_data",
+      "kind": "api-token",
+      "allowedEnvironments": [
+        "local",
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "maximumAccessScope": {
+        "resources": [
+          "market-data:read"
+        ]
+      },
+      "rotationExpectation": "90d",
+      "ttlPolicy": {
+        "maxSessionMinutes": 60
+      }
+    },
+    {
+      "handleId": "cred_binance_trade",
+      "kind": "exchange-api-key",
+      "allowedEnvironments": [
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "maximumAccessScope": {
+        "resources": [
+          "orders:write",
+          "balances:read",
+          "positions:read"
+        ]
+      },
+      "rotationExpectation": "30d",
+      "ttlPolicy": {
+        "maxSessionMinutes": 15
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "capabilityId": "cap-market-btc-price",
+      "kind": "data-source",
+      "provider": "binance-spot-public",
+      "riskLevel": "low",
+      "allowedEnvironments": [
+        "local",
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "requiredApproval": false,
+      "credentialHandleId": "cred_market_data",
+      "providerConstraints": {
+        "symbol": "BTC/USDT",
+        "stalenessBudgetMs": 5000
+      }
+    },
+    {
+      "capabilityId": "cap-market-basis",
+      "kind": "data-source",
+      "provider": "binance-futures-public",
+      "riskLevel": "low",
+      "allowedEnvironments": [
+        "local",
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "requiredApproval": false,
+      "credentialHandleId": "cred_market_data",
+      "providerConstraints": {
+        "symbol": "BTCUSDT",
+        "stalenessBudgetMs": 5000
+      }
+    },
+    {
+      "capabilityId": "cap-exchange-order",
+      "kind": "exchange-action",
+      "provider": "binance-perps",
+      "riskLevel": "high",
+      "allowedEnvironments": [
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "requiredApproval": false,
+      "credentialHandleId": "cred_binance_trade",
+      "providerConstraints": {
+        "venue": "binance",
+        "marketType": "perpetual",
+        "maxLeverage": 2,
+        "maxNotionalUsd": 100000
+      },
+      "effectSemantics": {
+        "idempotencyClass": "conditionally-idempotent",
+        "duplicateSubmitBehavior": "client-order-id",
+        "retryPolicy": {
+          "mode": "bounded",
+          "maxAttempts": 2
+        },
+        "compensationClass": "compensatable"
+      }
+    },
+    {
+      "capabilityId": "cap-exchange-balance",
+      "kind": "data-source",
+      "provider": "binance-account",
+      "riskLevel": "low",
+      "allowedEnvironments": [
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "requiredApproval": false,
+      "credentialHandleId": "cred_binance_trade",
+      "providerConstraints": {
+        "fields": [
+          "balances",
+          "positions"
+        ]
+      }
+    },
+    {
+      "capabilityId": "memory.read",
+      "kind": "data-source",
+      "provider": "aether-forge-runtime",
+      "riskLevel": "low",
+      "allowedEnvironments": [
+        "local",
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "requiredApproval": false,
+      "providerConstraints": {},
+      "description": "Read agent memory records for the current scope and environment"
+    },
+    {
+      "capabilityId": "memory.write",
+      "kind": "tool",
+      "provider": "aether-forge-runtime",
+      "riskLevel": "low",
+      "allowedEnvironments": [
+        "local",
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production"
+      ],
+      "requiredApproval": false,
+      "providerConstraints": {},
+      "description": "Write a new memory record to the agent memory store"
+    }
+  ]
+}

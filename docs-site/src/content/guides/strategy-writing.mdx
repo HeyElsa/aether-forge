@@ -1,0 +1,261 @@
+# Writing Effective Strategies
+
+Your strategy file is the single most important input to an Aether Forge agent. The LLM re-reads it on **every tick** and uses it to decide every action. This guide covers how to write strategies that produce consistent, profitable, safe behavior.
+
+<video src="/videos/18-strategy-writing.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+---
+
+## The Basics
+
+A strategy file is a **markdown file** written in plain English. No DSL. No code. Write what you'd tell a human trader sitting at a terminal.
+
+```markdown
+# My Agent Name
+
+## Objective
+One sentence: what this agent does.
+
+## Entry Rules
+When to open a position.
+
+## Exit Rules
+When to close a position.
+
+## Risk Management
+Position sizing, drawdown limits, loss streaks.
+```
+
+The file lives at `strategy.md` in your agent directory. Pass it at generation time:
+
+```bash
+forge generate-fast --strategy-file strategy.md ...
+```
+
+---
+
+## Anatomy of a Good Strategy
+
+### 1. Clear Objective
+
+Bad:
+```markdown
+## Objective
+Make money trading crypto.
+```
+
+Good:
+```markdown
+## Objective
+Scalp SOL on 1-minute momentum bursts. Target 1-2% gains per trade.
+Use Elsa for premium price data. Prefer high-volume windows (9am-4pm UTC).
+```
+
+**Why**: The LLM needs to understand the timeframe, asset, style, and data preference.
+
+### 2. Specific Entry Rules
+
+Bad:
+```markdown
+## Entry
+Buy when the price looks good.
+```
+
+Good:
+```markdown
+## Entry Rules (all must be true)
+- 1-minute candle closes bullish (close > open)
+- Volume > 1.5x the 20-period average
+- RSI between 40 and 70 (not overbought or oversold)
+- Gas cost under $0.50 per swap
+- No existing open position in this token
+```
+
+**Why**: The LLM evaluates each condition against the runtime state. Vague rules produce inconsistent behavior.
+
+### 3. Specific Exit Rules
+
+```markdown
+## Exit Rules
+- Take profit at +1.5% from entry (tight scalp)
+- Hard stop-loss at -0.8% from entry (non-negotiable)
+- Time stop: close any position open longer than 10 ticks
+- If trailing stop triggered at +1.0%, close immediately
+```
+
+### 4. Quantified Risk Management
+
+```markdown
+## Risk Management
+- Maximum 15% of portfolio per trade
+- Maximum 2 concurrent positions
+- 4-consecutive-loss streak → halt all trading and wait for manual review
+- If max drawdown exceeds 3% in a session → reduce position size by 50%
+- Daily loss limit: $50. If hit, stop trading for the day.
+```
+
+### 5. Memory Instructions
+
+The LLM has access to memory layers. Tell it when to use them:
+
+```markdown
+## Memory
+- After every trade, write the entry price, exit price, P&L, and reasoning
+- Before entering a trade, check if the same setup failed in the last 5 trades
+- If win rate over the last 20 trades drops below 40%, note this and reduce aggression
+- Track daily P&L in memory. Reset expectations each session.
+```
+
+### 6. Data Source Preferences
+
+```markdown
+## Data Sources
+- Use Elsa for token prices when available (richer data, worth the $0.002/call)
+- Fall back to Binance for basic spot prices
+- For gas estimates, use the built-in gas capability
+```
+
+---
+
+## Strategy Patterns
+
+### Momentum Scalper
+
+```markdown
+# SOL Momentum Scalper
+
+## Objective
+Scalp SOL on 1-minute momentum bursts during high-volume windows.
+
+## Entry (all must be true)
+- 1-min candle closes bullish
+- Volume > 1.5x 20-period average
+- RSI between 35 and 65
+- Spread < 0.1%
+
+## Exit
+- +1.5% take profit
+- -0.8% hard stop
+- 5-tick time stop
+
+## Risk
+- Max 15% per trade
+- Max 2 concurrent positions
+- 4-loss streak → halt
+```
+
+### Mean Reversion
+
+```markdown
+# ETH Mean Reversion
+
+## Objective
+Buy ETH when it's oversold, sell when it reverts to the mean.
+
+## Entry (all must be true)
+- RSI < 30 (oversold)
+- Price > 200-period moving average (still in uptrend)
+- Volume declining (selling pressure fading)
+
+## Exit
+- RSI > 50 (mean reverted)
+- Or +3% take profit
+- Or -1.5% hard stop
+
+## Risk
+- Max 20% per trade
+- Only 1 position at a time
+- If 3 consecutive stops hit, pause for 30 minutes
+```
+
+### Grid Trading
+
+```markdown
+# USDC-ETH Grid Trader
+
+## Objective
+Place buy and sell orders at fixed intervals around the current price.
+Profit from oscillation, not direction.
+
+## Grid Setup
+- 5 buy levels: -1%, -2%, -3%, -4%, -5% from current price
+- 5 sell levels: +1%, +2%, +3%, +4%, +5% from current price
+- Order size: 5% of portfolio per level
+
+## Rebalance
+- Every 10 ticks, check if price has drifted more than 5% from grid center
+- If so, recenter the grid around current price
+- Cancel unfilled orders before recentering
+
+## Risk
+- Max 50% of portfolio deployed in grid
+- Hard stop: if portfolio drops 8% from session start, close all and halt
+```
+
+### Multi-Agent Coordinator
+
+```markdown
+# Alpha Trader (Orchestrator)
+
+## Objective
+Coordinate with price-oracle and risk-engine agents to make trading decisions.
+
+## Workflow
+1. Every tick, ask price-oracle for current ETH price and trend
+2. Ask risk-engine for a risk score (0-1 scale)
+3. Only trade if risk score < 0.4 and trend is bullish
+4. If risk score > 0.7, close all positions immediately
+
+## Communication
+- price-oracle is on port 9001
+- risk-engine is on port 9002
+- All queries use A2A protocol
+
+## Risk
+- Never trade without consulting risk-engine first
+- If either agent is unreachable, do nothing (safe default)
+```
+
+---
+
+## Common Mistakes
+
+### Too vague
+```markdown
+## Entry
+Buy when momentum is good.
+```
+**Fix**: Define "good" with numbers: "momentum > 0.2% over last 5 candles."
+
+### No exit rules
+Without exit rules, the agent will hold positions forever.
+
+### No risk limits
+Without risk limits, the agent might put 100% of the portfolio into one trade.
+
+### Contradictory rules
+```markdown
+- Buy when RSI > 70     ← overbought, usually a sell signal
+- Buy when bearish      ← contradicts momentum entry
+```
+
+### Ignoring memory
+If you don't instruct the agent to use memory, it won't learn from past trades within the session.
+
+---
+
+## Iterating on Your Strategy
+
+You can edit `strategy.md` while the agent is running. Changes take effect on the **next tick** — no restart needed.
+
+With `--autoresearch`, the agent will also propose its own improvements:
+
+```bash
+forge strategy view ./my-agent
+# Shows current performance metrics and pending proposals
+
+forge strategy accept prop_a1b2c3
+# Applies the LLM's suggested parameter changes
+```
+
+The agent can never weaken safety constraints (position size > 25%, remove stop-loss, etc.) — safety bounds are enforced by the runtime.

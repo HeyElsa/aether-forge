@@ -1,0 +1,56 @@
+# Skills & Registries
+
+Three skill registries built in. All use the open [SKILL.md](https://agentskills.io) standard.
+
+<video src="/videos/23-skills.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Registries
+
+| Registry | Format | Focus |
+|---|---|---|
+| [skills.sh](https://skills.sh) | `owner/repo` | General-purpose (91K+ skills) |
+| [bankr.bot](https://skills.bankr.bot) | `bankr:skill-name` | Crypto/DeFi (~31 skills) |
+| [Elsa x402](https://x402.heyelsa.ai) | `elsa:category` | 21 pay-per-call DeFi endpoints |
+
+## Search & Add
+
+```bash
+# Search across registries
+forge skills-search "trading"
+
+# Add to an existing agent
+forge skills-add elsa:trading --project ./my-agent
+forge skills-add bankr:bankr --project ./my-agent
+
+# Add at generation time
+forge generate-fast --name bot --idea "yield monitor" \
+  --skills elsa:portfolio elsa:trading bankr:bankr
+```
+
+## Elsa x402 Endpoints
+
+21 DeFi endpoints that accept USDC micropayments on Base:
+
+```bash
+forge elsa-list
+forge elsa-list --category perpetuals
+```
+
+### Categories
+
+| Category | Endpoints | Examples |
+|---|---|---|
+| **Portfolio** | 4 | get-token-price, get-portfolio-balance |
+| **Trading** | 5 | execute-swap, get-swap-quote |
+| **Staking** | 3 | stake-token, get-staking-positions |
+| **Perpetuals** | 4 | open-perp-position, close-perp-position |
+| **Airdrops** | 3 | check-airdrop-eligibility |
+| **Gas** | 2 | estimate-gas-cost |
+
+## Auto-Mapping
+
+Skills auto-map to forge capabilities with correct:
+- `kind` (read/write)
+- `riskLevel` (low/medium/high)
+- `effectSemantics` (none/external-state-change)
+- `requiredApproval` (true for side-effecting skills)

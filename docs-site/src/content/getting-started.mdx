@@ -1,0 +1,133 @@
+# Getting Started
+
+Get from zero to a running agent in under 5 minutes.
+
+<video src="/videos/02-user-flow.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Install
+
+> **Note:** Aether Forge is not yet published to PyPI. Until then, install directly from GitHub.
+
+### Install from GitHub (recommended for now)
+
+```bash
+# Full install with all extras
+pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
+
+# Or clone and install locally
+git clone https://github.com/HeyElsa/aether-forge.git
+cd aether-forge
+pip install -e '.[all]'
+```
+
+### Install from PyPI (coming soon)
+
+```bash
+# Full install — wallet + memory + encryption + A2A + MCP
+pip install 'aether-forge[all]'
+
+# Or pick extras individually
+pip install 'aether-forge[wallet]'      # Real OWS wallets across 9 chains
+pip install 'aether-forge[knowledge]'   # MemPalace long-term memory layer
+pip install 'aether-forge[security]'    # cryptography for encrypted backups
+pip install aether-forge                # Core only — heuristic planner
+```
+
+Requires **Python 3.12+**. Single core dependency (`jsonschema`).
+
+## Verify
+
+```bash
+forge doctor
+```
+
+```
+[  ok] Python version: Python 3.12.13
+[  ok] jsonschema: jsonschema 4.26.0
+[  ok] OWS SDK: open-wallet-standard installed
+[  ok] cryptography: cryptography 46.0.7
+[  ok] Ollama: Connected (3 models)
+[  ok] Memory store (SQLite): round-trip ok
+[  ok] Knowledge layer (MemPalace): round-trip ok
+
+  Healthy — 8/8 ok
+```
+
+Every check is a **functional round-trip**, not just an import test.
+
+## Choose Your LLM
+
+Aether Forge auto-detects the best available LLM in this priority:
+
+1. **Ollama** (local, free, private) — `gemma4:latest`, `llama3.3`, etc.
+2. **Anthropic** — `claude-sonnet-4.5`, `claude-opus-4-6`
+3. **OpenAI** — `gpt-4o`, `gpt-4.1`
+4. **Google** — `gemini-2.5-flash`
+5. **OpenRouter** — any of 200+ models
+6. **Heuristic** — rule-based fallback (no LLM needed)
+
+Set your API key for whichever provider you want:
+
+```bash
+# Option A — Local Ollama (free)
+ollama pull gemma4:latest
+
+# Option B — OpenRouter (200+ models)
+export OPENROUTER_API_KEY=sk-or-v1-...
+
+# Option C — Anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+## Generate Your First Agent
+
+```bash
+forge generate-fast \
+  --name "My First Agent" \
+  --idea "ETH swing trader" \
+  --wallet --autonomous \
+  --output ./my-agent
+```
+
+```
+[planner] auto-detected: mode=ollama model=gemma4:latest
+  Wallet: 0xE8D0...081d5 (Base)
+  Attestation: self-attested
+Generated at ./my-agent
+```
+
+This creates a complete agent directory with:
+- `agent-spec.json` — agent contract
+- `capability-manifest.json` — declared capabilities
+- `policy-bundle.json` — safety rules
+- `scenario-pack.json` — test scenarios
+- `aether-forge.json` — runtime config (LLM, data sources, MCP)
+- `wallet.json` — wallet addresses
+- `attestation.json` — EIP-712 self-attestation
+
+## Validate
+
+```bash
+forge validate ./my-agent
+# Validated 5 artifacts in ./my-agent
+```
+
+## Run
+
+```bash
+# Paper trading — real prices, simulated orders
+forge run ./my-agent --mode paper --auto-approve
+
+# With self-improvement and knowledge layer
+forge run ./my-agent --mode paper --auto-approve --autoresearch --knowledge
+
+# With A2A server for inter-agent communication
+forge run ./my-agent --mode paper --auto-approve --a2a-port 9001
+```
+
+## Next Steps
+
+- [Build a Custom Agent](/docs/guides/custom-agent) — choose your LLM, add data sources, wire MCP servers
+- [LLM Planner](/docs/features/llm-planner) — how the LLM drives every tick
+- [Memory Architecture](/docs/features/memory) — four layers of typed memory
+- [CLI Reference](/docs/reference/cli) — every `forge` command

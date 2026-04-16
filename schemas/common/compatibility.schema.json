@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/common/compatibility.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "previousArtifactVersion",
+    "migrationRef"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "backward-compatible",
+        "forward-compatible",
+        "breaking",
+        "incompatible"
+      ]
+    },
+    "previousArtifactVersion": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "migrationRef": {
+      "anyOf": [
+        {
+          "$ref": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "breaking",
+              "incompatible"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "migrationRef": {
+            "$ref": "https://schemas.aether-forge.dev/common/artifact-ref.schema.json"
+          }
+        }
+      }
+    }
+  ]
+}

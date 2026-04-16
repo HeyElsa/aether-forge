@@ -1,0 +1,76 @@
+# Wallets
+
+Full [Open Wallet Standard](https://docs.openwallet.sh) support — 21 SDK functions across 9 chain families.
+
+<video src="/videos/11-wallets.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Supported Chains
+
+EVM, Solana, Bitcoin, Cosmos, Tron, TON, Sui, XRPL, Filecoin.
+
+## Per-Agent Wallets
+
+When using `--wallet` with `forge generate-fast`, each agent gets:
+
+- **Per-agent vault** (`.ows/` directory) — wallets, policies, and keys isolated per agent
+- **Chain-restriction policy** — CAIP-2 chain IDs restrict which chains the agent can sign on
+- **Scoped API key** — agent never gets the owner passphrase
+- **Simulated fallback** — when OWS SDK is not installed, generates simulated addresses
+
+```bash
+forge generate-fast --name eth-swing --wallet --output ./my-agent
+```
+
+```
+Wallet: forge-eth-swing
+EVM:     0xE8D0...081d5
+Solana:  GoXhR4fM...ZRiR
+Bitcoin: bc1q...
+
+Vault:    .ows/ (0700, encrypted)
+API key:  .env (0600, gitignored)
+Policy:   chain-restricted (Base)
+```
+
+## Encrypted Backups
+
+```bash
+forge wallet-backup .
+```
+
+- **Cipher**: AES-256-GCM
+- **KDF**: scrypt (n=2^16, r=8, p=1)
+- **Permissions**: 0600
+
+```bash
+forge wallet-restore wallet-backup-20260414.json
+```
+
+## CLI Commands
+
+```bash
+forge wallet-create --name agent-wallet
+forge wallet-list
+forge wallet-account --name agent-wallet --chain evm
+forge wallet-sign-message --name agent-wallet --chain evm --message "hello"
+forge wallet-sign-tx --name agent-wallet --chain evm --tx-hex 0x...
+forge wallet-send-tx --name agent-wallet --chain evm --tx-hex 0x...
+forge wallet-import --name imported --mnemonic "word1 word2 ..."
+forge wallet-export --name agent-wallet
+forge wallet-delete --name old-wallet
+```
+
+## EIP-712 Signing
+
+OWS wallets support EIP-712 typed data signing for:
+- **Attestation** — self-attesting agent identity
+- **A2A messages** — signing every inter-agent message
+- **x402 payments** — EIP-3009 `transferWithAuthorization`
+
+## Generated Files
+
+| File | Contains | Git-committed |
+|---|---|---|
+| `wallet.json` | Addresses, policy ID, key ID | Yes |
+| `.env` | `OWS_API_KEY=ows_key_...` | No |
+| `.ows/` | Encrypted vault data | No |

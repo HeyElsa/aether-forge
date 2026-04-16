@@ -1,0 +1,41 @@
+{
+  "artifactType": "policy-bundle",
+  "schemaVersion": "1.0.0",
+  "artifactId": "policy_delta_neutral_btc_core",
+  "artifactVersion": "0.1.0",
+  "artifactSetId": "aset_delta_neutral_btc_v001",
+  "title": "Delta Neutral BTC Core Policy Bundle",
+  "generator": {
+    "name": "aether-forge",
+    "version": "0.1.0",
+    "inputDigest": "sha256:delta-neutral-btc-v001"
+  },
+  "compatibility": {
+    "status": "backward-compatible",
+    "previousArtifactVersion": null,
+    "migrationRef": null
+  },
+  "provenance": {
+    "createdAt": "2026-04-06T12:00:00Z",
+    "sourceMode": "slow"
+  },
+  "bundleName": "Delta Neutral BTC Core Policy Bundle",
+  "defaultAction": "deny",
+  "rules": {
+    "maxNotionalUsd": 100000,
+    "walletAllowedChains": [
+      "evm",
+      "ethereum"
+    ],
+    "maxWalletTransferAmount": 5,
+    "requireApprovalEnvironments": [
+      "canary-live",
+      "production"
+    ],
+    "requireWalletApprovalEnvironments": [
+      "canary-live",
+      "production"
+    ],
+    "enforceStalenessChecks": true
+  }
+}

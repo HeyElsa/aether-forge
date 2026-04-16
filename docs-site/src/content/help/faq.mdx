@@ -1,0 +1,179 @@
+# FAQ
+
+## General
+
+### What is Aether Forge?
+
+A spec-first agent builder framework. You write a strategy in plain English, run one CLI command, and get a typed, governed, production-capable agent with wallet, memory, MCP tools, and A2A communication.
+
+### Who is this for?
+
+- DeFi engineers building autonomous trading agents
+- Indie devs experimenting with agent-to-agent commerce
+- Teams building production agents that handle real money
+- Researchers studying multi-agent coordination
+
+### Is it free?
+
+The framework itself is MIT-licensed and free. Costs come from:
+- LLM API calls (free with local Ollama)
+- x402 payments to data providers (~$0.001-$0.01/call)
+- Gas for on-chain registration (~$0.003 one-time)
+
+### What's the minimum to try it?
+
+```bash
+pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
+ollama pull gemma4:latest
+forge generate-fast --name test --idea "ETH watcher" --output ./test
+forge run ./test --mode paper --auto-approve --max-ticks 3
+```
+
+Total cost: $0.
+
+## LLM
+
+### Which LLM should I use?
+
+| Use case | Recommendation |
+|---|---|
+| Free / private | Ollama with `gemma4:latest` |
+| Best quality | Anthropic `claude-opus-4-6` |
+| Fast & cheap | OpenRouter `anthropic/claude-haiku` |
+| Local + capable | Ollama with `llama-3.3:70b` (needs 64GB RAM) |
+| Reasoning-heavy | OpenRouter `deepseek/deepseek-r1` (slow but smart) |
+
+### Can I switch LLMs without rebuilding the agent?
+
+Yes:
+
+```bash
+forge run . --planner-mode anthropic --planner-model claude-sonnet-4
+```
+
+Or edit `aether-forge.json` directly.
+
+### How much does an LLM cost per tick?
+
+Depends on prompt size and model. Rough numbers:
+
+| Model | Cost per tick |
+|---|---|
+| Ollama (local) | $0 |
+| Claude Haiku | ~$0.001 |
+| Claude Sonnet | ~$0.005 |
+| Claude Opus | ~$0.025 |
+| GPT-4o | ~$0.005 |
+| DeepSeek R1 | ~$0.002 |
+
+For a 30-second tick interval, ~2,800 ticks/day → daily cost of $0–$70 depending on model.
+
+## Architecture
+
+### Why not LangChain / CrewAI / AutoGen?
+
+| Aether Forge | LangChain | CrewAI | AutoGen |
+|---|---|---|---|
+| Spec-first (typed JSON artifacts) | Code-first | Code-first | Code-first |
+| Real wallet + on-chain identity | No | No | No |
+| Built-in payment layer (x402) | No | No | No |
+| Agent registry on-chain | No | No | No |
+| Strategy in plain markdown | No | No | No |
+| Production-grade (health, metrics, kill switch) | Partial | No | No |
+
+We're crypto-native and production-first. They're general-purpose.
+
+### Does an agent have to use crypto?
+
+No. Crypto features are opt-in:
+- `--wallet` — provision OWS wallet
+- `--autonomous` — enable autoresearch
+- `forge agent-register` — go on-chain
+
+Without these, you get a normal agent with planner + memory + MCP. No crypto.
+
+### Can I run an agent without an LLM?
+
+Yes — `--planner-mode heuristic` uses a rule-based planner. Limited but free and deterministic.
+
+## Wallets
+
+### How is the wallet provisioned?
+
+`--wallet` calls Open Wallet Standard SDK to create a wallet with addresses on 9 chain families (EVM, Solana, Bitcoin, Cosmos, Tron, TON, Sui, Filecoin, XRPL). The mnemonic is shown ONCE — save it.
+
+### Can I import an existing wallet?
+
+Yes:
+
+```bash
+forge wallet-import --name my-wallet --mnemonic "word1 word2 ..."
+```
+
+### Where is the wallet stored?
+
+`{agent-dir}/.ows/` — encrypted vault, 0700 permissions. The API key lives in `.env` (0600). Both are gitignored.
+
+### What if I lose the mnemonic?
+
+If you have an encrypted backup (`forge wallet-backup`), restore from it. Otherwise the wallet is unrecoverable. **Always back up immediately after generation.**
+
+## Security
+
+### Is this safe to run with real money?
+
+Built for it, but:
+1. Always start with `--mode paper`
+2. Set conservative budget caps in `x402_budget`
+3. Test with small amounts first ($10-$50)
+4. Monitor `/ready` and `/metrics`
+5. Have `forge halt .` ready
+
+### What happens if the LLM goes rogue?
+
+Multiple layers prevent damage:
+- Policy gate denies side-effecting capabilities by default
+- Capabilities require approval for risky actions
+- Notional limits cap per-trade size
+- Budget caps cap session/daily spend
+- Kill switch (`forge halt`) blocks everything instantly
+
+### Can other agents drain my wallet?
+
+No. Other agents can:
+- Send you A2A tasks (your planner decides whether to execute)
+- Charge you for paid endpoints (your `x402_budget` caps spend)
+
+They cannot directly access your wallet.
+
+## Deployment
+
+### Can I run on Vercel / Railway?
+
+Yes for stateless agents. Stateful agents (with memory) need persistent storage — use a volume mount in Docker, K8s PVC, or similar.
+
+### Can I run multiple agents in one container?
+
+Technically yes, but they'd share memory.db. Better practice: one container per agent.
+
+### How do I scale?
+
+Each agent is a single process. Scale by running more agents (potentially specialized — orchestrator + workers).
+
+## Open Source
+
+### How do I contribute?
+
+See [CONTRIBUTING.md](https://github.com/HeyElsa/aether-forge/blob/main/CONTRIBUTING.md). Tests must pass: `pytest tests/ -x`.
+
+### Where do I report bugs?
+
+[GitHub Issues](https://github.com/HeyElsa/aether-forge/issues). Use the bug report template.
+
+### Where do I report security issues?
+
+Email `x402@heyelsa.ai`. Don't open public issues for vulnerabilities.
+
+### Who maintains this?
+
+[HeyElsa](https://heyelsa.ai). The project is open-source under MIT.

@@ -1,0 +1,6 @@
+candidate	prq_score	status	description
+baseline-v0.5.0	19.5	keep	baseline canonical PRD
+exp-a	21.5	keep	artifact evolution contract
+exp-b	22.5	keep	credential handle boundary
+exp-c	24.0	keep	explicit effect semantics metadata
+exp-d	23.5	discard	time-bounded waiver ownership

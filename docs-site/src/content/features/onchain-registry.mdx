@@ -1,0 +1,63 @@
+# On-Chain Registry
+
+Every Aether Forge agent can be registered on the [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) IdentityRegistry on **Base mainnet**.
+
+<video src="/videos/12-onchain-registry.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Contract
+
+- **Address**: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
+- **Chain**: Base mainnet (chain ID 8453)
+- **Standard**: ERC-8004 Agent Identity
+- **Agents registered**: 61,000+
+
+## Local Registry
+
+Every agent created through Aether Forge is tracked in a local SQLite registry at `~/.aether-forge/agents.db`. Registration is automatic (opt-out via `--no-registry`).
+
+```bash
+forge agent-list                    # List all my agents
+forge agent-info <id>               # Show full details
+forge agent-remove <id>             # Archive (soft-delete)
+```
+
+## On-Chain Registration
+
+```bash
+forge agent-register <agent-id>
+```
+
+```
+Network: Base mainnet
+Registry: 0x8004A169...539a432
+
+Submitting to Base mainnet...
+TX Hash: 0x48db88cf...
+Block: 44685283
+Gas: $0.003
+Agents registered: 0 → 1
+```
+
+Each registered agent is an **NFT** with a metadata URI pointing to its capability manifest.
+
+## Discovery
+
+```bash
+# Find agents by ID
+forge agent-discover --agent-id 1
+
+# Find agents with specific capabilities
+forge agent-discover --capability get-token-price
+
+# Filter by verification
+forge agent-discover --capability get-token-price --verified-only
+```
+
+## Metadata
+
+On-chain metadata includes:
+- `framework` — `"aether-forge"`
+- `a2a_endpoint` — HTTP URL for A2A communication
+- `capabilities_hash` — SHA-256 of `capability-manifest.json`
+- `self_attestation` — EIP-712 signature
+- `aether_forge_verified` — framework attestor signature (if verified)

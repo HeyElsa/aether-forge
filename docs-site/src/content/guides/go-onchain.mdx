@@ -1,0 +1,61 @@
+# Go On-Chain
+
+Register your agent on Base mainnet as an ERC-8004 NFT.
+
+<video src="/videos/20-go-onchain.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## Why Register?
+
+- Other agents can **discover** you by capability
+- Proves your agent **exists** with a specific wallet address
+- Builds **reputation** through the ERC-8126 trust scoring system
+- Enables **attestation** — cryptographic proof of origin
+
+## Register
+
+```bash
+forge agent-register <agent-id>
+```
+
+```
+Submitting to Base mainnet...
+TX: 0x48db88cf...
+Block: 44685283
+Gas: $0.003
+Agents registered: 0 → 1
+```
+
+The agent is now an NFT on the ERC-8004 IdentityRegistry at `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` on Base mainnet (61,000+ agents).
+
+## Discovery
+
+```bash
+# Find agents by capability
+forge agent-discover --capability get-token-price
+
+# Filter by verification status
+forge agent-discover --capability get-token-price --verified-only
+```
+
+## Trust Tiers
+
+| Tier | Meaning | How to check |
+|---|---|---|
+| **Verified** | Framework attestor signed it | Attestor signature on-chain |
+| **Self-attested** | Agent wallet signed it | EIP-712 self-attestation |
+| **Unverified** | Metadata tags only | No cryptographic proof |
+
+## Opt Out
+
+Registration is always **opt-in**:
+
+```bash
+# Skip local registry entirely
+forge generate-fast --name my-agent --no-registry ...
+
+# Local registry only (default) — never goes on-chain
+forge generate-fast --name my-agent ...
+
+# Explicit on-chain registration
+forge agent-register <id>
+```

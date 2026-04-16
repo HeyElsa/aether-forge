@@ -1,0 +1,60 @@
+# Accept Payments
+
+Agents can charge other agents for premium capabilities using x402.
+
+<video src="/videos/19-accept-payments.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## How It Works
+
+1. Agent B configures **X402PaymentGate** with prices per capability
+2. Agent A calls Agent B's endpoint without payment
+3. Agent B returns **HTTP 402** with the price
+4. Agent A signs an **EIP-3009** `transferWithAuthorization` for USDC
+5. Agent B verifies the payment and delivers the result
+
+```
+Agent A                          Agent B
+   │                                │
+   │── POST /premium-analysis ─────►│
+   │◄── 402: $0.005 USDC required ──│
+   │                                │
+   │── POST + X-PAYMENT header ────►│
+   │   (EIP-3009 signed USDC)       │
+   │◄── 200: premium data ─────────│
+```
+
+## Payment Channels
+
+| Channel | Use case | Status |
+|---|---|---|
+| **x402 pay-per-call** | Per-request micropayments via EIP-3009 | Shipped |
+| **Direct USDC transfer** | Tips, bounties, flat fees | Shipped |
+| **ERC-8183 escrow** | Complex jobs with evaluator sign-off | Tx builder ready |
+
+## Budget Controls
+
+All payments are governed by the same budget system:
+
+```json
+{
+  "x402_budget": {
+    "max_per_call_usd": 0.01,
+    "max_session_usd": 1.00,
+    "max_daily_usd": 5.00
+  }
+}
+```
+
+Budget checks use **atomic file locking** (`fcntl.flock`) to prevent race conditions.
+
+## Tracking
+
+Every payment is logged in `x402_state.json`:
+
+```json
+{
+  "session_spent_usd": 0.006,
+  "total_payments": 3,
+  "daily_spent_usd": { "2026-04-14": 0.006 }
+}
+```

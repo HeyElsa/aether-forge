@@ -1,0 +1,615 @@
+# End-to-End: Your First Agent
+
+This tutorial walks through creating, configuring, testing, and deploying an ETH swing trading agent from absolute zero. Every command is real. Every output is what you'll actually see.
+
+<video src="/videos/16-custom-agent-flow.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+---
+
+## Prerequisites
+
+- Python 3.12+
+- An LLM provider (Ollama recommended for local, or any API key)
+- ~$0.01 in ETH on Base mainnet (only if you want to go live)
+
+---
+
+## Step 1: Install Aether Forge
+
+> **Note:** Aether Forge is not yet published to PyPI. Install from GitHub for now.
+
+```bash
+# Option A: Install directly from GitHub
+pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
+
+# Option B: Clone and install locally (better for development)
+git clone https://github.com/HeyElsa/aether-forge.git
+cd aether-forge
+pip install -e '.[all]'
+```
+
+This installs:
+- **Core**: JSON schema validation, CLI, planner, runtime
+- **`[wallet]`**: Open Wallet Standard SDK (9 chain families)
+- **`[knowledge]`**: MemPalace long-term memory (ChromaDB + temporal KG)
+- **`[security]`**: cryptography for AES-256-GCM encrypted backups
+- **`[a2a]`**: Google A2A SDK for agent-to-agent communication
+
+Verify everything works:
+
+```bash
+forge doctor
+```
+
+```
+  [  ok] Python version: Python 3.12.13 (ok)
+  [  ok] jsonschema: jsonschema 4.26.0
+  [  ok] OWS SDK: open-wallet-standard installed
+  [  ok] cryptography: cryptography 46.0.7 (encrypted backups available)
+  [  ok] Ollama: Connected — 3 models available
+  [  ok] Memory store (SQLite): Layer 3 round-trip ok (write + read)
+  [  ok] Knowledge layer (MemPalace): mempalace 3.1.0 — KG + semantic round-trip ok
+  [  ok] Config file: Valid: ./aether-forge.json
+
+    Healthy — 8/8 ok, 0 skipped, 0 failed
+```
+
+Every check is a **functional round-trip** — it actually writes and reads data, not just imports a module.
+
+---
+
+## Step 2: Set Up Your LLM
+
+Choose one. The agent will use this model on every tick to read your strategy and decide what to do.
+
+### Option A: Ollama (local, free, private)
+
+```bash
+# Install Ollama from https://ollama.com
+ollama pull gemma4:latest
+```
+
+No API key needed. The agent talks to `http://localhost:11434` automatically.
+
+### Option B: OpenRouter (200+ models)
+
+```bash
+export OPENROUTER_API_KEY=sk-or-v1-your-key-here
+```
+
+Use any model: `deepseek/deepseek-r1`, `meta-llama/llama-4-maverick`, `anthropic/claude-sonnet-4.5`, etc.
+
+### Option C: Anthropic
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-your-key-here
+```
+
+### Option D: OpenAI
+
+```bash
+export OPENAI_API_KEY=sk-your-key-here
+```
+
+---
+
+## Step 3: Write Your Strategy
+
+Create a file called `strategy.md`. This is the most important file — the LLM re-reads it on **every single tick**.
+
+```bash
+cat > strategy.md << 'EOF'
+# ETH Swing Trader
+
+## Objective
+Capture ETH momentum swings on 5-minute intervals.
+Buy when bullish signals align. Sell on profit target or stop-loss.
+
+## Entry Rules (all must be true)
+- 5-minute candle closes bullish (close > open)
+- Volume is 0.7x to 4x the 20-period average (not a fake-out, not a panic)
+- Momentum is positive (price trending up over last 5 candles)
+- Gas cost is under $0.50 per swap
+
+## Exit Rules
+- Take profit at +4% from entry
+- Hard stop-loss at -2% from entry
+- If 3 consecutive losses, halt trading and wait for manual review
+
+## Position Sizing
+- Maximum 25% of portfolio per trade
+- Never have more than 2 open positions
+
+## Risk Management
+- Track win rate. If it drops below 40% over 20 trades, reduce position size by half.
+- If max drawdown exceeds 5%, halt all trading.
+- Log every decision with reasoning for post-session review.
+EOF
+```
+
+**Tips for writing strategies:**
+- Write like you're instructing a human trader
+- Be specific about numbers (not "buy when cheap", but "buy when RSI < 30")
+- Include risk rules — the LLM will follow them
+- The strategy is just a markdown file. Edit it anytime. Changes take effect on the next tick.
+
+---
+
+## Step 4: Generate the Agent
+
+```bash
+forge generate-fast \
+  --name "eth-swing" \
+  --idea "ETH swing trader using momentum signals" \
+  --strategy-file strategy.md \
+  --wallet \
+  --autonomous \
+  --output ./eth-swing
+```
+
+```
+[planner] auto-detected: mode=ollama model=gemma4:latest baseUrl=http://localhost:11434
+  Writing agent-spec.json
+  Writing capability-manifest.json (14 capabilities)
+  Writing policy-bundle.json
+  Writing scenario-pack.json
+  Writing scaffold.manifest.json
+  Writing aether-forge.json
+  Provisioning OWS wallet — 9 chains
+    EVM:     0xE8D0...081d5
+    Solana:  GoXhR4fM...ZRiR
+    Bitcoin: bc1q...
+  Attestation: self-attested (EIP-712 signed)
+  Registered in local registry
+
+Generated at ./eth-swing
+```
+
+### What just happened?
+
+The generator created 8+ files in `./eth-swing/`:
+
+```
+eth-swing/
+├── agent-spec.json             # Agent's contract — objective, capabilities, eval criteria
+├── capability-manifest.json    # 14 declared capabilities with risk levels
+├── policy-bundle.json          # Safety rules — what's allowed in each environment
+├── scenario-pack.json          # Test scenarios for evaluation
+├── scaffold.manifest.json      # Project structure metadata
+├── aether-forge.json           # Runtime config — LLM, tick interval, data sources
+├── strategy.md                 # Your strategy file (copied)
+├── wallet.json                 # Wallet addresses (safe to commit)
+├── attestation.json            # EIP-712 self-attestation signature
+├── .env                        # OWS_API_KEY (NEVER commit this)
+├── .ows/                       # Encrypted wallet vault (NEVER commit this)
+└── .gitignore                  # Excludes .env, .ows/, replays/
+```
+
+---
+
+## Step 5: Explore What Was Generated
+
+### Agent spec
+
+```bash
+cat eth-swing/agent-spec.json | python3 -m json.tool | head -20
+```
+
+```json
+{
+  "schemaVersion": "0.7.0",
+  "artifactSetId": "aset_eth-swing_a1b2c3d4",
+  "name": "eth-swing",
+  "objective": "ETH swing trader using momentum signals",
+  "capabilities": [
+    "cap-market-btc-price",
+    "cap-market-volatility",
+    "cap-exchange-order",
+    "cap-portfolio-balance",
+    "cap-memory-read",
+    "cap-memory-write"
+  ],
+  "evaluationCriteria": {
+    "winRate": { "target": 0.45, "operator": ">=" },
+    "maxDrawdownPct": { "target": 5.0, "operator": "<=" }
+  }
+}
+```
+
+### Runtime config
+
+```bash
+cat eth-swing/aether-forge.json | python3 -m json.tool
+```
+
+```json
+{
+  "planner": {
+    "mode": "ollama",
+    "model": "gemma4:latest",
+    "baseUrl": "http://localhost:11434"
+  },
+  "runtime": {
+    "cryptoRouter": "mock"
+  }
+}
+```
+
+### Wallet
+
+```bash
+cat eth-swing/wallet.json | python3 -m json.tool
+```
+
+```json
+{
+  "wallet_name": "forge-eth-swing",
+  "addresses": {
+    "evm": "0xE8D0...081d5",
+    "solana": "GoXhR4fM...ZRiR",
+    "bitcoin": "bc1q..."
+  },
+  "chain_policy": "base",
+  "provider": "ows"
+}
+```
+
+---
+
+## Step 6: Validate
+
+```bash
+forge validate ./eth-swing
+```
+
+```
+Validated 5 artifacts in ./eth-swing
+  agent-spec.json          ok
+  capability-manifest.json ok
+  policy-bundle.json       ok
+  scenario-pack.json       ok
+  scaffold.manifest.json   ok
+```
+
+This runs JSON Schema validation on every artifact and cross-checks references (e.g., capabilities in the policy must exist in the manifest).
+
+---
+
+## Step 7: Evaluate with Scenarios
+
+```bash
+forge eval-pack ./eth-swing
+```
+
+```
+Scenario pack: total=2 matched=2 pass=1 hold=1 fail=0
+  ✓ baseline-momentum   pass
+  ~ edge-high-volatility hold (needs review)
+```
+
+---
+
+## Step 8: Paper Trade
+
+Now run the agent with **real market data** but **simulated orders**:
+
+```bash
+forge run ./eth-swing \
+  --mode paper \
+  --interval 30 \
+  --auto-approve \
+  --autoresearch \
+  --knowledge \
+  --a2a-port 9001
+```
+
+```
+eth-swing
+Environment: paper | Interval: 30s | A2A: :9001
+
+[  ok] Tick 1: complete (3 steps)
+  → cap-market-btc-price: ETH=$2,249.63
+  → cap-market-volatility: 1.5%
+  → reasoning: "Bullish candle, volume 1.2x avg. Entering long."
+  → cap-exchange-order: BUY 0.001 ETH at $2,249
+
+[  ok] Tick 2: complete (2 steps)
+  → cap-market-btc-price: ETH=$2,258.10
+  → reasoning: "Position up +0.4%. Holding. Stop at $2,204."
+
+[  ok] Tick 3: complete (2 steps)
+  → cap-market-btc-price: ETH=$2,271.33
+  → reasoning: "Position up +0.97%. Tightening stop to $2,226."
+
+[  ok] Tick 4: complete (3 steps)
+  → cap-market-btc-price: ETH=$2,339.24
+  → reasoning: "+4.0% target hit. Taking profit."
+  → cap-exchange-order: SELL 0.001 ETH at $2,339
+  → cap-memory-write: "Trade #1: +$0.09 profit"
+
+Portfolio: $10,000.09 (P&L: +$0.09)
+```
+
+### What's happening under the hood?
+
+Each tick, the runtime:
+
+1. **Assembles a prompt** with 6 sections: Objective, Capabilities, Runtime State, Memory, Knowledge, Strategy
+2. **Sends it to your LLM** (Ollama/Claude/GPT/etc.)
+3. **Parses the JSON response** into typed `StepProposal`s
+4. **Checks each step against the policy gate** (environment allowed? within limits? approval needed?)
+5. **Executes approved steps** via the DataRouter
+6. **Records everything** in the step ledger, memory, and replay files
+
+### Check what the agent remembers
+
+```bash
+sqlite3 eth-swing/memory.db "SELECT memory_type, summary FROM memory_records ORDER BY created_at DESC LIMIT 5"
+```
+
+```
+decision-history|Tick 4: SELL 0.001 ETH at $2,339 (+4.0% profit)
+decision-history|Tick 3: holding, tightened stop to $2,226
+decision-history|Tick 2: holding, position +0.4%
+decision-history|Tick 1: BUY 0.001 ETH at $2,249 (bullish momentum)
+```
+
+### Check the replay files
+
+```bash
+ls eth-swing/replays/
+```
+
+```
+replay_tick_001.json
+replay_tick_002.json
+replay_tick_003.json
+replay_tick_004.json
+```
+
+Each replay file contains the full step ledger, state before/after, and every decision the LLM made. This is your audit trail.
+
+---
+
+## Step 9: Add MCP Tools (Optional)
+
+Want the agent to send you notifications? Add an MCP server:
+
+```bash
+cat > eth-swing/aether-forge.json << 'EOF'
+{
+  "planner": {
+    "mode": "ollama",
+    "model": "gemma4:latest",
+    "baseUrl": "http://localhost:11434"
+  },
+  "mcp_servers": {
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+EOF
+```
+
+Verify:
+
+```bash
+forge doctor ./eth-swing/aether-forge.json
+```
+
+```
+[  ok] MCP server [hermes]: 10 tools available (stdio)
+```
+
+Now the agent can send messages on Telegram, Discord, Slack, etc. via Hermes.
+
+---
+
+## Step 10: Review Performance
+
+After several ticks with `--autoresearch` enabled:
+
+```bash
+forge strategy view ./eth-swing
+```
+
+```
+Strategy: eth-swing (version 1)
+
+Parameters:
+  spread_pct:            1.0
+  position_size_pct:     1.0
+  momentum_threshold:    0.5
+  volatility_multiplier: 1.0
+  tokens:                [ETH]
+
+Performance (last 20 ticks):
+  Win rate:      62% (target: >40%)     ✓
+  Max drawdown:  3.2% (target: <5%)     ✓
+  Avg win/loss:  1.8 (target: >1.0)     ✓
+  Total P&L:     +$127.45
+
+Pending proposal: prop_a1b2c3
+  Hypothesis: Relax entry confirmations for more trades
+  Change: momentum_threshold 0.5 → 0.3
+  Expected: +15% more trades
+  Safety: position_size ≤ 25% ✓, stop_loss ≤ 20% ✓
+```
+
+Accept or reject:
+
+```bash
+# Accept — strategy advances to v2
+forge strategy accept eth-swing prop_a1b2c3
+
+# Or reject — keep v1
+forge strategy reject eth-swing prop_a1b2c3 --reason "want more data first"
+```
+
+---
+
+## Step 11: Add Data Sources
+
+Upgrade from free APIs to premium Elsa data:
+
+```json
+{
+  "planner": {
+    "mode": "ollama",
+    "model": "gemma4:latest"
+  },
+  "data_sources": [
+    {
+      "name": "elsa",
+      "type": "x402",
+      "priority": 1
+    },
+    {
+      "name": "binance",
+      "type": "http",
+      "url": "https://api.binance.com",
+      "priority": 2
+    }
+  ],
+  "x402_budget": {
+    "max_per_call_usd": 0.01,
+    "max_session_usd": 1.00,
+    "max_daily_usd": 5.00
+  }
+}
+```
+
+---
+
+## Step 12: Connect to Other Agents
+
+If you have other agents running, your agent can delegate to them:
+
+```bash
+# Query a price oracle agent
+forge agent-send http://localhost:9002 \
+  --capability get-token-price \
+  --payload '{"token":"ETH"}'
+```
+
+```
+Remote agent: price-oracle
+Task status: completed
+Artifacts:
+  [0] {"price_usd": 2249.63, "trend": "bullish", "rsi": 55.2}
+```
+
+---
+
+## Step 13: Register On-Chain (Optional)
+
+Make your agent discoverable on Base mainnet:
+
+```bash
+# Fund the wallet with a tiny amount of ETH for gas (~$0.003)
+# Then:
+forge agent-register aset_eth-swing_a1b2c3d4
+```
+
+```
+Submitting to Base mainnet...
+TX: 0x48db88cf...
+Block: 44685283
+Gas: $0.003
+Agents registered: 0 → 1
+```
+
+Your agent is now an NFT on the ERC-8004 registry. Other agents can discover it:
+
+```bash
+forge agent-discover --capability cap-exchange-order
+```
+
+---
+
+## Step 14: Security Check
+
+Before going live:
+
+```bash
+forge security-check ./eth-swing --harden
+```
+
+```
+  [  ok] wallet.exists: real OWS (provider=ows)
+  [  ok] .env.perms: 0600
+  [  ok] .gitignore.coverage: .env, .ows/ excluded
+  [  ok] .ows.perms: 0700
+  [  ok] secret.scan: no secrets found in tracked files
+  [  ok] attestation: self-attested (valid)
+  [  ok] audit.exists: x402_audit.jsonl present
+
+  All checks passed
+```
+
+---
+
+## Step 15: Go Live
+
+```bash
+forge run ./eth-swing \
+  --mode live \
+  --chain base \
+  --interval 60 \
+  --a2a-port 9001 \
+  --health-port 8080 \
+  --json-log ./logs/eth-swing.jsonl \
+  --pid-file ./eth-swing.pid
+```
+
+```
+eth-swing
+Environment: live | Chain: base | Interval: 60s
+Health: http://localhost:8080 | A2A: :9001
+
+[  ok] Tick 1: complete (3 steps)
+  → ETH=$2,249.63 (live Binance data)
+  → BUY 0.001 ETH at $2,249 (real order on Base)
+  → x402: $0.002 paid to Elsa for premium data
+```
+
+### Emergency stop
+
+```bash
+forge halt ./eth-swing
+# Kill switch ACTIVE — all operations blocked
+
+forge resume ./eth-swing
+# Kill switch CLEARED
+```
+
+### Encrypted backup
+
+```bash
+forge wallet-backup ./eth-swing --passphrase "your-secure-passphrase"
+# → wallet-backup-20260414.json (AES-256-GCM, scrypt KDF)
+
+# Restore anywhere:
+forge wallet-restore wallet-backup-20260414.json --passphrase "your-secure-passphrase"
+```
+
+---
+
+## Summary
+
+You just built an agent that:
+
+1. Reads a plain-English strategy on every tick
+2. Uses an LLM to decide what to do
+3. Executes through a governed pipeline (planner → policy → execute → ledger)
+4. Remembers decisions across 4 memory layers
+5. Self-evaluates and proposes improvements
+6. Communicates with other agents via A2A
+7. Pays for premium data via x402
+8. Is registered on-chain as an ERC-8004 NFT
+9. Has encrypted wallet backups
+10. Can be stopped instantly with a kill switch
+
+**Total cost**: ~$0.01 in ETH for gas (on-chain registration + x402 payments). Free if you stay in paper mode.
