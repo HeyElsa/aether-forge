@@ -210,6 +210,40 @@ Budget state is tracked atomically in `x402_state.json` with file locking.
 
 ---
 
+## Policy Bundle (`policy-bundle.json`)
+
+Lives in the agent directory alongside `aether-forge.json`. Defines safety
+gates the runtime enforces before any side-effecting capability runs.
+
+### `agentPayments` — direct USDC transfers
+
+Required to opt in for agent-to-agent direct USDC transfers via
+`agent_payments.execute_payment(method="transfer")`. Without this block,
+all transfers are denied.
+
+```json
+{
+  "agentPayments": {
+    "directTransferEnabled": true,
+    "maxPerTransferUsd": 0.10,
+    "allowedRecipients": ["0xabc..."],
+    "allowedChains": ["base"]
+  }
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `directTransferEnabled` | Yes | Master switch (default: missing block = denied) |
+| `maxPerTransferUsd` | Yes (>0) | Per-transfer USD cap |
+| `allowedRecipients` | No | Whitelist of EVM addresses (case-insensitive) |
+| `allowedChains` | No | Whitelist of chains (`base`, `ethereum`, etc.) |
+
+x402 payments and ERC-8183 escrow are NOT gated by this block — they have
+their own budget controls in `aether-forge.json`'s `x402_budget`.
+
+---
+
 ## Environment Variables
 
 These are read at runtime and can override config:

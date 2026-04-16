@@ -1,5 +1,41 @@
 # PRD Changelog
 
+## v0.19.0 - 2026-04-16
+
+Real on-chain agent-to-agent USDC transfers (autonomous, policy-gated). Production observability fixes. Two-agent marketplace example.
+
+### Direct USDC transfer — wired end-to-end
+- `agent_payments.execute_payment(method="transfer")` now signs via OWS and broadcasts to Base mainnet (was previously build-only)
+- New `_sign_and_send_transfer` helper: fetches nonce + gas via RPC, RLP-encodes EIP-1559, calls `wallet.sign_and_send`
+- New `_check_transfer_policy` gate: requires `policy-bundle.json` to declare `agentPayments.directTransferEnabled: true` (default deny)
+- Supports `maxPerTransferUsd`, `allowedRecipients` whitelist, `allowedChains` whitelist
+- Updates `x402_state.json` and appends to `x402_audit.jsonl` atomically (under existing `flock`)
+
+### Verified live on Base mainnet
+- Buyer wallet `0x859F8647...` paid Oracle wallet `0x6dA34D1a...` $0.001 USDC. TX hash: `0x8b2c0df7ef585da602304a42219ca3c89d380c8865b149eaff7d2d9ce708dbf1`
+- Buyer balance: $1.999 → $1.998. Oracle: $0 → $0.001. Confirmed via `eth_call` on USDC `balanceOf`.
+- Autonomous LLM-driven payments (`forge run --mode live`): Claude Sonnet 4 planner spent $0.004 USDC across 2 paid Elsa calls without human prompting
+
+### Two-agent marketplace example
+- `examples/two-agent-marketplace/`: full reproducible demo
+  - `setup.sh` — generates buyer + oracle agents, patches buyer policy
+  - `run.sh` — launches both agents with health/A2A ports + dashboard
+  - `terminal-dashboard.py` — pure-stdlib ANSI live dashboard (no Flask): two-column status, on-chain ETH/USDC balances, recent audit feed, refreshes every 2s
+  - `dashboard.py` — Flask web alternative
+  - `pay-once.py` — manual A→B payment trigger
+  - `README.md` — architecture diagram + quick start
+
+### Observability fixes
+- `/ready` and `/metrics` endpoints fixed: were referencing `self.agent_directory`/`self.bundle` (non-existent attrs); now correctly use `artifact_directory`/`artifacts`
+- HealthHandler wraps responses in try/except so endpoint crashes return 500 not empty reply
+
+### RPC reliability
+- `_rpc_call` now sends `User-Agent` header — public Base RPCs (publicnode, llamarpc, base.org) were returning 403 Forbidden without one
+
+### Tests
+- 474 passed, 1 skipped (last full run including knowledge: 31m42s)
+- 5 new policy gate tests in `test_agent_payments.py` (default deny, disabled, over-max, recipient not allowed, chain not allowed)
+
 ## v0.18.0 - 2026-04-15
 
 Cloud LLM auto-detection, Nextra docs site, 25 video walkthroughs, HeyElsa branding, install-from-source.

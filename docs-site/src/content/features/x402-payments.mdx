@@ -67,6 +67,53 @@ Budget checks use **atomic file locking** to prevent race conditions.
 | **Direct USDC transfer** | Tips, bounties, flat fees |
 | **ERC-8183 escrow** | Complex jobs with evaluator sign-off |
 
+## Direct USDC Transfers (agent → agent)
+
+`agent_payments.execute_payment` can sign and broadcast a real ERC-20 transfer
+on Base mainnet. Defense-in-depth: the agent's `policy-bundle.json` MUST
+explicitly opt in via `agentPayments.directTransferEnabled`, otherwise the
+transfer is denied before signing.
+
+```json
+// policy-bundle.json
+{
+  "agentPayments": {
+    "directTransferEnabled": true,
+    "maxPerTransferUsd": 0.10,
+    "allowedRecipients": ["0x6dA34D1a14bA78865064A91C911Dda8284AaA7cb"],
+    "allowedChains": ["base"]
+  }
+}
+```
+
+| Field | Required | Behavior |
+|---|---|---|
+| `directTransferEnabled` | Yes | Master switch. Default false → transfers denied. |
+| `maxPerTransferUsd` | Yes (>0) | Per-transfer USD cap. |
+| `allowedRecipients` | No | If set, recipient address must be in this list. |
+| `allowedChains` | No | If set, payment chain must be in this list. |
+
+Programmatic call:
+
+```python
+from aether_forge.agent_payments import PaymentRequest, execute_payment
+
+result = execute_payment(agent_dir, PaymentRequest(
+    method="transfer",
+    budget_usd=0.001,
+    pay_to="0x6dA34D1a14bA78865064A91C911Dda8284AaA7cb",
+    chain="base",
+))
+print(result.tx_hash)  # → real Base mainnet tx hash
+```
+
+The runtime checks: budget caps → policy gate → builds tx → fetches
+nonce + gas via RPC → RLP-encodes EIP-1559 → signs via OWS → broadcasts →
+records in `x402_state.json` and `x402_audit.jsonl`.
+
+See `examples/two-agent-marketplace/` for a working end-to-end demo
+(buyer agent pays oracle agent for ETH price data).
+
 ## Elsa DeFi Endpoints
 
 21 pay-per-call DeFi endpoints on Base:

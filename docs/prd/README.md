@@ -4,8 +4,8 @@ This directory contains the canonical Product Requirements Documents for `Aether
 
 ## Current PRD
 
-- Current version: `v0.18.0`
-- Canonical file: `docs/prd/aether-forge-prd-v0.18.0.md`
+- Current version: `v0.19.0`
+- Canonical file: `docs/prd/CHANGELOG.md` (v0.19.0 entry — full PRD file pending)
 - Change log: `docs/prd/CHANGELOG.md`
 
 Note: v0.13.0 changes (security hardening, x402 client, data layer, generated-router data layer wiring, real-money live mode validation) live in the changelog only — they were merged into v0.14.0 as inherited baseline rather than written as a standalone PRD file.

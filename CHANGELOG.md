@@ -5,6 +5,10 @@ User-facing changes to Aether Forge. Format follows [Keep a Changelog](https://k
 ## [Unreleased] — 2026-04-16
 
 ### Added
+- **Direct USDC transfers wired end-to-end** — `agent_payments.execute_payment(method="transfer")` now signs via OWS and broadcasts to Base mainnet. Previously returned only the unsigned tx. Verified live: TX `0x8b2c0df7ef58...` moved $0.001 USDC between two agent wallets.
+- **`agentPayments` policy gate** — `policy-bundle.json` requires explicit `directTransferEnabled: true` to opt into direct transfers. Supports `maxPerTransferUsd`, `allowedRecipients` whitelist, `allowedChains` whitelist. Default deny.
+- **Two-agent marketplace example** — `examples/two-agent-marketplace/`: setup.sh generates buyer + oracle, run.sh launches both, terminal-dashboard.py shows live agent state with on-chain balances and audit feed (no Flask required).
+- **RPC User-Agent header** — `_rpc_call` now sends a User-Agent so public Base RPCs (publicnode, llamarpc) don't return 403. Required for direct transfer flow with default RPC.
 - **Cloud LLM auto-detection** — `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` automatically picked up from env when planner mode is set. No `apiKeyEnv` config needed. (`config.py`)
 - **Deep health checks** — `/ready` endpoint returns 503 when planner has consecutive failures or kill switch is active (`runner.py`). Distinguishes liveness from readiness for K8s.
 - **Prometheus metrics** — `/metrics` endpoint exports tick counts, failures, agent state in Prometheus text format. (`runner.py`)
