@@ -18,7 +18,6 @@ from aether_forge.adapters.function_call import (
 from aether_forge.config import FunctionCallPlanner
 from aether_forge.runtime import StepKind
 
-
 # ---------------------------------------------------------------------------
 # Translator layer
 # ---------------------------------------------------------------------------

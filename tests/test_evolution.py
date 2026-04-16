@@ -7,7 +7,6 @@ from pathlib import Path
 
 from aether_forge.evolution import (
     ImprovementProposal,
-    PerformanceReport,
     RuntimeAutoresearch,
     SelfEvaluator,
     StrategyArtifact,

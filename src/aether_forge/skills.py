@@ -14,15 +14,12 @@ Elsa skills are x402-paid endpoints that map directly to forge capabilities.
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 import shutil
-from dataclasses import dataclass, field
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib import request as urllib_request
-from urllib.error import URLError
-
 
 # Known skill registries
 REGISTRIES: dict[str, str] = {

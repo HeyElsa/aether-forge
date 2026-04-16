@@ -7,7 +7,6 @@ from tempfile import mkdtemp
 
 from aether_forge.artifacts import validate_artifact_directory
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
 

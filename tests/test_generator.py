@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import py_compile
+from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
 

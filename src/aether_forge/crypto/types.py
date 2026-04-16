@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
-
+from typing import Any
 
 CRYPTO_KINDS = {"wallet-action", "exchange-action", "onchain-action", "data-source"}
 

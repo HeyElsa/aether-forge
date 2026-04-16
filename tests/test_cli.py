@@ -1,17 +1,36 @@
 from __future__ import annotations
 
+import json
+import os
+import re
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-import json
-import re
+
+import pytest
 
 import aether_forge.cli as cli_module
 from aether_forge.cli import main
 from aether_forge.crypto import MockCryptoExecutionRouter
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
-from aether_forge.runtime import RuntimeSession, SessionStatus, StepKind, StepProposal, load_artifact_bundle, load_session_replay_json, write_session_replay_json
 
+# Tests that hit real external networks (Binance, etc.) are skipped in CI
+# because public exchange APIs geo-block CI runners (HTTP 451). Run them
+# locally where outbound HTTPS works:
+#     RUN_NETWORK_TESTS=1 pytest tests/test_cli.py
+_skip_network = pytest.mark.skipif(
+    os.environ.get("RUN_NETWORK_TESTS", "") == "",
+    reason="set RUN_NETWORK_TESTS=1 to enable (hits external APIs that geo-block CI)",
+)
+from aether_forge.runtime import (
+    RuntimeSession,
+    SessionStatus,
+    StepKind,
+    StepProposal,
+    load_artifact_bundle,
+    load_session_replay_json,
+    write_session_replay_json,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
@@ -96,6 +115,7 @@ def test_scaffold_run_cli_executes_generated_project() -> None:
         rmtree(output_dir)
 
 
+@_skip_network
 def test_scaffold_run_cli_accepts_scaffold_live_router_mode() -> None:
     output_dir = Path(mkdtemp(prefix="aether-forge-scaffold-run-"))
 

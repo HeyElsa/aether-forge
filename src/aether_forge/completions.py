@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 _COMMANDS = [
     "validate", "artifact-compat", "artifact-migration-plan",
     "eval", "eval-pack", "promote-draft", "resume-replay",

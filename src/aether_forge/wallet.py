@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -380,7 +380,7 @@ def _print_credentials(wallet: AgentWallet) -> None:
         print(f"  {wallet.mnemonic}")
         print()
     if wallet.api_key_token:
-        print(f"  API KEY — saved to .env (never commit this file):")
+        print("  API KEY — saved to .env (never commit this file):")
         print(f"  {wallet.api_key_token[:20]}...{wallet.api_key_token[-8:]}")
         print()
     print(f"  Wallet: {wallet.wallet_name} ({wallet.provider})")
@@ -459,8 +459,8 @@ def backup_agent_wallet(agent_directory: Path, output_path: Path | None = None) 
 
     THE BACKUP CONTAINS THE MNEMONIC. Treat it like a private key.
     """
-    from datetime import UTC, datetime
     import json as _json
+    from datetime import UTC, datetime
 
     wallet_config = load_agent_wallet(agent_directory)
     if wallet_config.get("provider") != "ows":

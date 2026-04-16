@@ -35,8 +35,8 @@ def test_runner_persists_memory(tmp_path: Path) -> None:
 
     assert db_path.exists()
     # Memory should have tick records
-    from aether_forge.storage import SqliteMemoryStore
     from aether_forge.memory import MemoryQuery
+    from aether_forge.storage import SqliteMemoryStore
     store = SqliteMemoryStore(db_path)
     records = store.read(MemoryQuery(memory_type="decision-history"))
     assert len(records) >= 2

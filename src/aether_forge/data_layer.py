@@ -36,10 +36,11 @@ import logging
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -740,7 +741,7 @@ def build_elsa_source(
     )
 
 
-def build_mcp_source(config_or_dict: Any, *, name: str | None = None) -> "McpDataSource":
+def build_mcp_source(config_or_dict: Any, *, name: str | None = None) -> McpDataSource:
     """Build an MCP data source from either an ``McpServerConfig`` or a
     plain dict (e.g. the ``mcp_servers:`` block from ``aether-forge.json``).
 

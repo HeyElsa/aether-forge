@@ -89,4 +89,24 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]
+ignore = [
+  "E501",   # line too long (we set 120)
+  "E402",   # module-level import not at top (intentional for lazy CLI loading)
+  "B904",   # raise without `from` (intentional where we hide framework stack)
+  "B905",   # zip() without strict= (3.12 default behavior is fine)
+  "E741",   # ambiguous variable name
+  "SIM105", # try/except/pass → contextlib.suppress (stylistic)
+  "SIM108", # if-else → ternary (stylistic)
+  "SIM102", # nested if (sometimes intentional for readability)
+  "SIM103", # needless bool (stylistic)
+  "SIM118", # in dict.keys() (sometimes intentional for explicitness)
+  "F841",   # unused local — sometimes intentional for clarity / catch
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "F841", "F401"]  # assert False + unused locals/imports OK in tests
+"src/aether_forge/cli.py" = ["F401"]  # re-exports for plugin/CLI surface
+"src/aether_forge/__init__.py" = ["F401"]  # public API re-exports
+"src/aether_forge/crypto/__init__.py" = ["F401"]  # public API re-exports
+"src/aether_forge/adapters/__init__.py" = ["F401"]  # public API re-exports
+"src/aether_forge/protocols/__init__.py" = ["F401"]  # public API re-exports

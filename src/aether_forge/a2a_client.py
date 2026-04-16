@@ -124,8 +124,8 @@ class A2AForgeClient:
         }
 
         # Direct JSON-RPC call to avoid async SDK issues
-        from urllib import request as urllib_request
         from urllib import error as urllib_error
+        from urllib import request as urllib_request
 
         body = json.dumps({
             "jsonrpc": "2.0",

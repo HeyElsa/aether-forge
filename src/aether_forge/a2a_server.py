@@ -28,9 +28,10 @@ import logging
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +145,7 @@ class _TaskStore:
                 ts = status.get("timestamp", "")
                 if state in terminal_states and ts:
                     try:
-                        from datetime import datetime, UTC
+                        from datetime import datetime
                         task_time = datetime.fromisoformat(ts).timestamp()
                         if task_time < cutoff:
                             to_delete.append(task_id)
@@ -228,7 +229,7 @@ def _default_task_handler(task: dict[str, Any]) -> dict[str, Any]:
 class _A2AHandler(BaseHTTPRequestHandler):
     """HTTP handler that implements the A2A protocol over JSON-RPC 2.0."""
 
-    server: "_A2AHTTPServer"
+    server: _A2AHTTPServer
 
     def log_message(self, format, *args):
         logger.debug("A2A server: %s", format % args)

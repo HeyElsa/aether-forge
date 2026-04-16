@@ -6,11 +6,10 @@ import importlib
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib import request as urllib_request
-from urllib.error import URLError
 
 
 @dataclass(slots=True)
@@ -126,6 +125,7 @@ def _check_sqlite_memory_store() -> CheckResult:
     try:
         import tempfile
         from datetime import UTC, datetime
+
         from .memory import MemoryQuery, MemoryRecord
         from .storage import SqliteMemoryStore
 
@@ -185,6 +185,7 @@ def _check_mempalace_knowledge_layer() -> CheckResult:
 
     try:
         import tempfile
+
         from .knowledge import KnowledgeStore
 
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 import json
 from pathlib import Path
-from aether_forge.doctor import run_doctor_checks, validate_config, generate_default_config, CheckResult
+
+from aether_forge.doctor import CheckResult, generate_default_config, run_doctor_checks, validate_config
+
 
 def test_doctor_checks_return_results() -> None:
     results = run_doctor_checks()

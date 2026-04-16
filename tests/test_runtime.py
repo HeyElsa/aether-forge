@@ -18,7 +18,6 @@ from aether_forge.runtime import (
     write_session_replay_json,
 )
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
 

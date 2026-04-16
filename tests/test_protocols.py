@@ -17,7 +17,6 @@ from aether_forge.protocols.x402 import (
     search_402_directory,
 )
 
-
 # ── ERC-8004 ──────────────────────────────────────────────────────────────
 
 

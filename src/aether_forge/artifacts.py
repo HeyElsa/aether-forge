@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import json
-import re
 
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
-
 
 JSON_VALUE = Any
 SECRET_LIKE_KEY = re.compile(r"(secret|token|private[-_]?key|seed[-_]?phrase|mnemonic|password|api[-_]?key)", re.IGNORECASE)

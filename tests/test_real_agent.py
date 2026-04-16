@@ -11,19 +11,18 @@ Requires: Ollama running locally with gemma4 model.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
-from aether_forge.scaffold_router import StrategyConfig, load_scaffold_router
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
-from aether_forge.models import OpenAICompatiblePlanningModel
-from aether_forge.planner import PromptDrivenPlanner, HeuristicPlanner
-from aether_forge.runner import AgentRunner, RunnerConfig
-from aether_forge.runtime import load_artifact_bundle, RuntimeSession
-from aether_forge.storage import SqliteMemoryStore
 from aether_forge.memory import MemoryQuery
+from aether_forge.models import OpenAICompatiblePlanningModel
+from aether_forge.planner import HeuristicPlanner, PromptDrivenPlanner
+from aether_forge.runner import AgentRunner, RunnerConfig
+from aether_forge.runtime import RuntimeSession, load_artifact_bundle
+from aether_forge.scaffold_router import StrategyConfig, load_scaffold_router
+from aether_forge.storage import SqliteMemoryStore
 
 
 def _ollama_available() -> bool:

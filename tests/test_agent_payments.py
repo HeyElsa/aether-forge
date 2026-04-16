@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from aether_forge.agent_payments import (
     PaymentRequest,
     PaymentResult,
@@ -15,7 +13,6 @@ from aether_forge.agent_payments import (
     check_budget,
     execute_payment,
 )
-
 
 # ---------------------------------------------------------------------------
 # PaymentRequest

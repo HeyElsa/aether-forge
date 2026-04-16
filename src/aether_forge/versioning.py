@@ -16,7 +16,7 @@ class SemanticVersion:
     patch: int
 
     @classmethod
-    def parse(cls, value: str) -> "SemanticVersion":
+    def parse(cls, value: str) -> SemanticVersion:
         parts = value.split(".")
         if len(parts) != 3 or not all(part.isdigit() for part in parts):
             raise ValueError(f"Invalid semantic version: {value}")

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-from urllib import request as urllib_request
+from typing import Any
 from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 
 @dataclass(slots=True)

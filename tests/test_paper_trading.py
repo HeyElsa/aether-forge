@@ -12,16 +12,15 @@ Requires: Ollama running locally + internet access for Binance API.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
-from aether_forge.scaffold_router import StrategyConfig, load_scaffold_router
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
 from aether_forge.models import OpenAICompatiblePlanningModel
-from aether_forge.planner import PromptDrivenPlanner, HeuristicPlanner
+from aether_forge.planner import HeuristicPlanner, PromptDrivenPlanner
 from aether_forge.runner import AgentRunner, RunnerConfig
+from aether_forge.scaffold_router import StrategyConfig, load_scaffold_router
 
 
 def _ollama_available() -> bool:
@@ -122,7 +121,7 @@ def test_paper_trading_with_live_prices(tmp_path: Path) -> None:
         print(f"  [{order['status']:>7}] {order['side']:>4} {order.get('amount', '?')} {order['token']} "
               f"@ ${order['limit_price']:,.2f} (${order.get('notional_usd', 0):,.2f})")
 
-    print(f"\nPortfolio:")
+    print("\nPortfolio:")
     print(f"  Cash:  ${portfolio['cash_usd']:>10,.2f}")
     for token, pos in portfolio.get("positions", {}).items():
         print(f"  {token}:   {pos['amount']:.6f} = ${pos['value_usd']:>10,.2f} @ ${pos['price']:,.2f}")

@@ -1,6 +1,6 @@
 """Tests for DeFi safety helpers."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from aether_forge.defi_safety import (
     ExposureTracker,
@@ -9,7 +9,6 @@ from aether_forge.defi_safety import (
     check_slippage,
     simulate_tx,
 )
-
 
 # ---------------------------------------------------------------------------
 # Slippage

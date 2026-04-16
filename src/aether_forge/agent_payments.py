@@ -40,7 +40,7 @@ import fcntl
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -542,8 +542,8 @@ def _sign_and_send_transfer(
     enriches it with nonce + gas estimate via RPC, then RLP-encodes it as an
     EIP-1559 unsigned envelope and hands it to ``wallet.sign_and_send``.
     """
-    from .wallet import sign_and_send, load_agent_wallet
     from .onchain_registry import encode_eip1559_unsigned
+    from .wallet import load_agent_wallet, sign_and_send
 
     rpc = rpc_url or _RPC_DEFAULTS.get(chain) or _RPC_DEFAULTS["base"]
 

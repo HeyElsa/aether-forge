@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import json
 
-from aether_forge.models import AnthropicPlanningModel, GeminiPlanningModel, ModelInfo, OpenAICompatiblePlanningModel, StaticPlanningModel, list_models
+from aether_forge.models import (
+    AnthropicPlanningModel,
+    GeminiPlanningModel,
+    OpenAICompatiblePlanningModel,
+    StaticPlanningModel,
+    list_models,
+)
 
 
 def test_static_planning_model_returns_fixed_response() -> None:

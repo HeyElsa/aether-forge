@@ -1,4 +1,5 @@
-from aether_forge.completions import generate_bash_completion, generate_zsh_completion, generate_fish_completion
+from aether_forge.completions import generate_bash_completion, generate_fish_completion, generate_zsh_completion
+
 
 def test_bash_completion_contains_commands():
     script = generate_bash_completion()
