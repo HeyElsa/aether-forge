@@ -262,7 +262,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--planner-model", help="Default model name")
     init_parser.add_argument("--api-key-env", help="Environment variable for the API key")
 
-    doctor_parser = subparsers.add_parser("doctor", help="Check Aether Forge environment and dependencies")
+    subparsers.add_parser("doctor", help="Check Aether Forge environment and dependencies")
 
     config_validate_parser = subparsers.add_parser("config-validate", help="Validate an aether-forge.json config file")
     config_validate_parser.add_argument("config_path", nargs="?", default="aether-forge.json", help="Path to config file")

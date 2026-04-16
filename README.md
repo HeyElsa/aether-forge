@@ -186,6 +186,8 @@ forge promote-draft ./my-agent --target paper --approver "ops-team"
 │ Skills     │ SKILL.md           │ skills.sh + bankr.bot + Elsa x402 + any repo            │
 │ DeFi       │ Elsa x402          │ Swaps, perps, staking, airdrops — pay-per-call on Base  │
 │ Security   │ Hardened           │ Session keys, circuit breakers, injection detection      │
+│ DeFi Safety│ defi_safety        │ tx simulation, slippage, exposure, liquidation health   │
+│ Observability│ /metrics + /ready│ Prometheus metrics, deep health, replay debugger        │
 │ Runtime    │ Forge Engine       │ Planner → Policy → Execute → Ledger + memory + replay   │
 │ Spec       │ JSON Schema        │ 8 artifact types, cross-validation, migration contracts │
 │ Eval       │ Scenario Packs     │ Baseline + edge cases, promotion evidence, replays      │
@@ -511,7 +513,7 @@ Agents can pay each other for capabilities using three channels, all on Base mai
 | Channel | Use case | Status |
 |---|---|---|
 | **x402 pay-per-call** | Agent B gates capabilities behind a price. Agent A pays per request via EIP-3009. | ✅ Shipped (client + server) |
-| **Direct USDC transfer** | One-shot transfer for tips, bounties, flat fees | ✅ Tx builder shipped |
+| **Direct USDC transfer** | One-shot transfer for tips, bounties, flat fees | ✅ Wired end-to-end (signs + broadcasts) |
 | **ERC-8183 escrow** | Complex jobs with evaluator sign-off | ⚠️ Tx builder ready, contract not yet deployed |
 
 Agent B configures paid capabilities:
@@ -528,6 +530,33 @@ task_handler = build_paid_task_handler(gate, capability_handlers)
 
 When Agent A calls a paid capability without payment, Agent B returns `auth-required` with the price and payment address. Agent A pays, retries, and gets the result.
 
+#### Direct USDC transfers (policy-gated)
+
+Agents can directly transfer USDC to other addresses, but only when the agent's `policy-bundle.json` explicitly opts in (default: deny):
+
+```json
+{
+  "agentPayments": {
+    "directTransferEnabled": true,
+    "maxPerTransferUsd": 0.10,
+    "allowedRecipients": ["0xPeerAgent..."],
+    "allowedChains": ["base"]
+  }
+}
+```
+
+```python
+from aether_forge.agent_payments import PaymentRequest, execute_payment
+
+result = execute_payment(agent_dir, PaymentRequest(
+    method="transfer", budget_usd=0.001,
+    pay_to="0xPeerAgent...", chain="base",
+))
+print(result.tx_hash)  # → real Base mainnet tx hash
+```
+
+See `examples/two-agent-marketplace/` for a working end-to-end demo (buyer agent pays oracle agent for ETH price data, with a live terminal dashboard).
+
 ---
 
 ## CLI Reference
@@ -538,11 +567,15 @@ When Agent A calls a paid capability without payment, Agent B returns `auth-requ
 | **Verify** | `validate`, `eval`, `eval-pack`, `artifact-compat`, `artifact-migration-plan` |
 | **Run** | `run`, `scaffold-run`, `resume-replay`, `scaffold-policy-sync`, `scaffold-live-status` |
 | **Strategy** | `strategy view`, `strategy accept`, `strategy reject` |
-| **Agents** | `agent-list`, `agent-info`, `agent-remove`, `agent-send`, `agent-register` |
+| **Agents** | `agent-list`, `agent-info`, `agent-remove`, `agent-send`, `agent-register`, `agent-discover` |
+| **Debug** | `replays`, `replay-show` |
 | **Ship** | `promote-draft` |
 | **Skills** | `skills-search`, `skills-add`, `elsa-list` |
 | **Models** | `models-list` |
-| **Wallet** | `wallet-create`, `wallet-list`, `wallet-info`, `wallet-account`, `wallet-sign-message`, `wallet-sign-tx`, `wallet-send-tx`, `wallet-import`, `wallet-delete`, `wallet-export` |
+| **Wallet** | `wallet-create`, `wallet-list`, `wallet-info`, `wallet-account`, `wallet-sign-message`, `wallet-sign-tx`, `wallet-send-tx`, `wallet-import`, `wallet-delete`, `wallet-export`, `wallet-backup`, `wallet-restore` |
+| **Payments** | `x402-call`, `halt`, `resume` |
+| **Security** | `security-check` |
+| **Diagnostics** | `doctor`, `config-validate`, `init`, `completions` |
 
 ---
 

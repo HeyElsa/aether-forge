@@ -310,5 +310,3 @@ def truncate_to_budget(prompt: str, model: str | None, *, reserve_tokens: int = 
     truncated_tokens = estimated - budget
     marker = f"\n\n[... {truncated_tokens} tokens truncated to fit context window ...]\n\n"
     return head + marker + tail
-
-    return "\n".join(lines)
