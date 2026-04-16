@@ -547,16 +547,24 @@ def _sign_and_send_transfer(
 
     rpc = rpc_url or _RPC_DEFAULTS.get(chain) or _RPC_DEFAULTS["base"]
 
-    # Get the agent's EVM address
+    # Get the agent's EVM address — handle both wallet.json shapes
     wallet_cfg = load_agent_wallet(agent_directory)
-    accounts = wallet_cfg.get("accounts", []) or wallet_cfg.get("addresses", {})
-    if isinstance(accounts, dict):
-        from_address = accounts.get("evm")
-    else:
-        evm = next((a for a in accounts if a.get("chain") == "evm"), None)
-        from_address = evm["address"] if evm else None
+    from_address = (
+        wallet_cfg.get("evmAddress")
+        or wallet_cfg.get("addresses", {}).get("evm")
+    )
     if not from_address:
-        raise RuntimeError("could not determine agent EVM address")
+        # OWS shape: accounts list with chainId starting with eip155:
+        for acct in wallet_cfg.get("accounts", []):
+            cid = str(acct.get("chainId", ""))
+            if cid.startswith("eip155:") or acct.get("chain") == "evm":
+                from_address = acct.get("address")
+                break
+    if not from_address:
+        raise RuntimeError(
+            f"could not determine agent EVM address from wallet.json: "
+            f"keys={list(wallet_cfg.keys())}"
+        )
 
     # Fetch nonce + gas via RPC
     nonce = _rpc_call(rpc, "eth_getTransactionCount", [from_address, "latest"])
@@ -598,12 +606,24 @@ def _sign_and_send_transfer(
 
 
 def _rpc_call(rpc_url: str, method: str, params: list) -> str:
-    """Single JSON-RPC call returning the raw hex result string."""
+    """Single JSON-RPC call returning the raw hex result string.
+
+    Sends a browser-like User-Agent because some public Base RPCs (publicnode,
+    llamarpc) reject requests without one as 403 Forbidden.
+    """
     import json as _json
     from urllib import request as _ur
 
     body = _json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    req = _ur.Request(rpc_url, data=body, headers={"Content-Type": "application/json"})
+    req = _ur.Request(
+        rpc_url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "aether-forge/0.1.0 (+https://github.com/HeyElsa/aether-forge)",
+            "Accept": "application/json",
+        },
+    )
     with _ur.urlopen(req, timeout=15) as resp:
         out = _json.loads(resp.read())
         if "error" in out:
