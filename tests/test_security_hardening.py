@@ -36,6 +36,25 @@ requires_crypto = pytest.mark.skipif(not _has_cryptography(), reason="cryptograp
 # ---------------------------------------------------------------------------
 # Sanitization
 # ---------------------------------------------------------------------------
+#
+# !! IMPORTANT — DO NOT REPLACE THE TEST MNEMONIC BELOW WITH A REAL ONE !!
+#
+# The mnemonic ``abandon abandon abandon abandon abandon abandon abandon
+# abandon abandon abandon abandon about`` is the canonical BIP-39 test vector
+# published in the BIP-39 specification. It derives publicly-documented
+# addresses that every crypto library uses for unit testing. Funding any
+# wallet derived from this phrase is reckless — assume it is drained
+# immediately by every BIP-39 test scanner running on Ethereum.
+#
+# If you need a mnemonic for local testing of a NEW wallet flow (e.g.,
+# manual end-to-end on Base Sepolia), generate one in your own dev
+# environment and never commit it. The .gitignore already excludes .env,
+# .ows/ vaults, and wallet-backup-*.json for this reason.
+#
+# Past incident: a real funded mnemonic was accidentally committed here
+# 2026-04-15. The wallet was drained, repo history was nuked, and we
+# moved to this canonical test vector. See SECURITY.md for the report
+# process if you spot another leak.
 
 def test_sanitize_string_redacts_mnemonic() -> None:
     text = "my mnemonic is abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
