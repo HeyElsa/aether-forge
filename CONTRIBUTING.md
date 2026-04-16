@@ -49,7 +49,7 @@ forge doctor
 
 ## Reporting Security Issues
 
-Do **not** open a public issue for security vulnerabilities. Email x402@heyelsa.ai with details and we'll respond within 48 hours.
+Do **not** open a public issue for security vulnerabilities. Email ask@heyelsa.ai with details and we'll respond within 48 hours.
 
 ## License
 

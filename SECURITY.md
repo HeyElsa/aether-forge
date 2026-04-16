@@ -6,7 +6,7 @@ If you discover a security vulnerability in Aether Forge, please report it respo
 
 **Do NOT open a public GitHub issue.**
 
-Email **x402@heyelsa.ai** with:
+Email **ask@heyelsa.ai** with:
 - Description of the vulnerability
 - Steps to reproduce
 - Impact assessment

@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 authors = [
-  {name = "HeyElsa", email = "x402@heyelsa.ai"},
+  {name = "HeyElsa", email = "ask@heyelsa.ai"},
 ]
 keywords = [
   "agent", "ai", "framework", "spec-first", "policy",
