@@ -37,6 +37,33 @@ $ forge generate-fast --name "BTC Basis Trader" \
 
 ---
 
+## ⚠️ Disclaimer
+
+Aether Forge is **early-stage software** (`v0.1.0`, pre-1.0). It moves real
+money on Base mainnet through autonomous LLM-driven agents. Use at your own
+risk:
+
+- **Software is provided AS-IS without warranty** of any kind. See [LICENSE](LICENSE) (MIT).
+- **You are solely responsible** for any funds loaded into agent wallets,
+  any transactions those agents sign, and any losses incurred from bugs,
+  LLM hallucinations, market events, exploits, or your own configuration.
+- **Always test in `--mode paper` first** with simulated orders. Set
+  conservative `x402_budget` caps. Use the kill switch (`forge halt .`).
+- **This is NOT financial advice**, NOT a regulated service, NOT an audited
+  smart contract framework. We make no guarantees about correctness,
+  security, profitability, or fitness for any purpose.
+- **Agent decisions are non-deterministic** — the same strategy.md against
+  the same market data can produce different actions across LLM providers
+  and even between runs.
+- **For production use**: drain wallets between sessions, run a
+  `forge security-check --harden` audit, monitor `/ready` and
+  `/metrics`, and have a rollback plan.
+
+If you spot a security vulnerability, email **ask@heyelsa.ai** — do NOT
+open a public issue. See [SECURITY.md](SECURITY.md).
+
+---
+
 ## Why
 
 Building autonomous agents today means scattered configs, no policy enforcement, untested deployments, and zero auditability. Moving to production is a leap of faith.
