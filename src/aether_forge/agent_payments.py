@@ -375,17 +375,55 @@ def _execute_payment_locked(
                 amount_usd=0,
                 error="No pay_to address provided",
             )
+
+        # Policy gate — require explicit opt-in for agent-to-agent transfers
+        policy_ok, policy_reason = _check_transfer_policy(
+            agent_directory, payment.pay_to, payment.budget_usd, payment.chain
+        )
+        if not policy_ok:
+            _audit_payment(agent_directory, "payment_denied", {
+                "method": "transfer", "amount_usd": payment.budget_usd,
+                "pay_to": payment.pay_to, "reason": policy_reason,
+            })
+            return PaymentResult(
+                success=False,
+                method="transfer",
+                amount_usd=0,
+                error=f"policy denied: {policy_reason}",
+            )
+
+        # Build, sign, and broadcast on-chain
         tx = build_transfer_tx(
             payment.pay_to,
             payment.budget_usd,
             chain=payment.chain,
         )
+        try:
+            tx_hash = _sign_and_send_transfer(agent_directory, tx, payment.chain)
+        except Exception as error:
+            _audit_payment(agent_directory, "payment_failed", {
+                "method": "transfer", "amount_usd": payment.budget_usd,
+                "pay_to": payment.pay_to, "error": str(error),
+            })
+            return PaymentResult(
+                success=False,
+                method="transfer",
+                amount_usd=payment.budget_usd,
+                error=f"sign/send failed: {error}",
+            )
+
+        # Update budget atomically (we hold the lock from caller)
+        _record_spend(agent_directory, payment.budget_usd)
+        _audit_payment(agent_directory, "payment_settled", {
+            "method": "transfer", "amount_usd": payment.budget_usd,
+            "pay_to": payment.pay_to, "tx_hash": tx_hash,
+        })
+
         return PaymentResult(
             success=True,
             method="transfer",
             amount_usd=payment.budget_usd,
-            tx_hash="",  # populated after actual send
-            error=json.dumps(tx),  # carry the unsigned tx for the caller
+            tx_hash=tx_hash,
         )
 
     if payment.method == "escrow":
@@ -413,3 +451,192 @@ def _execute_payment_locked(
         amount_usd=0,
         error=f"Unknown payment method: {payment.method}",
     )
+
+
+# ---------------------------------------------------------------------------
+# Direct USDC transfer — full sign + broadcast wiring
+# ---------------------------------------------------------------------------
+
+
+# RPC defaults per chain (override via AETHER_FORGE_RPC_<CHAIN> env var or
+# by passing rpc_url through to the helper).
+_RPC_DEFAULTS = {
+    "base": "https://mainnet.base.org",
+    "ethereum": "https://eth.llamarpc.com",
+    "polygon": "https://polygon-rpc.com",
+    "arbitrum": "https://arb1.arbitrum.io/rpc",
+    "optimism": "https://mainnet.optimism.io",
+}
+
+
+def _check_transfer_policy(
+    agent_directory: Path,
+    recipient: str,
+    amount_usd: float,
+    chain: str,
+) -> tuple[bool, str]:
+    """Verify the agent's policy permits this direct USDC transfer.
+
+    Reads ``policy-bundle.json`` for an ``agentPayments`` block:
+
+    .. code-block:: json
+
+        {
+          "agentPayments": {
+            "directTransferEnabled": true,
+            "maxPerTransferUsd": 1.0,
+            "allowedRecipients": ["0xabc...", "0xdef..."],
+            "allowedChains": ["base"]
+          }
+        }
+
+    If ``agentPayments`` is missing, transfers are DENIED by default
+    (defense in depth — explicit opt-in required).
+
+    ``allowedRecipients`` is optional; if absent, all recipients allowed
+    up to the per-transfer limit. If present, the recipient MUST be in
+    the list (case-insensitive).
+    """
+    policy_path = agent_directory / "policy-bundle.json"
+    if not policy_path.exists():
+        return (False, "no policy-bundle.json — transfers default to deny")
+
+    try:
+        policy = json.loads(policy_path.read_text())
+    except Exception as error:
+        return (False, f"policy-bundle.json invalid: {error}")
+
+    cfg = policy.get("agentPayments")
+    if not cfg or not cfg.get("directTransferEnabled"):
+        return (False, "policy.agentPayments.directTransferEnabled is not true")
+
+    max_per = float(cfg.get("maxPerTransferUsd", 0))
+    if max_per <= 0:
+        return (False, "policy.agentPayments.maxPerTransferUsd must be > 0")
+    if amount_usd > max_per:
+        return (False, f"amount ${amount_usd} exceeds policy max ${max_per}")
+
+    allowed_chains = cfg.get("allowedChains")
+    if allowed_chains and chain not in allowed_chains:
+        return (False, f"chain '{chain}' not in policy.allowedChains")
+
+    allowed_recipients = cfg.get("allowedRecipients")
+    if allowed_recipients:
+        normalized = {r.lower() for r in allowed_recipients}
+        if recipient.lower() not in normalized:
+            return (False, f"recipient {recipient} not in policy.allowedRecipients")
+
+    return (True, "ok")
+
+
+def _sign_and_send_transfer(
+    agent_directory: Path,
+    tx_partial: dict[str, Any],
+    chain: str,
+    *,
+    rpc_url: str | None = None,
+) -> str:
+    """Complete the unsigned tx, sign via OWS, broadcast, and return tx_hash.
+
+    Takes the ``build_transfer_tx`` partial (to/data/value/chainId/type) and
+    enriches it with nonce + gas estimate via RPC, then RLP-encodes it as an
+    EIP-1559 unsigned envelope and hands it to ``wallet.sign_and_send``.
+    """
+    from .wallet import sign_and_send, load_agent_wallet
+    from .onchain_registry import encode_eip1559_unsigned
+
+    rpc = rpc_url or _RPC_DEFAULTS.get(chain) or _RPC_DEFAULTS["base"]
+
+    # Get the agent's EVM address
+    wallet_cfg = load_agent_wallet(agent_directory)
+    accounts = wallet_cfg.get("accounts", []) or wallet_cfg.get("addresses", {})
+    if isinstance(accounts, dict):
+        from_address = accounts.get("evm")
+    else:
+        evm = next((a for a in accounts if a.get("chain") == "evm"), None)
+        from_address = evm["address"] if evm else None
+    if not from_address:
+        raise RuntimeError("could not determine agent EVM address")
+
+    # Fetch nonce + gas via RPC
+    nonce = _rpc_call(rpc, "eth_getTransactionCount", [from_address, "latest"])
+    gas_price = _rpc_call(rpc, "eth_gasPrice", [])
+    try:
+        gas_estimate_hex = _rpc_call(rpc, "eth_estimateGas", [{
+            "from": from_address,
+            "to": tx_partial["to"],
+            "data": tx_partial["data"],
+            "value": tx_partial.get("value", "0x0"),
+        }])
+        gas_estimate = int(gas_estimate_hex, 16)
+    except Exception:
+        gas_estimate = 100_000  # safe default for ERC-20 transfer
+    gas_limit = int(gas_estimate * 1.2)
+
+    full_tx = {
+        "from": from_address,
+        "to": tx_partial["to"],
+        "data": tx_partial["data"],
+        "value": tx_partial.get("value", "0x0"),
+        "chainId": tx_partial["chainId"],
+        "type": "0x2",
+        "nonce": nonce,
+        "gas": hex(gas_limit),
+        "maxFeePerGas": hex(int(gas_price, 16) * 2),
+        "maxPriorityFeePerGas": hex(int(gas_price, 16) // 10 + 1),
+    }
+
+    # RLP-encode as unsigned EIP-1559 envelope
+    tx_hex = encode_eip1559_unsigned(full_tx)
+
+    # Sign + broadcast via OWS
+    result = sign_and_send(agent_directory, chain, tx_hex, rpc_url=rpc)
+    tx_hash = result.get("tx_hash") or result.get("txHash") or ""
+    if not tx_hash:
+        raise RuntimeError(f"sign_and_send returned no tx_hash: {result}")
+    return tx_hash
+
+
+def _rpc_call(rpc_url: str, method: str, params: list) -> str:
+    """Single JSON-RPC call returning the raw hex result string."""
+    import json as _json
+    from urllib import request as _ur
+
+    body = _json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
+    req = _ur.Request(rpc_url, data=body, headers={"Content-Type": "application/json"})
+    with _ur.urlopen(req, timeout=15) as resp:
+        out = _json.loads(resp.read())
+        if "error" in out:
+            raise RuntimeError(out["error"])
+        return out["result"]
+
+
+def _record_spend(agent_directory: Path, amount_usd: float) -> None:
+    """Update x402_state.json after a successful payment."""
+    state_path = agent_directory / "x402_state.json"
+    state = {}
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text())
+        except Exception:
+            state = {}
+    state["session_spent_usd"] = state.get("session_spent_usd", 0.0) + amount_usd
+    today = datetime.now(UTC).date().isoformat()
+    daily = state.get("daily_spent_usd", {}) or {}
+    daily[today] = daily.get(today, 0.0) + amount_usd
+    state["daily_spent_usd"] = daily
+    state["total_payments"] = state.get("total_payments", 0) + 1
+    state["saved_at"] = datetime.now(UTC).isoformat()
+    state_path.write_text(json.dumps(state, indent=2))
+
+
+def _audit_payment(agent_directory: Path, event: str, details: dict[str, Any]) -> None:
+    """Append a payment event to x402_audit.jsonl."""
+    audit_path = agent_directory / "x402_audit.jsonl"
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "event": event,
+        **details,
+    }
+    with audit_path.open("a") as f:
+        f.write(json.dumps(record) + "\n")

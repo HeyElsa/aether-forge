@@ -155,12 +155,77 @@ def test_execute_payment_transfer_no_address(tmp_path: Path) -> None:
     assert "No pay_to" in result.error
 
 
-def test_execute_payment_transfer_builds_tx(tmp_path: Path) -> None:
+def test_execute_payment_transfer_denied_without_policy(tmp_path: Path) -> None:
+    """Direct transfers default to deny — explicit policy opt-in required."""
     payment = PaymentRequest(method="transfer", budget_usd=0.05, pay_to="0x" + "a" * 40)
     result = execute_payment(tmp_path, payment)
-    assert result.success is True
-    assert result.method == "transfer"
-    assert result.amount_usd == 0.05
+    assert result.success is False
+    assert "policy" in result.error.lower()
+
+
+def test_execute_payment_transfer_denied_when_policy_disables(tmp_path: Path) -> None:
+    import json as _json
+    (tmp_path / "policy-bundle.json").write_text(_json.dumps({
+        "agentPayments": {"directTransferEnabled": False}
+    }))
+    payment = PaymentRequest(method="transfer", budget_usd=0.05, pay_to="0x" + "a" * 40)
+    result = execute_payment(tmp_path, payment)
+    assert result.success is False
+    assert "directTransferEnabled" in result.error
+
+
+def test_execute_payment_transfer_denied_over_max(tmp_path: Path) -> None:
+    import json as _json
+    # Set a generous x402 budget so policy check fires before budget check
+    (tmp_path / "x402_state.json").write_text(_json.dumps({
+        "session_spent_usd": 0,
+        "daily_spent_usd": {},
+    }))
+    (tmp_path / "policy-bundle.json").write_text(_json.dumps({
+        "agentPayments": {
+            "directTransferEnabled": True,
+            "maxPerTransferUsd": 0.001,  # very tight policy cap
+        }
+    }))
+    # Small amount that passes default x402 budget but not the policy cap
+    payment = PaymentRequest(method="transfer", budget_usd=0.05, pay_to="0x" + "a" * 40)
+    result = execute_payment(tmp_path, payment)
+    assert result.success is False
+    # Either policy or budget can fail first — both are correct deny behaviors
+    assert "policy max" in result.error or "cap" in result.error.lower()
+
+
+def test_execute_payment_transfer_denied_recipient_not_allowed(tmp_path: Path) -> None:
+    import json as _json
+    (tmp_path / "policy-bundle.json").write_text(_json.dumps({
+        "agentPayments": {
+            "directTransferEnabled": True,
+            "maxPerTransferUsd": 1.0,
+            "allowedRecipients": ["0x" + "b" * 40],
+        }
+    }))
+    payment = PaymentRequest(method="transfer", budget_usd=0.05, pay_to="0x" + "a" * 40)
+    result = execute_payment(tmp_path, payment)
+    assert result.success is False
+    assert "allowedRecipients" in result.error
+
+
+def test_execute_payment_transfer_denied_chain_not_allowed(tmp_path: Path) -> None:
+    import json as _json
+    (tmp_path / "policy-bundle.json").write_text(_json.dumps({
+        "agentPayments": {
+            "directTransferEnabled": True,
+            "maxPerTransferUsd": 1.0,
+            "allowedChains": ["base"],
+        }
+    }))
+    payment = PaymentRequest(
+        method="transfer", budget_usd=0.05,
+        pay_to="0x" + "a" * 40, chain="ethereum",
+    )
+    result = execute_payment(tmp_path, payment)
+    assert result.success is False
+    assert "allowedChains" in result.error
 
 
 def test_execute_payment_escrow_no_contract(tmp_path: Path) -> None:
