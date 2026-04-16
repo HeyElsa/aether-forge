@@ -1,9 +1,71 @@
 import Link from "next/link";
 
+function WaveBackground() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 1440 800"
+      preserveAspectRatio="xMidYMid slice"
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 0,
+        pointerEvents: "none",
+        opacity: 0.6,
+      }}
+    >
+      <defs>
+        <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0" />
+          <stop offset="50%" stopColor="currentColor" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <g
+        stroke="url(#waveGrad)"
+        fill="none"
+        strokeWidth="1"
+        style={{ color: "var(--af-wave, #4a4a52)" }}
+      >
+        {Array.from({ length: 18 }).map((_, i) => {
+          const baseY = 180 + i * 32;
+          const amplitude = 18 + (i % 3) * 6;
+          const phase = i * 30;
+          const dur = 14 + (i % 5) * 3;
+          const reverse = i % 2 === 0 ? "normal" : "reverse";
+          return (
+            <path
+              key={i}
+              d={`M0 ${baseY} Q360 ${baseY - amplitude} 720 ${baseY} T1440 ${baseY}`}
+              style={{
+                animation: `af-wave-${i % 5} ${dur}s ease-in-out infinite ${reverse}`,
+                transformOrigin: "center",
+                animationDelay: `${-phase * 0.05}s`,
+              }}
+            />
+          );
+        })}
+      </g>
+      <style>{`
+        @keyframes af-wave-0 { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-40px); } }
+        @keyframes af-wave-1 { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(50px); } }
+        @keyframes af-wave-2 { 0%, 100% { transform: translateX(-20px); } 50% { transform: translateX(30px); } }
+        @keyframes af-wave-3 { 0%, 100% { transform: translateX(15px); } 50% { transform: translateX(-45px); } }
+        @keyframes af-wave-4 { 0%, 100% { transform: translateX(-30px); } 50% { transform: translateX(20px); } }
+        @media (prefers-color-scheme: dark) { svg[aria-hidden] g { color: #2a2a2e !important; } }
+        @media (prefers-reduced-motion: reduce) { svg[aria-hidden] path { animation: none !important; } }
+      `}</style>
+    </svg>
+  );
+}
+
 export default function HomePage() {
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -11,8 +73,11 @@ export default function HomePage() {
         minHeight: "80vh",
         padding: "2rem",
         textAlign: "center",
+        overflow: "hidden",
       }}
     >
+      <WaveBackground />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
       <picture>
         <source srcSet="/logo.svg" media="(prefers-color-scheme: dark)" />
         <img src="/logo-dark.svg" alt="Aether Forge" width={120} height={120} />
@@ -143,6 +208,7 @@ export default function HomePage() {
             </p>
           </div>
         ))}
+      </div>
       </div>
     </div>
   );
