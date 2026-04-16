@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from importlib import import_module
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib import request as urllib_request
 
 from .types import CRYPTO_KINDS, CryptoCapabilityDescriptor

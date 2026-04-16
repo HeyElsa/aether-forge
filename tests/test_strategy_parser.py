@@ -2,7 +2,6 @@
 
 from aether_forge.strategy_parser import parse_strategy_file
 
-
 SAMPLE_STRATEGY = """
 # ETH Momentum Swing Strategy
 

@@ -16,7 +16,6 @@ from aether_forge.slow_generate import (
     generate_slow_artifact_set,
 )
 
-
 # ---------------------------------------------------------------------------
 # 1. Baseline-only (no research model)
 # ---------------------------------------------------------------------------

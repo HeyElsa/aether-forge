@@ -8,7 +8,6 @@ from tempfile import mkdtemp
 from aether_forge.cli import main
 from aether_forge.versioning import SemanticVersion, assess_artifact_set_compatibility, build_artifact_migration_plan
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
 

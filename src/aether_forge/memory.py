@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import uuid4
-import re
-
 
 LIVE_ENVIRONMENTS = {"paper", "canary-live", "production"}
 SECRET_LIKE_KEY = re.compile(r"(secret|token|private[-_]?key|seed[-_]?phrase|mnemonic|password|api[-_]?key)", re.IGNORECASE)

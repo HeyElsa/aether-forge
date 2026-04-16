@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
-import json
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -1245,7 +1245,7 @@ def _agent_md(title: str, slug: str, artifact_set_id: str, domain: str, summary:
 
     wallet_section = ""
     if has_wallet:
-        wallet_section = f"""
+        wallet_section = """
 ## Wallet
 
 This agent has a multi-chain wallet provisioned at creation.

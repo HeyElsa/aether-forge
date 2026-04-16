@@ -56,7 +56,7 @@ class NativePolicyGate:
         self.memory_rules: dict[str, Any] = memory_rules or {}
 
     @classmethod
-    def from_policy_bundle(cls, policy_bundle: dict[str, Any]) -> "NativePolicyGate":
+    def from_policy_bundle(cls, policy_bundle: dict[str, Any]) -> NativePolicyGate:
         rules = policy_bundle.get("rules", {}) if isinstance(policy_bundle.get("rules"), dict) else {}
         return cls(
             policy_bundle_version=str(policy_bundle.get("artifactVersion", "native-policy-0.1.0")),

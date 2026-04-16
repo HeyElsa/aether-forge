@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 from .memory import (
     SENSITIVITY_LEVELS,
-    InMemoryMemoryStore,
     MemoryPromotionPolicy,
     MemoryPromotionRequest,
     MemoryPromotionResult,

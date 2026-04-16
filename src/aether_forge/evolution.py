@@ -453,7 +453,7 @@ class RuntimeAutoresearch:
         print(f"  {'='*60}")
         print(f"  Hypothesis: {proposal.hypothesis}")
         print(f"  Rationale:  {proposal.rationale}")
-        print(f"  Changes:")
+        print("  Changes:")
         for key, value in proposal.mutations.items():
             current = self.strategy.parameters.get(key, "?")
             print(f"    {key}: {current} → {value}")

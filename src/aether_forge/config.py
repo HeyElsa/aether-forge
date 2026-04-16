@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import logging
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .adapters.function_call import (
     FunctionCallResponse,
@@ -28,7 +29,6 @@ _PROVIDER_DEFAULTS: dict[str, tuple[str, str]] = {
 from .planner import HeuristicPlanner, PlanningModel, PromptDrivenPlanner
 from .prompting import (
     build_function_call_prompt_from_session,
-    build_planning_prompt_from_session,
 )
 from .runtime import Planner, RuntimeSession, StepProposal
 

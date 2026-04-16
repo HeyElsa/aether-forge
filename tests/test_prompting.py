@@ -7,7 +7,6 @@ from aether_forge.planner import HeuristicPlanner
 from aether_forge.prompting import assemble_planning_prompt_sections, build_planning_prompt_from_session
 from aether_forge.runtime import RuntimeSession, load_artifact_bundle
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
 

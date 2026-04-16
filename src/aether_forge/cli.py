@@ -3,23 +3,56 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
-import sys
 
 logger = logging.getLogger(__name__)
 
 from . import __version__
 from .artifacts import format_issues, validate_artifact_directory
-from .config import build_planner_factory, discover_default_config_path, load_config_file, resolve_planner_settings, resolve_runtime_settings
-from .crypto import AuthenticatedPaperTradingCryptoExecutionRouter, MockCryptoExecutionRouter, OWSWalletCryptoExecutionRouter, OpenWalletStandardAdapter, PublicMarketDataCryptoExecutionRouter, SimWalletCryptoExecutionRouter
-from .evals import build_promotion_evidence, create_promotion_record_artifact, evaluate_scenario_pack, evaluate_scenario_with_planner
+from .config import (
+    build_planner_factory,
+    discover_default_config_path,
+    load_config_file,
+    resolve_planner_settings,
+    resolve_runtime_settings,
+)
+from .crypto import (
+    AuthenticatedPaperTradingCryptoExecutionRouter,
+    MockCryptoExecutionRouter,
+    OpenWalletStandardAdapter,
+    OWSWalletCryptoExecutionRouter,
+    PublicMarketDataCryptoExecutionRouter,
+    SimWalletCryptoExecutionRouter,
+)
+from .evals import (
+    build_promotion_evidence,
+    create_promotion_record_artifact,
+    evaluate_scenario_pack,
+    evaluate_scenario_with_planner,
+)
 from .generator import FastGenerateRequest, generate_fast_artifact_set
-from .models import AnthropicPlanningModel, GeminiPlanningModel, OpenAICompatiblePlanningModel, StaticPlanningModel, list_models
+from .models import (
+    AnthropicPlanningModel,
+    GeminiPlanningModel,
+    OpenAICompatiblePlanningModel,
+    StaticPlanningModel,
+    list_models,
+)
+from .runtime import (
+    hydrate_session_from_replay,
+    load_artifact_bundle,
+    load_session_replay_json,
+    write_session_replay_json,
+)
+from .scaffold import (
+    build_scaffold_live_exchange_router,
+    inspect_scaffold_live_exchange_status,
+    sync_scaffold_policy_bundle,
+)
+from .skills import install_skill_to_project, resolve_source, search_skills
 from .slow_generate import SlowGenerateRequest, generate_slow_artifact_set
-from .runtime import hydrate_session_from_replay, load_artifact_bundle, load_session_replay_json, write_session_replay_json
-from .scaffold import build_scaffold_live_exchange_router, inspect_scaffold_live_exchange_status, sync_scaffold_policy_bundle
-from .skills import install_skill_to_project, search_skills, resolve_source
 from .storage import SqliteMemoryStore
 from .versioning import assess_artifact_set_compatibility, build_artifact_migration_plan, format_compatibility_result
 
@@ -347,7 +380,7 @@ def main(argv: list[str] | None = None) -> int:
     except RuntimeError as error:
         msg = str(error)
         if "Open Wallet Standard" in msg or "ows" in msg.lower():
-            print(f"Error: Wallet commands require the OWS SDK.\n  pip install aether-forge[wallet]", file=sys.stderr)
+            print("Error: Wallet commands require the OWS SDK.\n  pip install aether-forge[wallet]", file=sys.stderr)
         else:
             print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -875,8 +908,8 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         return 0
 
     if args.command == "doctor":
-        from .doctor import run_doctor_checks
         from .config import discover_default_config_path
+        from .doctor import run_doctor_checks
         config_path = discover_default_config_path()
         results = run_doctor_checks(config_path=config_path)
         all_pass = True
@@ -903,7 +936,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
             print(f"  {verdict} — {passed}/{total} ok, {skipped} skipped, {failed} failed")
         else:
             print(f"  UNHEALTHY — {passed}/{total} ok, {skipped} skipped, {failed} failed")
-            print(f"  Re-run with verbose output once the failing checks are addressed.")
+            print("  Re-run with verbose output once the failing checks are addressed.")
         return 0 if all_pass else 1
 
     if args.command == "config-validate":
@@ -921,15 +954,16 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         return 0 if all_pass else 1
 
     if args.command == "completions":
-        from .completions import generate_bash_completion, generate_zsh_completion, generate_fish_completion
+        from .completions import generate_bash_completion, generate_fish_completion, generate_zsh_completion
         generators = {"bash": generate_bash_completion, "zsh": generate_zsh_completion, "fish": generate_fish_completion}
         print(generators[args.shell]())
         return 0
 
     if args.command == "wallet-backup":
-        from .wallet import backup_agent_wallet
-        from .security_hardening import encrypt_backup, lock_down_file
         import getpass
+
+        from .security_hardening import encrypt_backup, lock_down_file
+        from .wallet import backup_agent_wallet
         directory = Path(args.artifact_directory).resolve()
         output = Path(args.output).resolve() if args.output else None
         try:
@@ -938,8 +972,8 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
 
             if args.unencrypted:
                 print(f"  WARNING: Unencrypted backup at: {path}")
-                print(f"  This file contains the mnemonic in plaintext.")
-                print(f"  Permissions set to 0600 (owner only)")
+                print("  This file contains the mnemonic in plaintext.")
+                print("  Permissions set to 0600 (owner only)")
                 return 0
 
             # Re-read and encrypt
@@ -958,8 +992,8 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
             path.write_text(json.dumps(encrypted, indent=2) + "\n", encoding="utf8")
             lock_down_file(path)
             print(f"  Encrypted backup written to: {path}")
-            print(f"  Cipher: AES-256-GCM, KDF: scrypt")
-            print(f"  Permissions: 0600")
+            print("  Cipher: AES-256-GCM, KDF: scrypt")
+            print("  Permissions: 0600")
             print(f"  Restore with: forge wallet-restore {path} --into ./agent-dir")
             return 0
         except Exception as error:
@@ -967,7 +1001,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
             return 1
 
     if args.command == "security-check":
-        from .security_hardening import preflight_security_check, harden_agent_directory
+        from .security_hardening import harden_agent_directory, preflight_security_check
         directory = Path(args.artifact_directory).resolve()
 
         if args.harden:
@@ -989,7 +1023,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
             print(f"  [{icon}] {check['name']}: {check['message']}")
         print(f"  {'─' * 60}")
         if report["ok"] and not report["warnings"]:
-            print(f"  All checks passed.")
+            print("  All checks passed.")
         elif report["ok"]:
             print(f"  Passed with {len(report['warnings'])} warnings.")
         else:
@@ -1017,7 +1051,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         halt_path = directory / "halt"
         halt_path.write_text(f"halted at {datetime.now(UTC).isoformat()}: {args.reason}\n", encoding="utf8")
         print(f"  Kill switch ACTIVE: {halt_path}")
-        print(f"  All x402 calls and live mode will be blocked.")
+        print("  All x402 calls and live mode will be blocked.")
         print(f"  Run 'forge resume {directory}' after manual review.")
         return 0
 
@@ -1032,7 +1066,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         return 0
 
     if args.command == "x402-call":
-        from .x402_client import X402Client, X402Config, X402Error, PaymentBudgetError, HaltedError
+        from .x402_client import HaltedError, PaymentBudgetError, X402Client, X402Config, X402Error
 
         if not args.confirm_live:
             print("Error: --confirm-live is REQUIRED for real x402 calls.", file=sys.stderr)
@@ -1056,15 +1090,15 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         # Pre-flight summary
         wallet = json.loads(wallet_path.read_text())
         evm = wallet.get("addresses", {}).get("evm", "?")
-        print(f"\n  X402 LIVE CALL")
-        print(f"  ──────────────")
+        print("\n  X402 LIVE CALL")
+        print("  ──────────────")
         print(f"  Agent wallet: {evm}")
         print(f"  Chain:        {args.chain}")
         print(f"  URL:          {args.url}")
         print(f"  Method:       {args.method}")
         print(f"  Max per call: ${args.max_per_call_usd}")
         print(f"  Max session:  ${args.max_session_usd}")
-        print(f"  Confirmed:    YES")
+        print("  Confirmed:    YES")
         print()
 
         try:
@@ -1075,7 +1109,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
                 response = client.get(args.url)
 
             print(f"  Response status: {response.get('status')}")
-            print(f"  Response body:")
+            print("  Response body:")
             body_str = json.dumps(response.get("body"), indent=4) if isinstance(response.get("body"), (dict, list)) else str(response.get("body"))
             for line in body_str.split("\n")[:30]:
                 print(f"    {line}")
@@ -1178,12 +1212,10 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
     if args.command == "agent-register":
         from .agent_registry import AgentRegistry
         from .onchain_registry import (
-            OnchainRegistry,
-            IDENTITY_REGISTRY_BASE,
-            IDENTITY_REGISTRY_BASE_SEPOLIA,
-            BASE_CHAIN_ID,
             BASE_SEPOLIA_CHAIN_ID,
             DEFAULT_RPC_SEPOLIA,
+            IDENTITY_REGISTRY_BASE_SEPOLIA,
+            OnchainRegistry,
         )
 
         registry = AgentRegistry()
@@ -1191,7 +1223,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         registry.close()
         if agent is None:
             print(f"  Agent not found in local registry: {args.agent_id}")
-            print(f"  Run 'forge agent-list' to see available agents.")
+            print("  Run 'forge agent-list' to see available agents.")
             return 1
 
         use_testnet = getattr(args, "testnet", False)
@@ -1232,15 +1264,15 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
 
         # Build the unsigned transaction
         tx = onchain.build_register_tx(agent_uri=metadata_uri)
-        print(f"  Unsigned registration transaction:")
+        print("  Unsigned registration transaction:")
         print(f"    to:      {tx['to']}")
         print(f"    chainId: {tx['chainId']}")
         print(f"    data:    {tx['data'][:80]}...")
         print()
-        print(f"  To submit this transaction, sign and send via your wallet:")
+        print("  To submit this transaction, sign and send via your wallet:")
         print(f"    forge wallet-send-tx --chain evm --tx-hex {tx['data'][:40]}...")
         print()
-        print(f"  Or use cast (Foundry):")
+        print("  Or use cast (Foundry):")
         print(f"    cast send {tx['to']} {tx['data'][:40]}... --rpc-url {onchain.rpc_url}")
         print()
 
@@ -1269,10 +1301,10 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
                     print(f"  Result: {result}")
             except Exception as error:
                 print(f"  Submission failed: {error}")
-                print(f"  The unsigned transaction is ready — submit manually:")
+                print("  The unsigned transaction is ready — submit manually:")
                 print(f"    cast send {tx['to']} --data {tx['data'][:60]}...")
         else:
-            print(f"  No wallet found — build the unsigned tx and submit manually.")
+            print("  No wallet found — build the unsigned tx and submit manually.")
 
         return 0
 
@@ -1477,11 +1509,11 @@ def main_cli() -> None:
         raise SystemExit(130)
     except FileNotFoundError as error:
         print(f"\n  ERROR: File not found: {error.filename}", file=sys.stderr)
-        print(f"  Hint: Check the path. If this is an agent directory, run `forge generate-fast` first.", file=sys.stderr)
+        print("  Hint: Check the path. If this is an agent directory, run `forge generate-fast` first.", file=sys.stderr)
         raise SystemExit(2)
     except PermissionError as error:
         print(f"\n  ERROR: Permission denied: {error.filename}", file=sys.stderr)
-        print(f"  Hint: Check file permissions or run with appropriate user.", file=sys.stderr)
+        print("  Hint: Check file permissions or run with appropriate user.", file=sys.stderr)
         raise SystemExit(2)
     except SystemExit:
         raise

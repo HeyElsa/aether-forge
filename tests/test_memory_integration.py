@@ -21,7 +21,6 @@ from aether_forge.runtime import (
     load_artifact_bundle,
 )
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
 

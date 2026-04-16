@@ -11,16 +11,15 @@ from __future__ import annotations
 import copy
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 from .evals import ScenarioPackEvaluationSummary, evaluate_scenario_pack
-from .generator import FastGenerateRequest, GeneratedArtifactSet, generate_fast_artifact_set
+from .generator import FastGenerateRequest, generate_fast_artifact_set
 
 
 class ResearchModel(Protocol):

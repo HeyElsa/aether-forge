@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from aether_forge.attestation import (
     Attestation,
     build_attestation_typed_data,
@@ -16,7 +14,6 @@ from aether_forge.attestation import (
     verify_framework_attestation,
     verify_self_attestation,
 )
-
 
 # ---------------------------------------------------------------------------
 # Hashing

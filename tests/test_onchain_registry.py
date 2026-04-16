@@ -7,11 +7,6 @@ The ABI encoding was validated against the live contract (returned
 
 from __future__ import annotations
 
-import json
-from typing import Any
-
-import pytest
-
 from aether_forge.onchain_registry import (
     OnchainRegistry,
     _decode_address,
@@ -22,7 +17,6 @@ from aether_forge.onchain_registry import (
     _encode_string,
     _encode_uint256,
 )
-
 
 # ---------------------------------------------------------------------------
 # ABI encoding tests

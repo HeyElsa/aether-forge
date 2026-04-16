@@ -11,23 +11,18 @@ import json
 import logging
 import signal
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from .memory import InMemoryMemoryStore, MemoryQuery, MemoryRecord
+from .memory import InMemoryMemoryStore, MemoryRecord
 from .planner import HeuristicPlanner
 from .policy import NativePolicyGate, PolicyDecision
 from .runtime import (
-    ArtifactBundle,
-    ExecutionResult,
     RuntimeSession,
     SessionStatus,
-    StepKind,
-    StepLedgerEntry,
-    StepProposal,
-    export_session_replay,
     load_artifact_bundle,
     write_session_replay_json,
 )
@@ -543,7 +538,7 @@ class AgentRunner:
             /metrics   — Prometheus text format (tick count, errors, latency)
         """
         import threading
-        from http.server import HTTPServer, BaseHTTPRequestHandler
+        from http.server import BaseHTTPRequestHandler, HTTPServer
 
         runner_ref = self
 

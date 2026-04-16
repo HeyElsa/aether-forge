@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, date
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Callable
-from urllib import error as urllib_error
-from urllib import request as urllib_request
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

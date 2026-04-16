@@ -214,7 +214,6 @@ def test_audit_log_sanitizes_secret_fields(tmp_path: Path) -> None:
 
 def test_audit_log_file_locked_down(tmp_path: Path) -> None:
     """The audit log file must be created with 0600 permissions."""
-    import os
     client = _make_client(tmp_path)
     client._audit("test_event", {"foo": "bar"})
     audit_path = tmp_path / "x402_audit.jsonl"

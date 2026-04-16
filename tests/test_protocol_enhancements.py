@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 import json
+
 from aether_forge.protocols.erc8004 import AgentCard, ERC8004Client, _encode_register_call
-from aether_forge.protocols.x402 import X402PaymentFlow, PaymentRequirement, _estimate_usd
+from aether_forge.protocols.x402 import PaymentRequirement, X402PaymentFlow, _estimate_usd
+
 
 def test_erc8004_build_register_tx():
     client = ERC8004Client()

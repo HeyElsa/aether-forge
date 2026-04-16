@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
-import json
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 from .artifacts import validate_artifact_directory
 from .memory import InMemoryMemoryStore, MemoryPromotionRequest, MemoryQuery, MemoryRecord
-from .policy import NativePolicyGate, PolicyDecision
+from .policy import NativePolicyGate
 
 
 class SessionStatus(StrEnum):
@@ -108,13 +108,13 @@ class RuntimeReplay:
 
 
 class Planner(Protocol):
-    def propose_plan(self, session: "RuntimeSession") -> list[StepProposal]: ...
+    def propose_plan(self, session: RuntimeSession) -> list[StepProposal]: ...
 
 
 class ExecutionRouter(Protocol):
     def execute(
         self,
-        session: "RuntimeSession",
+        session: RuntimeSession,
         proposal: StepProposal,
         capability: dict[str, Any],
     ) -> ExecutionResult: ...

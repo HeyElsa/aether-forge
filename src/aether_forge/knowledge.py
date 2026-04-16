@@ -12,7 +12,6 @@ Requires: pip install mempalace
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,8 +49,8 @@ class KnowledgeStore:
 
     def _init(self) -> None:
         try:
-            from mempalace.palace import get_collection
             from mempalace.knowledge_graph import KnowledgeGraph
+            from mempalace.palace import get_collection
 
             self._collection = get_collection(self._palace_path)
             kg_path = str(Path(self._palace_path) / "knowledge_graph.db")

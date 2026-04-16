@@ -7,7 +7,11 @@ from tempfile import mkdtemp
 
 from aether_forge.cli import main
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
-from aether_forge.scaffold import build_scaffold_live_exchange_router, inspect_scaffold_live_exchange_status, load_scaffold_live_exchange_adapter
+from aether_forge.scaffold import (
+    build_scaffold_live_exchange_router,
+    inspect_scaffold_live_exchange_status,
+    load_scaffold_live_exchange_adapter,
+)
 
 
 def test_generated_scaffold_live_exchange_loader_returns_none_by_default() -> None:

@@ -8,12 +8,12 @@ from tempfile import mkdtemp
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
 from aether_forge.skills import (
     InstalledSkill,
+    _read_skill_description,
     install_skill_to_project,
     install_skills_to_project,
     search_skills,
     skills_to_capabilities,
     skills_to_capability_refs,
-    _read_skill_description,
 )
 
 
@@ -178,7 +178,7 @@ def test_install_elsa_single_skill() -> None:
 def test_install_elsa_all_skills() -> None:
     tmp = Path(mkdtemp(prefix="aether-forge-elsa-all-"))
     try:
-        from aether_forge.skills import _install_elsa_skill, ELSA_ENDPOINTS
+        from aether_forge.skills import ELSA_ENDPOINTS, _install_elsa_skill
         results = _install_elsa_skill("elsa:all", tmp)
         assert len(results) == len(ELSA_ENDPOINTS)
         names = {r.name for r in results}

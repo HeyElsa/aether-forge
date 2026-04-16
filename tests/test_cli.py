@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-import json
-import re
 
 import aether_forge.cli as cli_module
 from aether_forge.cli import main
 from aether_forge.crypto import MockCryptoExecutionRouter
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
-from aether_forge.runtime import RuntimeSession, SessionStatus, StepKind, StepProposal, load_artifact_bundle, load_session_replay_json, write_session_replay_json
-
+from aether_forge.runtime import (
+    RuntimeSession,
+    SessionStatus,
+    StepKind,
+    StepProposal,
+    load_artifact_bundle,
+    load_session_replay_json,
+    write_session_replay_json,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"

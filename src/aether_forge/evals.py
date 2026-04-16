@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from .crypto import AuthenticatedPaperTradingCryptoExecutionRouter, MockCryptoExecutionRouter, PublicMarketDataCryptoExecutionRouter
+from .crypto import (
+    MockCryptoExecutionRouter,
+)
 from .planner import HeuristicPlanner
 from .runtime import (
     ArtifactBundle,
     Planner,
     RuntimeSession,
     SessionStatus,
-    write_session_replay_json,
     load_artifact_bundle,
+    write_session_replay_json,
 )
 
 

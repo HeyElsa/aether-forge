@@ -6,7 +6,6 @@ from aether_forge.crypto import MockCryptoExecutionRouter
 from aether_forge.policy import NativePolicyGate
 from aether_forge.runtime import RuntimeSession, SessionStatus, StepKind, StepProposal, load_artifact_bundle
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
 

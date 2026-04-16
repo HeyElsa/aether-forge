@@ -7,7 +7,6 @@ responses so nothing actually needs a real MCP server running.
 from __future__ import annotations
 
 import json
-from io import StringIO
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -15,14 +14,12 @@ import pytest
 
 from aether_forge.data_layer import DataRouter, McpDataSource, build_mcp_source
 from aether_forge.mcp_client import (
-    McpError,
     McpHttpClient,
     McpProtocolError,
     McpServerConfig,
     McpStdioClient,
     build_mcp_client,
 )
-
 
 # ---------------------------------------------------------------------------
 # Config validation

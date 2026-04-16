@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -177,7 +177,7 @@ class ERC8126Client:
             overall_score=overall,
             risk_tier=risk_tier,
             verifications=verifications,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
+            assessed_at=datetime.now(UTC).isoformat(),
         )
 
 

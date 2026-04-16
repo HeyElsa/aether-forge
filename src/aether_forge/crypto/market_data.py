@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .types import RequestFn
-from .utils import _default_json_request, _normalize_spot_symbol, _normalize_perp_symbol
+from .utils import _default_json_request, _normalize_perp_symbol, _normalize_spot_symbol
 
 
 class BinancePublicMarketDataBackend:

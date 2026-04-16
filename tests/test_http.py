@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from aether_forge.http import HttpError, RetryPolicy, http_get_json, http_post_json
 
 
