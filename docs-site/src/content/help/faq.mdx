@@ -160,11 +160,29 @@ Technically yes, but they'd share memory.db. Better practice: one container per 
 
 Each agent is a single process. Scale by running more agents (potentially specialized — orchestrator + workers).
 
+## Extending
+
+### Can I add a custom LLM planner?
+
+Yes — implement the `Planner` Protocol exported from `aether_forge`, or wrap any OpenAI-compatible endpoint with the existing `OpenAICompatiblePlanningModel`. See [Extending the Framework](/guides/extending) for a worked xAI example.
+
+### Can I add a custom data source (private API, oracle)?
+
+Yes — subclass `DataSource` from `aether_forge` and add it to your agent's `src/strategy/router.py::_build_data_router`. Full pattern in the [custom data source cookbook](/cookbook/custom-data-source).
+
+### Can I publish my extension to PyPI without forking?
+
+Yes. Aether Forge auto-discovers plugins via `importlib.metadata` entry points. Declare one of `aether_forge.{planners,execution_routers,data_sources,skill_registries}` in your `pyproject.toml` and the framework picks it up after `pip install`. See [Extending the Framework — Distributing as a PyPI plugin](/guides/extending).
+
+### Can I swap the memory backend (e.g., Postgres)?
+
+Yes — implement the `MemoryStore` Protocol (`read`, `write`, `promote`). The reference implementation is `SqliteMemoryStore` in `src/aether_forge/storage.py`. Critical: apply the sensitivity ceiling and environment filter inside `read` — the runtime trusts the store.
+
 ## Open Source
 
 ### How do I contribute?
 
-See [CONTRIBUTING.md](https://github.com/HeyElsa/aether-forge/blob/main/CONTRIBUTING.md). Tests must pass: `pytest tests/ -x`.
+See [CONTRIBUTING.md](https://github.com/HeyElsa/aether-forge/blob/main/CONTRIBUTING.md). Tests must pass: `pytest tests/ -x`. One-time: `pre-commit install` (matches CI lint/format/collect hooks).
 
 ### Where do I report bugs?
 

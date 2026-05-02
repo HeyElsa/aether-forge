@@ -2,12 +2,22 @@
 
 The DataRouter supports HTTP, x402, MCP, and WebSocket sources out of the box. To add a new source — proprietary API, internal feed, alternative oracle — implement the `DataSource` interface.
 
+> **Looking for the broader story?** This recipe is the focused
+> end-to-end example for *one* data source. For the full extension
+> picture across all five Protocols (Planner / ExecutionRouter /
+> PlanningModel / MemoryStore / DataSource) plus PyPI plugin
+> distribution, see [Extending the Framework](/guides/extending).
+
 ## 1. Inherit from DataSource
 
 ```python
 # src/strategy/sources/my_oracle.py
 from typing import Any, Callable
-from aether_forge.data_layer import DataSource, DataResult, DataSourceCost
+
+# DataSource (and supporting types) are exported from the top-level
+# aether_forge package as of v0.20.0. The legacy
+# `aether_forge.data_layer` import path still works for backward compat.
+from aether_forge import DataSource, DataResult, DataSourceCost
 
 class MyOracleSource(DataSource):
     name = "my-oracle"
