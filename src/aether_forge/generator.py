@@ -878,7 +878,12 @@ def _write_scaffold_files(
         Path("AGENT.md"): _agent_md(title, slug, artifact_set_id, domain, summary, idea, request or FastGenerateRequest(name=title, idea=idea, output_directory=output_directory)),
         Path("strategy.json"): _project_strategy_json(title, domain),
         Path("Dockerfile"): _project_dockerfile(),
+        Path(".dockerignore"): _project_dockerignore(),
         Path("docker-compose.yml"): _project_docker_compose(title, slug),
+        Path("Makefile"): _project_makefile(slug),
+        Path(".env.example"): _project_env_example(),
+        Path("tests/__init__.py"): _project_tests_init(),
+        Path("tests/test_agent.py"): _project_test_agent(title),
     }
 
     written_paths: list[Path] = []
@@ -1590,6 +1595,164 @@ def _project_docker_compose(title: str, slug: str) -> str:
         "      # - AETHER_FORGE_PLANNER_MODE=openrouter\n"
         "      # - AETHER_FORGE_PLANNER_MODEL=meta-llama/llama-4-maverick\n"
         "      # - AETHER_FORGE_PLANNER_API_KEY=your-key-here\n"
+    )
+
+
+def _project_tests_init() -> str:
+    return '"""Tests for this generated agent. Run with: pytest tests/ -v"""\n'
+
+
+def _project_test_agent(title: str) -> str:
+    return (
+        f'"""Smoke tests for {title}.\n\n'
+        "These tests run with the offline HeuristicPlanner so they need no\n"
+        "LLM API key. They verify that the agent's artifacts validate against\n"
+        "the framework's JSON schemas and that every declared scenario reaches\n"
+        "its expected outcome.\n"
+        '"""\n\n'
+        "from __future__ import annotations\n\n"
+        "from pathlib import Path\n\n"
+        "from aether_forge import (\n"
+        "    HeuristicPlanner,\n"
+        "    MockCryptoExecutionRouter,\n"
+        "    evaluate_scenario_pack,\n"
+        "    validate_artifact_directory,\n"
+        ")\n\n"
+        "AGENT_DIR = Path(__file__).resolve().parents[1]\n\n\n"
+        "def test_artifacts_validate():\n"
+        '    """All JSON artifacts conform to their schemas."""\n'
+        "    result = validate_artifact_directory(AGENT_DIR)\n"
+        "    assert result.ok, (\n"
+        "        f\"Artifact validation failed:\\n\"\n"
+        '        + "\\n".join(f"  {issue.code}: {issue.message}" for issue in result.issues)\n'
+        "    )\n\n\n"
+        "def test_scenario_pack_meets_expectations():\n"
+        '    """Every scenario\'s actual stage outcome matches its expectedOutcome."""\n'
+        "    summary, _sessions = evaluate_scenario_pack(\n"
+        "        AGENT_DIR,\n"
+        "        planner_factory=HeuristicPlanner,\n"
+        "        execution_router_factory=MockCryptoExecutionRouter,\n"
+        "    )\n"
+        "    assert summary.total_scenarios > 0, \"scenario-pack.json defined no scenarios\"\n"
+        "    assert summary.meets_expectations, (\n"
+        '        f"Scenarios did not meet expectations: matched="\n'
+        '        f"{summary.matched_expectations}/{summary.total_scenarios}, "\n'
+        '        f"counts={summary.counts_by_stage}"\n'
+        "    )\n"
+    )
+
+
+def _project_dockerignore() -> str:
+    return (
+        "# Build artifacts\n"
+        "__pycache__/\n"
+        "*.py[cod]\n"
+        "*.egg-info/\n"
+        ".pytest_cache/\n"
+        ".ruff_cache/\n"
+        ".mypy_cache/\n"
+        "\n# Local state — never bake into images\n"
+        ".env\n"
+        ".env.*\n"
+        "!.env.example\n"
+        ".ows/\n"
+        "wallet-backup-*.json\n"
+        "memory.db\n"
+        "memory.db-journal\n"
+        "memory.db-wal\n"
+        "memory.db-shm\n"
+        "knowledge/\n"
+        "replays/\n"
+        "logs/\n"
+        "x402_state.json\n"
+        "x402_audit.jsonl\n"
+        "halt\n"
+        "\n# Dev / VCS noise\n"
+        ".git/\n"
+        ".gitignore\n"
+        ".vscode/\n"
+        ".idea/\n"
+        ".venv/\n"
+        "venv/\n"
+        "node_modules/\n"
+    )
+
+
+def _project_makefile(slug: str) -> str:
+    return (
+        "# Generated agent Makefile — common workflows\n"
+        ".PHONY: help validate eval-pack test run-paper run-sandbox run-live "
+        "doctor halt resume clean docker-build docker-run\n\n"
+        "help:\n"
+        "\t@echo 'Common targets:'\n"
+        "\t@echo '  make validate     — validate all artifacts (agent-spec, policy-bundle, ...)'\n"
+        "\t@echo '  make eval-pack    — run the scenario pack against the runtime'\n"
+        "\t@echo '  make test         — run pytest in tests/'\n"
+        "\t@echo '  make run-paper    — run continuously in paper mode (real prices, simulated orders)'\n"
+        "\t@echo '  make run-sandbox  — run continuously in sandbox (mock everything)'\n"
+        "\t@echo '  make run-live     — run continuously in LIVE mode (real money — be careful!)'\n"
+        "\t@echo '  make doctor       — diagnostic round-trip checks'\n"
+        "\t@echo '  make halt         — activate kill switch (blocks all live x402 calls)'\n"
+        "\t@echo '  make resume       — clear kill switch'\n"
+        "\t@echo '  make docker-build — build the production Docker image'\n"
+        "\t@echo '  make docker-run   — run the image with paper-mode defaults'\n"
+        "\t@echo '  make clean        — remove caches, replays, logs, memory.db (PRESERVES wallet)'\n\n"
+        "validate:\n"
+        "\tforge validate .\n\n"
+        "eval-pack:\n"
+        "\tforge eval-pack .\n\n"
+        "test:\n"
+        "\tpytest tests/ -v\n\n"
+        "run-paper:\n"
+        "\tforge run . --auto-approve --environment paper --interval 30 "
+        "--health-port 8080 --json-log ./logs/agent.jsonl\n\n"
+        "run-sandbox:\n"
+        "\tforge run . --auto-approve --environment sandbox --interval 30\n\n"
+        "run-live:\n"
+        "\t@echo '⚠  Live mode signs real transactions. Confirm by setting CONFIRM_LIVE=yes.'\n"
+        "\t@[ \"$$CONFIRM_LIVE\" = \"yes\" ] || (echo 'aborted' && exit 1)\n"
+        "\tforge run . --environment production --interval 30 "
+        "--health-port 8080 --json-log ./logs/agent.jsonl\n\n"
+        "doctor:\n"
+        "\tforge doctor\n\n"
+        "halt:\n"
+        "\tforge halt .\n\n"
+        "resume:\n"
+        "\tforge resume .\n\n"
+        "docker-build:\n"
+        f"\tdocker build -t {slug}:latest .\n\n"
+        "docker-run:\n"
+        f"\tdocker run --rm -p 8080:8080 --env-file .env {slug}:latest\n\n"
+        "clean:\n"
+        "\trm -rf __pycache__ .pytest_cache .ruff_cache .mypy_cache \\\n"
+        "\t       replays/ logs/ memory.db memory.db-* knowledge/\n"
+    )
+
+
+def _project_env_example() -> str:
+    return (
+        "# Copy to .env and fill in. NEVER commit .env to git.\n"
+        "# The framework reads these env vars at runtime; precedence is\n"
+        "# CLI flag > env var > aether-forge.json > built-in default.\n\n"
+        "# ---- LLM providers (pick one — auto-detect probes in this order) ----\n"
+        "# Local Ollama (no key needed; auto-detected if running)\n"
+        "# AETHER_FORGE_PLANNER_MODE=ollama\n"
+        "# AETHER_FORGE_PLANNER_MODEL=gemma4:latest\n\n"
+        "# Anthropic\n"
+        "# ANTHROPIC_API_KEY=sk-ant-...\n\n"
+        "# OpenAI\n"
+        "# OPENAI_API_KEY=sk-...\n\n"
+        "# Google Gemini\n"
+        "# GEMINI_API_KEY=...\n"
+        "# GOOGLE_API_KEY=...\n\n"
+        "# OpenRouter (gateway to many providers)\n"
+        "# OPENROUTER_API_KEY=sk-or-...\n\n"
+        "# ---- Wallet (only if you ran generate-fast --wallet) ----\n"
+        "# OWS_API_KEY=ows_key_...\n\n"
+        "# ---- Local registry override (defaults to ~/.aether-forge/agents.db) ----\n"
+        "# AETHER_FORGE_REGISTRY_PATH=/var/lib/aether-forge/agents.db\n\n"
+        "# ---- MCP server credentials (only if your aether-forge.json declares them) ----\n"
+        "# GITHUB_TOKEN=ghp_...\n"
     )
 
 

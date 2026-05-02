@@ -3,6 +3,18 @@ __version__ = "0.1.0"
 from .artifacts import LoadedArtifact, validate_artifact_directory
 from .config import build_planner_factory, load_config_file
 from .crypto import MockCryptoExecutionRouter
+from .data_layer import (
+    DataResult,
+    DataRouter,
+    DataSource,
+    DataSourceCost,
+    HTTPDataSource,
+    McpDataSource,
+    MockDataSource,
+    Subscription,
+    WebSocketDataSource,
+    X402DataSource,
+)
 from .evals import build_promotion_evidence, evaluate_scenario_pack
 from .exceptions import (
     ConfigError,
@@ -24,12 +36,26 @@ from .market_data import (
     MockVenue,
     build_market_data_router,
 )
-from .memory import InMemoryMemoryStore, MemoryPromotionPolicy, MemoryRecord
-from .models import AnthropicPlanningModel, GeminiPlanningModel, OpenAICompatiblePlanningModel
-from .planner import HeuristicPlanner, PromptDrivenPlanner
+from .memory import InMemoryMemoryStore, MemoryPromotionPolicy, MemoryRecord, MemoryStore
+from .models import (
+    AnthropicPlanningModel,
+    GeminiPlanningModel,
+    OpenAICompatiblePlanningModel,
+    StaticPlanningModel,
+)
+from .planner import HeuristicPlanner, PlanningModel, PromptDrivenPlanner
 from .policy import NativePolicyGate, PolicyDecision
 from .runner import AgentRunner, RunnerConfig
-from .runtime import ArtifactBundle, ExecutionResult, RuntimeReplay, RuntimeSession, StepLedgerEntry, StepProposal
+from .runtime import (
+    ArtifactBundle,
+    ExecutionResult,
+    ExecutionRouter,
+    Planner,
+    RuntimeReplay,
+    RuntimeSession,
+    StepLedgerEntry,
+    StepProposal,
+)
 from .scaffold_router import StrategyConfig, load_scaffold_router
 from .secrets import (
     ChainSecretsProvider,
@@ -47,6 +73,14 @@ from .x402_client import HaltedError, PaymentBudgetError, PaymentRequirement, X4
 
 __all__ = [
     "__version__",
+    # Extension Protocols (build your own planner / router / memory / data source)
+    "Planner",
+    "ExecutionRouter",
+    "PlanningModel",
+    "MemoryStore",
+    "DataSource",
+    "Subscription",
+    # Runtime
     "RuntimeSession",
     "ArtifactBundle",
     "StepProposal",
@@ -82,6 +116,7 @@ __all__ = [
     "AnthropicPlanningModel",
     "GeminiPlanningModel",
     "OpenAICompatiblePlanningModel",
+    "StaticPlanningModel",
     "SecretsProvider",
     "EnvSecretsProvider",
     "FileSecretsProvider",
@@ -93,6 +128,15 @@ __all__ = [
     "CoinGeckoVenue",
     "MockVenue",
     "build_market_data_router",
+    # Data layer (DataSource implementations + router + supporting types)
+    "DataResult",
+    "DataRouter",
+    "DataSourceCost",
+    "HTTPDataSource",
+    "X402DataSource",
+    "WebSocketDataSource",
+    "McpDataSource",
+    "MockDataSource",
     "ForgeError",
     "ValidationError",
     "PolicyError",

@@ -840,8 +840,10 @@ Or browse the markdown directly:
 - [End-to-End Tutorial](docs-site/src/content/guides/end-to-end.mdx)
 - [Build a Custom Agent](docs-site/src/content/guides/custom-agent.mdx)
 - [Writing Strategies](docs-site/src/content/guides/strategy-writing.mdx)
+- [Extending the Framework](docs-site/src/content/guides/extending.mdx) — custom planners, routers, data sources, memory stores; PyPI plugin distribution
 - [CLI Reference](docs-site/src/content/reference/cli.mdx)
 - [Configuration Reference](docs-site/src/content/reference/configuration.mdx)
+- [Architecture deep-dive](ARCHITECTURE.md) — runtime tick lifecycle, policy gate, memory layers, payment channels
 
 ---
 

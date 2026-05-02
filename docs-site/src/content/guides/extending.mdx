@@ -1,0 +1,259 @@
+# Extending the Framework
+
+Aether Forge is built around a small set of typed Protocols. Every
+significant moving part — the planner, the execution router, the memory
+store, the data sources, the LLM model adapter — is swappable. This guide
+walks through how to build your own and how to publish it as a PyPI plugin
+so others can install it without forking.
+
+> **Who this is for:** anyone writing code that *uses* Aether Forge —
+> whether you're customizing a single agent project or shipping a reusable
+> extension.
+
+## The Protocol contract
+
+Every extension point is a Python `Protocol` (or `ABC`) you can implement.
+They are exported from the top-level `aether_forge` package and ship with
+docstrings that describe the contract and a minimum-viable implementation.
+
+```python
+from aether_forge import (
+    Planner,            # propose_plan(session) -> list[StepProposal]
+    ExecutionRouter,    # execute(session, proposal, capability) -> ExecutionResult
+    PlanningModel,      # complete(prompt) -> str
+    MemoryStore,        # read / write / promote
+    DataSource,         # supports(capability), fetch(...), subscribe(...)
+    Subscription,       # stop(), active
+    SecretsProvider,    # resolve_api_key(...), get_secret(...)
+    MarketDataVenue,    # get_price(symbol), get_candles(symbol, interval)
+)
+```
+
+Read the docstring of each before implementing — they spell out every
+invariant the runtime relies on:
+
+```python
+print(Planner.__doc__)
+print(DataSource.__doc__)
+```
+
+## Walkthroughs
+
+### 1. A custom LLM planner — wrap any OpenAI-compatible endpoint
+
+The fastest way to add a new LLM provider is to reuse
+`OpenAICompatiblePlanningModel`. xAI Grok exposes a
+`/v1/chat/completions` endpoint, so the integration is one factory:
+
+```python
+# my_plugin/grok.py
+from __future__ import annotations
+import os
+
+from aether_forge import (
+    HeuristicPlanner,
+    OpenAICompatiblePlanningModel,
+    PromptDrivenPlanner,
+)
+
+
+def build_grok_planner():
+    """Factory returning a Planner. No-arg, suitable for entry points."""
+    model = OpenAICompatiblePlanningModel(
+        model="grok-4",
+        api_key=os.environ["XAI_API_KEY"],
+        base_url="https://api.x.ai/v1",
+    )
+    return PromptDrivenPlanner(
+        model=model,
+        fallback_planner=HeuristicPlanner(),
+    )
+```
+
+For a fully custom transport (not OpenAI-compatible), implement
+`PlanningModel` directly:
+
+```python
+from aether_forge import PlanningModel, PromptDrivenPlanner
+
+class MyPlanningModel(PlanningModel):
+    def complete(self, planning_prompt: str) -> str:
+        # POST planning_prompt to your endpoint, return the response text.
+        # Must contain a JSON object with a "steps" array.
+        ...
+```
+
+### 2. A custom data source — your private price feed
+
+Inherit from `DataSource` and you're plug-compatible with the framework's
+`DataRouter`:
+
+```python
+# my_plugin/private_prices.py
+from __future__ import annotations
+from typing import Any
+
+from aether_forge import DataSource, DataResult, DataSourceCost
+from aether_forge.http import http_get_json   # shared retry primitives
+
+
+class PrivatePricesSource(DataSource):
+    def __init__(self) -> None:
+        super().__init__(name="private-prices")
+
+    def supports(self, capability: str) -> bool:
+        return capability in {"spot-price", "candles"}
+
+    def fetch(self, capability: str, **params: Any) -> DataResult:
+        self.fetch_count += 1
+        symbol = params["symbol"]
+        body = http_get_json(f"https://prices.internal/v1/{capability}",
+                             params={"symbol": symbol})
+        return DataResult(
+            success=True,
+            data=body,
+            source=self.name,
+            capability=capability,
+            cost=DataSourceCost(amount_usd=0.0, paid=False),
+        )
+```
+
+Wire it into your agent's router (`src/strategy/router.py`) by adding it
+to the source list before the public fallbacks. Once registered as a
+plugin (below), users can install your source with `pip install
+my-plugin` and reference it by name from config.
+
+### 3. A custom memory store — Postgres backend (sketch)
+
+The `MemoryStore` Protocol is three methods. The store is responsible for
+applying the sensitivity ceiling and environment filter inside `read` —
+the runtime trusts the store, not the caller.
+
+```python
+from aether_forge import MemoryStore, MemoryRecord
+from aether_forge.memory import (
+    MemoryQuery, MemoryPromotionRequest, MemoryPromotionResult,
+    SENSITIVITY_LEVELS,
+)
+
+
+class PostgresMemoryStore(MemoryStore):
+    def __init__(self, dsn: str) -> None:
+        import psycopg
+        self._conn = psycopg.connect(dsn)
+        # CREATE TABLE memory_records (...) — match storage.py's schema.
+
+    def read(self, query: MemoryQuery) -> list[MemoryRecord]:
+        # SELECT ... WHERE scope=? AND environment=?
+        #   AND idx_sensitivity <= ?  (apply ceiling here)
+        #   AND (expires_at IS NULL OR expires_at > NOW())
+        ...
+
+    def write(self, record: MemoryRecord) -> MemoryRecord:
+        # INSERT ... ON CONFLICT (memory_id) DO UPDATE
+        ...
+
+    def promote(self, request: MemoryPromotionRequest) -> MemoryPromotionResult:
+        # Read source records, copy with new memory_id and provenance_refs,
+        # write to the target environment. Never mutate in place.
+        ...
+```
+
+The reference implementation is `aether_forge.SqliteMemoryStore`
+(`src/aether_forge/storage.py`). Mirror its sensitivity filtering and
+upsert semantics.
+
+### 4. A custom skill registry
+
+Register a registry as a string URL (or a callable returning one):
+
+```python
+# my_plugin/registries.py
+PRIVATE_REGISTRY_URL = "https://skills.internal.example.com"
+```
+
+Once installed as a plugin (below), `aether_forge.skills.get_registries()`
+will include `private` alongside `skills.sh`, `bankr`, and `elsa`.
+
+## Distributing as a PyPI plugin
+
+Aether Forge discovers extensions via standard
+`importlib.metadata` entry points. Declare them in your package's
+`pyproject.toml`:
+
+```toml
+[project]
+name = "aether-forge-grok"
+version = "0.1.0"
+dependencies = ["aether-forge >= 0.1.0"]
+
+# Each group corresponds to one Aether Forge extension point.
+[project.entry-points."aether_forge.planners"]
+grok = "my_plugin.grok:build_grok_planner"
+
+[project.entry-points."aether_forge.execution_routers"]
+my-router = "my_plugin.router:build_router"
+
+[project.entry-points."aether_forge.data_sources"]
+private-prices = "my_plugin.private_prices:PrivatePricesSource"
+
+[project.entry-points."aether_forge.skill_registries"]
+private = "my_plugin.registries:PRIVATE_REGISTRY_URL"
+```
+
+After `pip install aether-forge-grok`, users can pick the planner by name:
+
+```bash
+forge run ./my-agent --planner-mode grok
+# → resolves through the aether_forge.planners entry point group
+```
+
+Or in `aether-forge.json`:
+
+```json
+{
+  "planner": {"mode": "grok"}
+}
+```
+
+### Failure semantics
+
+A plugin whose `load()` raises during discovery is **logged at WARNING
+and skipped** — it cannot crash the framework. This keeps third-party
+quality issues from breaking the core. If you don't see your plugin
+take effect, run `forge doctor` and check the logs for a `plugin %r in
+group %s failed to load` line.
+
+### The four groups, at a glance
+
+| Entry-point group | Target | Resolved by |
+|---|---|---|
+| `aether_forge.planners` | Zero-arg factory returning a `Planner` | `aether_forge.config.build_planner_factory` (fallback after built-in modes) |
+| `aether_forge.execution_routers` | Factory returning an `ExecutionRouter` | Wire from your agent's `src/strategy/router.py::build_router` |
+| `aether_forge.data_sources` | `DataSource` subclass or factory | Reference from your `DataRouter` setup |
+| `aether_forge.skill_registries` | String URL (or callable returning one) | `aether_forge.skills.get_registries()` |
+
+## Testing your extension
+
+Aether Forge ships shared pytest fixtures in `tests/conftest.py` of the
+framework — use the same patterns in your own package's tests. The most
+useful are:
+
+- `tmp_agent_dir` — a `generate_fast_artifact_set`-built agent in a tmp
+  path (lets you exercise the full runtime without scaffolding by hand)
+- `static_planning_model` — a deterministic LLM stand-in (returns fixed
+  JSON; use it to test planner-driven flows without API keys)
+- `mock_router` — `MockCryptoExecutionRouter` for execution-free runs
+- `runtime_session` — fully wired `RuntimeSession` ready to `.run()`
+
+For plugin discovery itself, monkey-patch `aether_forge.plugins.entry_points`
+and call `aether_forge.plugins.reset_cache()` — see
+`tests/test_plugins.py` for the canonical pattern.
+
+## Where to read more
+
+- [`ARCHITECTURE.md`](https://github.com/HeyElsa/aether-forge/blob/main/ARCHITECTURE.md) — the runtime tick lifecycle and policy gate
+- [Python SDK reference](/reference/python-sdk) — every public symbol
+- [Cookbook: Custom data source](/cookbook/custom-data-source) — a
+  longer end-to-end example with retries and caching
+- The Protocol docstrings themselves (`help(aether_forge.Planner)`)

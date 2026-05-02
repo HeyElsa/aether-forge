@@ -35,6 +35,8 @@ dependencies = [
 dev = [
   "pytest>=8.3.5",
   "ruff>=0.6.0",
+  "mypy>=1.11.0",
+  "pre-commit>=3.7.0",
   "build",
   "twine",
 ]
@@ -74,8 +76,51 @@ Issues = "https://github.com/HeyElsa/aether-forge/issues"
 [project.scripts]
 forge = "aether_forge.cli:main_cli"
 
+# Plugin entry points — third parties extend Aether Forge by declaring entries
+# in these groups in their own pyproject.toml. See docs-site/.../guides/extending.mdx.
+[project.entry-points."aether_forge.planners"]
+# Example: grok = "my_pkg:build_grok_planner"
+
+[project.entry-points."aether_forge.execution_routers"]
+# Example: my-router = "my_pkg:build_router"
+
+[project.entry-points."aether_forge.data_sources"]
+# Example: private-prices = "my_pkg:PrivatePricesSource"
+
+[project.entry-points."aether_forge.skill_registries"]
+# Example: my-registry = "my_pkg.registries:MY_REGISTRY"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# mypy is informational for now — public-API surface is checked but the
+# rest of the codebase has not been swept for strict typing yet. Flip
+# `strict = true` to the wider `files` list once the surface is clean.
+[tool.mypy]
+python_version = "3.12"
+files = [
+  "src/aether_forge/__init__.py",
+  "src/aether_forge/runtime.py",
+  "src/aether_forge/planner.py",
+  "src/aether_forge/policy.py",
+  "src/aether_forge/memory.py",
+  "src/aether_forge/data_layer.py",
+  "src/aether_forge/plugins.py",
+]
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Optional deps — don't fail when they're not present.
+[[tool.mypy.overrides]]
+module = [
+  "mempalace.*",
+  "open_wallet_standard.*",
+  "cryptography.*",
+  "a2a.*",
+  "a2a_sdk.*",
+  "chromadb.*",
+]
+ignore_missing_imports = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
