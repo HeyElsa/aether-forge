@@ -1,6 +1,5 @@
 import { AbsoluteFill, Series } from "remotion";
 import {
-  ACCENT,
   BG,
   CodeBlock,
   ContentScene,
@@ -87,7 +86,7 @@ export const GettingStarted: React.FC = () => (
     <Series>
       <Series.Sequence durationInFrames={180} name="Title">
         <TitleScene
-          headline="Get Started"
+          titleLines={["GET", "STARTED"]}
           tagline="Idea to governed, testable agent in 90 seconds"
         />
       </Series.Sequence>
@@ -104,14 +103,7 @@ export const GettingStarted: React.FC = () => (
         <Step4Run />
       </Series.Sequence>
       <Series.Sequence durationInFrames={240} name="Outro">
-        <OutroScene
-          closing={
-            <>
-              Idea to running agent.{" "}
-              <span style={{ color: ACCENT }}>&lt; 90 seconds.</span>
-            </>
-          }
-        />
+        <OutroScene />
       </Series.Sequence>
     </Series>
   </AbsoluteFill>

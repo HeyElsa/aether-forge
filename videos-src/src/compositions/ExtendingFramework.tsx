@@ -1,6 +1,5 @@
 import { AbsoluteFill, Series } from "remotion";
 import {
-  ACCENT,
   BG,
   CodeBlock,
   ContentScene,
@@ -82,8 +81,9 @@ export const ExtendingFramework: React.FC = () => (
     <Series>
       <Series.Sequence durationInFrames={180} name="Title">
         <TitleScene
-          headline="Extending Aether Forge"
+          titleLines={["EXTENDING", "AETHER FORGE"]}
           tagline="Custom planners, data sources & memory stores — without forking"
+          titleFontSize={104}
         />
       </Series.Sequence>
       <Series.Sequence durationInFrames={300} name="Protocols">
@@ -96,13 +96,7 @@ export const ExtendingFramework: React.FC = () => (
         <Step3Plugin />
       </Series.Sequence>
       <Series.Sequence durationInFrames={270} name="Outro">
-        <OutroScene
-          closing={
-            <>
-              Build on top. <span style={{ color: ACCENT }}>Don't fork.</span>
-            </>
-          }
-        />
+        <OutroScene />
       </Series.Sequence>
     </Series>
   </AbsoluteFill>

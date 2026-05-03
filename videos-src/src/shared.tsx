@@ -1,9 +1,17 @@
 /**
  * Shared scene primitives + style tokens for all Aether Forge videos.
  *
- * Compositions stay short: define a `<Series>` of scenes, each scene
- * composes the helpers below. New compositions can drop in alongside
- * existing ones in `src/Root.tsx`.
+ * Style is canon-matched against the existing 27 videos in
+ * docs-site/public/videos/ (e.g. 21-cli, 03-agent-generation, 00-hero):
+ *
+ *   - Pure black background. White / gray monochrome typography.
+ *   - Title scene: knot logo at top + thin uppercase 2-line title with wide
+ *     letter-spacing + small gray tagline. NO red accent bars.
+ *   - Content scenes: small gray uppercase kicker (wide letter-spacing) +
+ *     bold headline + content body.
+ *   - Outro: knot + AETHER / FORGE wordmark + github URL pill +
+ *     "Spec first. Real money. Production grade." + tiny "by [elsa-mark]".
+ *     Identical across every video.
  */
 
 import {
@@ -19,7 +27,8 @@ import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import { loadFont as loadJetBrainsMono } from "@remotion/google-fonts/JetBrainsMono";
 
 const { fontFamily: interFamilyLoaded } = loadInter("normal", {
-  weights: ["400", "600", "700"],
+  // 200 / 300 = thin/light for the wordmark; 600/700 for bold headlines.
+  weights: ["200", "300", "400", "600", "700"],
   subsets: ["latin"],
 });
 const { fontFamily: monoFamilyLoaded } = loadJetBrainsMono("normal", {
@@ -31,18 +40,20 @@ export const interFamily = interFamilyLoaded;
 export const monoFamily = monoFamilyLoaded;
 
 // ---------------------------------------------------------------------------
-// Palette — shared across all compositions
+// Palette — pure monochrome to match existing videos
 // ---------------------------------------------------------------------------
 
-export const BG = "#0a0a0a";
-export const FG = "#f5f5f5";
-export const MUTED = "#9ca3af";
-export const ACCENT = "#ef4444"; // Elsa red
+export const BG = "#000000";
+export const FG = "#f5f5f7"; // matches the white in logo.svg
+export const MUTED = "#9ca3af"; // gray for taglines + kickers
+export const COMMENT = "#6b7280";
 export const KEYWORD = "#7dd3fc";
 export const STRING = "#86efac";
-export const COMMENT = "#6b7280";
 export const TYPENAME = "#fbbf24";
 export const SUCCESS = "#86efac";
+
+// Reserved (not used in canonical scenes; kept so old props don't break).
+export const ACCENT = MUTED;
 
 // ---------------------------------------------------------------------------
 // Animation helpers
@@ -67,7 +78,7 @@ export const typewriter = (
 };
 
 // ---------------------------------------------------------------------------
-// Code rendering — heuristic syntax tinting (no real lexer)
+// Code rendering
 // ---------------------------------------------------------------------------
 
 const KEYWORDS = new Set([
@@ -95,14 +106,13 @@ export const TypedLine: React.FC<{ text: string }> = ({ text }) => {
 export const CursorBlink: React.FC = () => {
   const frame = useCurrentFrame();
   const visible = Math.floor(frame / 15) % 2 === 0;
-  return <span style={{ opacity: visible ? 1 : 0, color: ACCENT }}>▌</span>;
+  return <span style={{ opacity: visible ? 1 : 0, color: FG }}>▌</span>;
 };
 
 export const CodeBlock: React.FC<{
   source: string;
   charsPerSecond?: number;
   filename?: string;
-  language?: "python" | "toml" | "shell" | "json";
   fontSize?: number;
   maxWidth?: number;
 }> = ({
@@ -119,7 +129,7 @@ export const CodeBlock: React.FC<{
   return (
     <div
       style={{
-        background: "#111111",
+        background: "#0a0a0a",
         border: "1px solid #1f2937",
         borderRadius: 14,
         padding: "32px 40px 36px",
@@ -154,7 +164,7 @@ export const CodeBlock: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Shell output block (no typewriter; appears all at once with fade)
+// Shell output
 // ---------------------------------------------------------------------------
 
 export const ShellOutput: React.FC<{
@@ -173,9 +183,7 @@ export const ShellOutput: React.FC<{
     >
       {lines.map((l, i) => (
         <div key={i} style={{ whiteSpace: "pre", color: l.color || FG }}>
-          {l.prompt && (
-            <span style={{ color: STRING }}>{l.prompt} </span>
-          )}
+          {l.prompt && <span style={{ color: STRING }}>{l.prompt} </span>}
           {l.text}
         </div>
       ))}
@@ -184,20 +192,56 @@ export const ShellOutput: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Title scene — accent bar + headline + tagline
+// Wordmark renderer — "AETHER FORGE", "GET STARTED", "PYTHON SDK"
+// ---------------------------------------------------------------------------
+// Two-line uppercase, very wide letter-spacing, thin (200) weight.
+// Matches the existing 21-cli "THE FORGE / CLI" and 03-agent-generation
+// "AGENT / GENERATION" titles exactly.
+// ---------------------------------------------------------------------------
+
+export const Wordmark: React.FC<{
+  lines: string[];
+  fontSize?: number;
+  letterSpacing?: number;
+  color?: string;
+}> = ({ lines, fontSize = 130, letterSpacing = 8, color = FG }) => (
+  <div
+    style={{
+      fontFamily: interFamily,
+      fontWeight: 200,
+      fontSize,
+      letterSpacing,
+      color,
+      textTransform: "uppercase",
+      lineHeight: 1.05,
+      textAlign: "center",
+    }}
+  >
+    {lines.map((l, i) => (
+      <div key={i}>{l}</div>
+    ))}
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Title scene — knot logo + 2-line wordmark + tagline
 // ---------------------------------------------------------------------------
 
 export const TitleScene: React.FC<{
-  headline: string;
+  /** 2-line uppercase title, e.g. ["GET", "STARTED"]. */
+  titleLines: string[];
+  /** Small gray subtitle below the wordmark. */
   tagline: string;
-}> = ({ headline, tagline }) => {
+  /** Wordmark font size; slim down for longer titles. */
+  titleFontSize?: number;
+  /** Letter-spacing for the wordmark. */
+  letterSpacing?: number;
+}> = ({ titleLines, tagline, titleFontSize = 130, letterSpacing = 8 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const t1 = fadeIn(frame, fps, 0, 0.7);
-  const t2 = fadeIn(frame, fps, 0.4 * fps, 0.7);
-  const accentBar = interpolate(frame, [0, fps * 0.6], [0, 220], {
-    extrapolateRight: "clamp",
-  });
+  const logoOp = fadeIn(frame, fps, 0, 0.6);
+  const titleOp = fadeIn(frame, fps, 0.4 * fps, 0.6);
+  const taglineOp = fadeIn(frame, fps, 0.8 * fps, 0.6);
   return (
     <AbsoluteFill
       style={{
@@ -205,45 +249,52 @@ export const TitleScene: React.FC<{
         justifyContent: "center",
         alignItems: "center",
         flexDirection: "column",
-        gap: 24,
+        gap: 60,
       }}
     >
-      <div style={{ height: 5, width: accentBar, background: ACCENT, borderRadius: 3 }} />
-      <h1
+      <div
         style={{
-          color: FG,
-          fontFamily: interFamily,
-          fontWeight: 700,
-          fontSize: 110,
-          margin: 0,
-          letterSpacing: -2,
-          opacity: t1,
-          transform: `translateY(${(1 - t1) * 20}px)`,
+          opacity: logoOp,
+          transform: `translateY(${(1 - logoOp) * 12}px)`,
         }}
       >
-        {headline}
-      </h1>
-      <p
+        <Img
+          src={staticFile("forge-logo.svg")}
+          style={{ width: 140, height: 140 }}
+        />
+      </div>
+      <div
         style={{
+          opacity: titleOp,
+          transform: `translateY(${(1 - titleOp) * 12}px)`,
+        }}
+      >
+        <Wordmark
+          lines={titleLines}
+          fontSize={titleFontSize}
+          letterSpacing={letterSpacing}
+        />
+      </div>
+      <div
+        style={{
+          opacity: taglineOp,
+          transform: `translateY(${(1 - taglineOp) * 8}px)`,
           color: MUTED,
           fontFamily: interFamily,
-          fontSize: 38,
-          margin: 0,
+          fontSize: 32,
           fontWeight: 400,
-          opacity: t2,
-          transform: `translateY(${(1 - t2) * 15}px)`,
-          maxWidth: 1500,
           textAlign: "center",
+          maxWidth: 1500,
         }}
       >
         {tagline}
-      </p>
+      </div>
     </AbsoluteFill>
   );
 };
 
 // ---------------------------------------------------------------------------
-// Scene caption — small accent label + bigger title
+// Scene caption — tiny gray uppercase kicker + bold headline
 // ---------------------------------------------------------------------------
 
 export const SceneCaption: React.FC<{ kicker?: string; subtitle?: string }> = ({
@@ -266,9 +317,9 @@ export const SceneCaption: React.FC<{ kicker?: string; subtitle?: string }> = ({
         <div
           style={{
             fontSize: 22,
-            color: ACCENT,
+            color: MUTED,
             fontWeight: 600,
-            letterSpacing: 3,
+            letterSpacing: 4,
             textTransform: "uppercase",
             marginBottom: 14,
           }}
@@ -286,7 +337,7 @@ export const SceneCaption: React.FC<{ kicker?: string; subtitle?: string }> = ({
 };
 
 // ---------------------------------------------------------------------------
-// Generic content scene wrapper — caption + content
+// Generic content scene — caption + content body
 // ---------------------------------------------------------------------------
 
 export const ContentScene: React.FC<{
@@ -311,20 +362,17 @@ export const ContentScene: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Outro — closing line + "by Elsa logo"
+// Outro — canonical "AETHER FORGE" end card (identical across all videos)
 // ---------------------------------------------------------------------------
 
-export const OutroScene: React.FC<{
-  closing: React.ReactNode;
-}> = ({ closing }) => {
+export const OutroScene: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const fade = fadeIn(frame, fps, 0, 0.6);
-  const logoScale = spring({
-    frame: frame - 8,
-    fps,
-    config: { damping: 12, stiffness: 110 },
-  });
+  const logoOp = fadeIn(frame, fps, 0, 0.6);
+  const wordmarkOp = fadeIn(frame, fps, 0.3 * fps, 0.6);
+  const pillOp = fadeIn(frame, fps, 0.7 * fps, 0.6);
+  const taglineOp = fadeIn(frame, fps, 1.0 * fps, 0.5);
+  const byOp = fadeIn(frame, fps, 1.3 * fps, 0.5);
   return (
     <AbsoluteFill
       style={{
@@ -332,44 +380,67 @@ export const OutroScene: React.FC<{
         justifyContent: "center",
         alignItems: "center",
         flexDirection: "column",
-        gap: 40,
+        gap: 32,
       }}
     >
-      <div
-        style={{
-          color: FG,
-          fontFamily: interFamily,
-          fontSize: 56,
-          fontWeight: 600,
-          opacity: fade,
-          textAlign: "center",
-          maxWidth: 1500,
-        }}
-      >
-        {closing}
+      <div style={{ opacity: logoOp }}>
+        <Img
+          src={staticFile("forge-logo.svg")}
+          style={{ width: 110, height: 110 }}
+        />
+      </div>
+      <div style={{ opacity: wordmarkOp, marginTop: 8 }}>
+        <Wordmark lines={["AETHER", "FORGE"]} fontSize={108} letterSpacing={6} />
       </div>
       <div
         style={{
-          opacity: fade,
-          transform: `scale(${logoScale})`,
+          opacity: pillOp,
+          marginTop: 20,
+          padding: "16px 32px",
+          background: "#0a0a0a",
+          border: "1px solid #1f2937",
+          borderRadius: 14,
+          fontFamily: monoFamily,
+          fontSize: 30,
+          color: FG,
+          letterSpacing: 0.5,
+        }}
+      >
+        github.com/HeyElsa/aether-forge
+      </div>
+      <div
+        style={{
+          opacity: taglineOp,
+          color: MUTED,
+          fontFamily: interFamily,
+          fontSize: 26,
+          fontWeight: 400,
+          marginTop: 10,
+        }}
+      >
+        Spec first. Real money. Production grade.
+      </div>
+      <div
+        style={{
+          opacity: byOp,
           display: "flex",
           alignItems: "center",
-          gap: 16,
+          gap: 10,
+          marginTop: 12,
         }}
       >
         <span
           style={{
             color: MUTED,
             fontFamily: interFamily,
-            fontSize: 28,
-            fontWeight: 400,
+            fontSize: 20,
           }}
         >
           by
         </span>
         <Img
-          src={staticFile("elsa-logo.svg")}
-          style={{ height: 56, filter: "brightness(0) invert(1)" }}
+          src={staticFile("elsa-mark.svg")}
+          style={{ height: 28, width: "auto" }}
         />
       </div>
     </AbsoluteFill>

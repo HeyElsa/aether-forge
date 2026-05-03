@@ -1,12 +1,5 @@
 import { AbsoluteFill, Series } from "remotion";
-import {
-  ACCENT,
-  BG,
-  CodeBlock,
-  ContentScene,
-  OutroScene,
-  TitleScene,
-} from "../shared";
+import { BG, CodeBlock, ContentScene, OutroScene, TitleScene } from "../shared";
 
 const Scene1Generate = () => (
   <ContentScene kicker="Programmatic" subtitle="Generate an agent from your own code">
@@ -66,7 +59,7 @@ export const PythonSDK: React.FC = () => (
     <Series>
       <Series.Sequence durationInFrames={180} name="Title">
         <TitleScene
-          headline="Python SDK"
+          titleLines={["PYTHON", "SDK"]}
           tagline="Run agents, build prompts, query memory, verify attestations — from your code"
         />
       </Series.Sequence>
@@ -80,13 +73,7 @@ export const PythonSDK: React.FC = () => (
         <Scene3RunSession />
       </Series.Sequence>
       <Series.Sequence durationInFrames={240} name="Outro">
-        <OutroScene
-          closing={
-            <>
-              Programmable. <span style={{ color: ACCENT }}>End-to-end.</span>
-            </>
-          }
-        />
+        <OutroScene />
       </Series.Sequence>
     </Series>
   </AbsoluteFill>
