@@ -7,7 +7,10 @@
     "dev": "remotion studio src/index.tsx",
     "render": "remotion render src/index.tsx",
     "render:extending": "remotion render src/index.tsx ExtendingFramework out/30-extending.mp4 --concurrency=4",
-    "build": "npm run render:extending"
+    "render:getting-started": "remotion render src/index.tsx GettingStarted out/31-getting-started.mp4 --concurrency=4",
+    "render:python-sdk": "remotion render src/index.tsx PythonSDK out/32-python-sdk.mp4 --concurrency=4",
+    "render:all": "npm run render:extending && npm run render:getting-started && npm run render:python-sdk",
+    "build": "npm run render:all"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.388",

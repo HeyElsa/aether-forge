@@ -16,8 +16,11 @@ when docs change.
 ```bash
 cd videos-src
 npm install
-npm run dev               # opens Remotion Studio at http://localhost:3000
-npm run render:extending  # renders out/30-extending.mp4
+npm run dev                     # opens Remotion Studio at http://localhost:3000
+npm run render:all              # renders all 3 (~3 minutes total)
+npm run render:extending        # just the extending video
+npm run render:getting-started  # just the getting-started video
+npm run render:python-sdk       # just the python-sdk video
 ```
 
 ## Compositions
@@ -25,6 +28,17 @@ npm run render:extending  # renders out/30-extending.mp4
 | Composition ID | Output | Duration | Embedded in |
 |---|---|---|---|
 | `ExtendingFramework` | `out/30-extending.mp4` | 25 s | `docs-site/.../guides/extending.mdx` |
+| `GettingStarted` | `out/31-getting-started.mp4` | 31 s | `docs-site/.../getting-started.mdx` |
+| `PythonSDK` | `out/32-python-sdk.mp4` | 26.5 s | `docs-site/.../reference/python-sdk.mdx` |
+
+## Shared primitives
+
+`src/shared.tsx` exports the reusable scene types and style tokens
+every composition uses: `TitleScene`, `ContentScene`, `OutroScene`,
+`SceneCaption`, `CodeBlock`, `ShellOutput`, `TypedLine`,
+`CursorBlink`, helpers (`fadeIn`, `typewriter`), palette constants,
+and the loaded font families. Define new scenes once there if more
+than one composition needs them.
 
 ## Adding a new composition
 
