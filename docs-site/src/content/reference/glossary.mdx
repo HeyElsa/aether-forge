@@ -36,11 +36,17 @@ Every term that appears in Aether Forge docs, defined in one place.
 
 **DataRouter** — Unified dispatch surface for data sources (HTTP, x402, MCP, WebSocket). Tries sources in priority order; first success wins.
 
+**DataSource** — ABC for any data backend the `DataRouter` can dispatch to. Subclass it to add a private API, oracle, or alternative price feed. Built-in implementations: `HTTPDataSource`, `X402DataSource`, `WebSocketDataSource`, `McpDataSource`, `MockDataSource`. Exported from `aether_forge`. See [Extending the Framework](/guides/extending).
+
 **Deep Health Check** — Readiness check (`/ready`) that returns 503 if planner is failing or kill switch is active. Distinct from liveness (`/health`) which always returns 200.
 
 ## E
 
 **EIP-3009** — Ethereum standard for gasless USDC transfers via signed authorizations. Used by x402 for pay-per-call APIs.
+
+**Entry Point (Plugin)** — `importlib.metadata` entry-point group used to discover third-party extensions. Four groups: `aether_forge.{planners,execution_routers,data_sources,skill_registries}`. Plugin failures are logged and skipped, never raised.
+
+**Extension Protocol** — A Python `Protocol` (or ABC) that defines a swap-in/swap-out contract for a framework component. The five extension protocols are `Planner`, `ExecutionRouter`, `PlanningModel`, `MemoryStore`, and `DataSource`. All exported from the top-level `aether_forge` package.
 
 **EIP-712** — Ethereum standard for typed structured data signing. Used by Aether Forge for attestations and A2A message authentication.
 
@@ -86,6 +92,8 @@ Every term that appears in Aether Forge docs, defined in one place.
 
 **MemPalace** — External Python package providing the Layer 4 knowledge store. Optional (`pip install 'aether-forge[knowledge]'`).
 
+**MemoryStore** — Protocol for the Layer 3 typed memory backend. Three methods: `read(query) -> list[MemoryRecord]`, `write(record) -> MemoryRecord`, `promote(request) -> MemoryPromotionResult`. Implementations apply the sensitivity ceiling and environment filter inside `read`. Built-in: `InMemoryMemoryStore`, `SqliteMemoryStore`. Exported from `aether_forge`.
+
 **Memory Layer 1 — Replays** — JSON files written per tick. Audit trail, never read by LLM.
 
 **Memory Layer 2 — Working Set** — In-process dict. Current tick state. Read by LLM as `## Runtime State`.
@@ -106,7 +114,11 @@ Every term that appears in Aether Forge docs, defined in one place.
 
 **Pagefind** — Static search engine used by the docs site. Runs as `postbuild`.
 
-**Planner** — The component that proposes steps each tick. Modes: `heuristic`, `static`, `function-call`, `openai-compatible`, `anthropic`, `gemini`, `openai`, `openrouter`, `ollama`.
+**Planner** — The component that proposes steps each tick. Modes: `heuristic`, `static`, `function-call`, `openai-compatible`, `anthropic`, `gemini`, `openai`, `openrouter`, `ollama`. Custom modes resolve via the `aether_forge.planners` plugin entry-point group.
+
+**PlanningModel** — Protocol for the LLM-completion backend used by `PromptDrivenPlanner`. One method: `complete(prompt) -> str`. Built-in: `AnthropicPlanningModel`, `OpenAICompatiblePlanningModel`, `GeminiPlanningModel`, `StaticPlanningModel`. Exported from `aether_forge`.
+
+**Plugin** — A third-party Python package that extends Aether Forge via `importlib.metadata` entry points. See *Entry Point*. Plugins do not require forking the framework — `pip install` and the framework auto-discovers them.
 
 **Policy Gate** — Runtime component that evaluates each proposed step against `policy-bundle.json` rules. Default-deny for side effects.
 

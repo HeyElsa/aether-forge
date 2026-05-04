@@ -28,6 +28,24 @@ REGISTRIES: dict[str, str] = {
     "elsa": "https://x402.heyelsa.ai",
 }
 
+
+def get_registries() -> dict[str, str]:
+    """Return built-in registries merged with any plugins.
+
+    Third parties register additional registries by declaring an entry point
+    in group ``aether_forge.skill_registries`` whose target is a string URL
+    (or a callable returning one).
+    """
+    from .plugins import GROUP_SKILL_REGISTRIES, iter_entry_points
+
+    merged = dict(REGISTRIES)
+    for name, target in iter_entry_points(GROUP_SKILL_REGISTRIES):
+        url = target() if callable(target) else target
+        if not isinstance(url, str):
+            continue
+        merged[name] = url
+    return merged
+
 SKILLS_SH_API = "https://skills.sh"
 BANKR_REPO = "BankrBot/skills"
 ELSA_API = "https://x402-api.heyelsa.ai/api"

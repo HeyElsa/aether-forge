@@ -327,4 +327,25 @@ def build_planner_factory(
 
         return _function_call_factory
 
+    plugin_factory = _resolve_planner_plugin(settings.mode)
+    if plugin_factory is not None:
+        return plugin_factory
+
     raise ValueError(f"Unsupported planner mode: {settings.mode}")
+
+
+def _resolve_planner_plugin(mode: str) -> Callable[[], Planner] | None:
+    """Look up a third-party planner registered via entry points.
+
+    A plugin entry point in group ``aether_forge.planners`` must resolve to a
+    zero-argument factory returning a :class:`Planner`.
+    """
+    from .plugins import GROUP_PLANNERS, find_entry_point
+
+    target = find_entry_point(GROUP_PLANNERS, mode)
+    if target is None:
+        return None
+    if not callable(target):
+        logger.warning("planner plugin %r is not callable; ignoring", mode)
+        return None
+    return target  # type: ignore[return-value]

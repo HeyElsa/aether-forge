@@ -108,10 +108,55 @@ class RuntimeReplay:
 
 
 class Planner(Protocol):
+    """Proposes the next bounded steps for a runtime session.
+
+    A planner is called once per tick. It reads the current ``RuntimeSession``
+    (artifacts, environment, working set, observations, memory context) and
+    returns an ordered list of ``StepProposal`` objects that the runtime will
+    validate, policy-check, and execute. The list may be empty (treated as a
+    natural session end). Returned proposals must reference capabilities that
+    are declared in the agent's ``capability-manifest.json``; undeclared IDs
+    are rejected and the planner is asked to ``REPORT_GAP`` instead.
+
+    Minimum viable implementation::
+
+        class NoOpPlanner:
+            def propose_plan(self, session) -> list[StepProposal]:
+                return [StepProposal(kind=StepKind.REASON,
+                                     description="nothing to do",
+                                     mark_complete=True)]
+
+    Built-in implementations: :class:`aether_forge.HeuristicPlanner` (offline,
+    state-machine), :class:`aether_forge.PromptDrivenPlanner` (LLM-driven via a
+    ``PlanningModel``).
+    """
+
     def propose_plan(self, session: RuntimeSession) -> list[StepProposal]: ...
 
 
 class ExecutionRouter(Protocol):
+    """Dispatches a proposed capability call to the right backend.
+
+    The runtime calls ``execute`` once per ``USE_CAPABILITY`` step that has
+    cleared the policy gate. Implementations route the proposal to the
+    appropriate backend (mock, paper, live exchange, OWS wallet, MCP tool)
+    based on the capability's declared kind and the session's environment,
+    then return an ``ExecutionResult`` with the result payload, observations,
+    and any cost incurred. Routers must be safe to call concurrently across
+    sessions but receive one tick at a time per session.
+
+    Minimum viable implementation::
+
+        class EchoRouter:
+            def execute(self, session, proposal, capability) -> ExecutionResult:
+                return ExecutionResult(success=True,
+                                       result={"echo": proposal.payload})
+
+    Built-in implementations live in :mod:`aether_forge.crypto` —
+    :class:`aether_forge.MockCryptoExecutionRouter` is the default; paper /
+    live / OWS-wallet variants exist for production paths.
+    """
+
     def execute(
         self,
         session: RuntimeSession,

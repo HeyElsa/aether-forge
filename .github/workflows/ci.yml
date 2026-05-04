@@ -27,6 +27,10 @@ jobs:
       - name: Lint
         run: ruff check src/ tests/
 
+      - name: Type check (informational — won't fail the build yet)
+        continue-on-error: true
+        run: mypy
+
       - name: Test
         run: pytest tests/ -x --tb=short
 

@@ -165,9 +165,160 @@ forge replay-show ./my-agent/replays/tick_0001.json --steps-only
 
 Shows what the LLM proposed, policy decisions, and results per step.
 
+## Artifacts & Migration
+
+### `forge eval`
+
+Run a single scenario against the native runtime (not the full pack).
+
+```bash
+forge eval ./my-agent --scenario btc-up-trend
+```
+
+### `forge artifact-compat`
+
+Check compatibility between two artifact directories — reports whether a
+target version is backward-compatible with the current spec, and whether
+a migration contract is required.
+
+```bash
+forge artifact-compat ./my-agent-v1 ./my-agent-v2
+```
+
+### `forge artifact-migration-plan`
+
+Generate a migration contract skeleton for a single artifact type. Use
+this when a major-version bump requires data hydration.
+
+```bash
+forge artifact-migration-plan ./my-agent-v1 ./my-agent-v2 \
+    --artifact-type capability-manifest
+```
+
+## Scaffold
+
+The `scaffold-*` commands operate on the generated agent project (the
+`src/strategy/`, `src/runtime/`, `src/policies/` layout that
+`generate-fast` produces).
+
+### `forge scaffold-run`
+
+Drive the scaffold's eval flow without going through the framework's
+top-level `eval` command — useful when iterating on
+`src/strategy/router.py`.
+
+```bash
+forge scaffold-run ./my-agent
+```
+
+### `forge scaffold-policy-sync`
+
+Diff the policy logic embedded in the scaffold's Python (e.g.
+`src/policies/policy_bundle.py`) against `policy-bundle.json` and bring
+the JSON back into sync.
+
+```bash
+forge scaffold-policy-sync ./my-agent
+```
+
+### `forge scaffold-live-status`
+
+Inspect the scaffold's live exchange adapter — connectivity, last quote
+latency, configured chain — without firing real orders.
+
+```bash
+forge scaffold-live-status ./my-agent
+```
+
+## Replay & Resume
+
+### `forge resume-replay`
+
+Resume a runtime session from a tick replay file. The session
+re-hydrates from `step_ledger`, `working_set`, and `pending_approvals`,
+then continues from the hold point. Pair with `--approval-token` to
+auto-approve a held step.
+
+```bash
+forge resume-replay ./my-agent/replays/tick_0008.json \
+    --approval-token approver-cli-2026-05-02
+```
+
+## Payments
+
+### `forge x402-call`
+
+Fire a single x402 payment call manually (real money on Base mainnet).
+Respects the agent's persistent budget (`x402_state.json`), the halt
+file, and the audit log.
+
+```bash
+forge x402-call --endpoint get-swap-quote \
+    --payload '{"in":"USDC","out":"WETH","amount":"100"}' \
+    --agent-dir ./my-agent --max-usd 0.05
+```
+
+## Models & Config
+
+### `forge models-list`
+
+List available LLM models from a provider — useful when picking a
+model for the planner block in `aether-forge.json`.
+
+```bash
+forge models-list --provider openrouter --query claude
+forge models-list --provider ollama
+forge models-list --provider anthropic
+```
+
+### `forge config-validate`
+
+Validate an `aether-forge.json` against the configuration schema (planner
+block, runtime block, mcp_servers block).
+
+```bash
+forge config-validate ./my-agent/aether-forge.json
+```
+
+### `forge init`
+
+Initialize a new `aether-forge.json` in the current (or named)
+directory — shortcut for adding the framework to an existing project
+without running the full generator.
+
+```bash
+forge init                                # in cwd
+forge init ./my-existing-project
+```
+
+## Wallet (extra)
+
+### `forge wallet-info`
+
+Read full wallet metadata (provider, vault path, policy ID, scoped API
+key handle) for a single named wallet.
+
+```bash
+forge wallet-info --name agent-wallet
+```
+
+## Shell completions
+
+### `forge completions`
+
+Generate shell completion scripts.
+
+```bash
+forge completions bash > ~/.local/share/bash-completion/completions/forge
+forge completions zsh  > ~/.zfunc/_forge
+forge completions fish > ~/.config/fish/completions/forge.fish
+```
+
 ## Diagnostics
 
 ```bash
-forge doctor                         # Full system check
-forge doctor ./aether-forge.json     # Check specific config
+forge doctor                         # Full system check (8 round-trip checks)
 ```
+
+Probes Python, jsonschema, OWS SDK, cryptography, Ollama, OpenRouter, the
+SQLite memory layer, and MemPalace; prints a one-line verdict.

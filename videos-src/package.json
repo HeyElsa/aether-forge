@@ -1,0 +1,26 @@
+{
+  "name": "aether-forge-videos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remotion sources for the Aether Forge docs-site videos",
+  "scripts": {
+    "dev": "remotion studio src/index.tsx",
+    "render": "remotion render src/index.tsx",
+    "render:extending": "remotion render src/index.tsx ExtendingFramework out/30-extending.mp4 --concurrency=4",
+    "render:getting-started": "remotion render src/index.tsx GettingStarted out/31-getting-started.mp4 --concurrency=4",
+    "render:python-sdk": "remotion render src/index.tsx PythonSDK out/32-python-sdk.mp4 --concurrency=4",
+    "render:all": "npm run render:extending && npm run render:getting-started && npm run render:python-sdk",
+    "build": "npm run render:all"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.388",
+    "@remotion/google-fonts": "^4.0.388",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.388"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.4.5"
+  }
+}
