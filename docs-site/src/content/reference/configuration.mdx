@@ -105,6 +105,14 @@ When no `planner.mode` is specified, Aether Forge probes in order:
 5. `OPENROUTER_API_KEY` → OpenRouter
 6. Heuristic fallback (no LLM)
 
+### Custom modes via plugins
+
+If `mode` doesn't match any built-in, Aether Forge looks it up in the
+`aether_forge.planners` entry-point group (third-party plugins installed
+from PyPI). See [Extending the Framework](/guides/extending) for the full
+walkthrough. A failing plugin is logged and skipped — it cannot crash the
+runtime.
+
 ---
 
 ## `runtime` — Execution Mode
@@ -256,6 +264,33 @@ These are read at runtime and can override config:
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Google API key |
 | `OWS_API_KEY` | Open Wallet Standard API key |
 | `AETHER_FORGE_REGISTRY_PATH` | Override local registry database path |
+| `AETHER_FORGE_PLANNER_MODE` | Default planner mode (used when no CLI flag and no config file value) |
+| `AETHER_FORGE_PLANNER_MODEL` | Default model name |
+| `AETHER_FORGE_PLANNER_BASE_URL` | Default API endpoint |
+| `AETHER_FORGE_PLANNER_API_KEY` | API key passed directly (less common — prefer `AETHER_FORGE_PLANNER_API_KEY_ENV`) |
+| `AETHER_FORGE_PLANNER_API_KEY_ENV` | Name of the env var that holds the API key (indirection — keeps the key out of process listings) |
+| `AETHER_FORGE_CRYPTO_ROUTER` | Default `runtime.cryptoRouter` mode |
+
+---
+
+## Settings Precedence
+
+When the same setting can come from multiple places, Aether Forge resolves
+in this order (first wins):
+
+```
+CLI flag  >  AETHER_FORGE_* env var  >  aether-forge.json  >  built-in default
+```
+
+Examples:
+
+- `forge run --planner-mode anthropic` overrides `AETHER_FORGE_PLANNER_MODE`,
+  which overrides `planner.mode` in `aether-forge.json`, which overrides
+  the auto-detect probe.
+- `--planner-api-key-env ANTHROPIC_API_KEY` (CLI) → looks up the env var
+  named `ANTHROPIC_API_KEY` and uses its value as the key.
+- API keys: prefer `apiKeyEnv` (indirection) over `apiKey` (direct value)
+  so secrets stay out of `aether-forge.json`.
 
 ---
 

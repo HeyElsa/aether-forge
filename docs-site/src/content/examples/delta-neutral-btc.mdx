@@ -1,0 +1,115 @@
+# Delta-Neutral BTC Basis Trader
+
+A complete reference agent ships with the repo at [`examples/delta-neutral-btc/`](https://github.com/HeyElsa/aether-forge/tree/main/examples/delta-neutral-btc). It captures the **positive basis between BTC spot and perpetual futures** while staying delta-neutral.
+
+This is the canonical example used in unit tests, evaluation runs, and the `forge eval-pack` smoke test.
+
+## Strategy in plain English
+
+> **Buy spot BTC. Short BTC perp at the same notional.** When the futures-spot
+> spread (basis) is wide and the funding rate favors shorts, you collect both
+> the spread carry and the funding payments. Unwind when basis tightens or
+> volatility spikes.
+
+The agent has zero directional exposure to BTC price — it only profits from the convergence between two BTC instruments.
+
+## Why this is a good example
+
+- **Two-sided execution** — every action requires both a spot leg and a perp leg
+- **Real risk management** — exposure caps, unwind triggers, halt conditions
+- **Multi-source data** — spot price + funding rate + basis spread
+- **Production scenarios** — baseline, volatility unwind, exposure breach, stale data halt
+
+## What's in the example directory
+
+| File | Purpose |
+|---|---|
+| `agent-spec.json` | Contract: name, summary, owners, promotion path |
+| `capability-manifest.json` | 6 declared capabilities (market data, exchange order, balance, memory) |
+| `policy-bundle.json` | Notional caps, allowed venues, halt rules |
+| `scenario-pack.json` | 4 evaluation scenarios |
+| `scaffold.manifest.json` | Project structure |
+| `research-record.json` | Slow-mode autoresearch findings |
+| `promotion-record.json` | Sandbox → paper → canary promotion record |
+
+## Capabilities declared
+
+| Capability | Kind | Risk | Effect |
+|---|---|---|---|
+| `cap-market-btc-price` | data-source | low | Fetch BTC spot price |
+| `cap-market-basis` | data-source | low | Fetch perp-spot basis spread + funding rate |
+| `cap-exchange-balance` | data-source | low | Read exchange account balances |
+| `cap-exchange-order` | exchange-action | **high** | Place/cancel orders (requires approval in live) |
+| `memory.read` | data-source | low | Read prior decisions |
+| `memory.write` | tool | low | Persist tick summaries |
+
+## Test scenarios
+
+| Scenario | What it tests |
+|---|---|
+| `scen-baseline-basis-wide` | Happy path — basis 30+ bps, agent enters position |
+| `scen-volatility-unwind` | Vol spikes — agent unwinds before stop-out |
+| `scen-policy-exposure-breach` | Tries to exceed notional cap — must be denied by policy gate |
+| `scen-stale-data-halt` | Price feed stale > 60s — agent halts |
+
+## Run it yourself
+
+### Validate the spec
+
+```bash
+forge validate examples/delta-neutral-btc/
+# Validated 5 artifacts in examples/delta-neutral-btc/
+```
+
+### Run scenario evaluations
+
+```bash
+forge eval-pack examples/delta-neutral-btc/
+# Scenario pack: total=4 matched=4 pass=3 hold=1 fail=0
+```
+
+### Use it as a starting point
+
+The simplest path to your own basis trader:
+
+```bash
+# Copy the example
+cp -r examples/delta-neutral-btc/ ./my-basis-trader
+
+# Edit the strategy parameters
+vim my-basis-trader/policy-bundle.json   # notional caps
+vim my-basis-trader/scenario-pack.json   # your test cases
+
+# Provision a real wallet
+forge wallet-create --name basis-trader
+
+# Validate everything
+forge validate my-basis-trader/
+
+# Paper trade
+forge run my-basis-trader --mode paper --auto-approve
+```
+
+## Promotion record
+
+This example has already been promoted through the full pipeline (recorded in `promotion-record.json`):
+
+```
+sandbox → paper → canary-live
+   ✓        ✓         ✓
+```
+
+Each promotion required:
+- All scenarios passing
+- Policy compliance verified
+- Approver sign-off
+- Scenario replay evidence
+
+This is the reference for what a "production-ready" agent looks like in Aether Forge.
+
+## Related
+
+- [End-to-End Tutorial](/docs/guides/end-to-end) — build your own from scratch
+- [Build a Custom Agent](/docs/guides/custom-agent) — customize the planner, data sources, MCP
+- [Two-Agent Marketplace](/docs/examples/two-agent-marketplace) — extend to multi-agent
+- [Artifact System](/docs/reference/artifacts) — JSON schemas behind every file in this example

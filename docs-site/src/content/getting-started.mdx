@@ -2,7 +2,7 @@
 
 Get from zero to a running agent in under 5 minutes.
 
-<video src="/videos/02-user-flow.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/31-getting-started.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
 
 ## Install
 
@@ -112,6 +112,16 @@ forge validate ./my-agent
 # Validated 5 artifacts in ./my-agent
 ```
 
+Every generated agent ships with a `Makefile`, `tests/test_agent.py` smoke test, `Dockerfile`, and `.env.example` — so the next steps are one command each:
+
+```bash
+cd ./my-agent
+make test         # green out-of-box: artifacts validate + scenarios meet expectations
+make eval-pack    # run the scenario pack against the runtime
+make doctor       # 8-point diagnostic round-trip
+make help         # see all available targets
+```
+
 ## Run
 
 ```bash
@@ -128,6 +138,7 @@ forge run ./my-agent --mode paper --auto-approve --a2a-port 9001
 ## Next Steps
 
 - [Build a Custom Agent](/docs/guides/custom-agent) — choose your LLM, add data sources, wire MCP servers
+- [Extending the Framework](/docs/guides/extending) — custom planners, data sources, memory stores, PyPI plugin distribution
 - [LLM Planner](/docs/features/llm-planner) — how the LLM drives every tick
 - [Memory Architecture](/docs/features/memory) — four layers of typed memory
 - [CLI Reference](/docs/reference/cli) — every `forge` command

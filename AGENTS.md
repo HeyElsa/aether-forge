@@ -80,6 +80,10 @@ Do not drift away from these without explicitly updating the PRD:
 - Budget check + payment execution MUST be atomic (file lock held across both) to prevent race conditions.
 - Agents accepting payments via `X402PaymentGate` MUST verify payment headers structurally before executing paid capabilities. Wrong address and insufficient amount MUST be rejected.
 - All capability execution results from external sources (MCP, A2A, x402) MUST be scanned for prompt injection patterns before entering the planner's prompt context.
+- The five extension Protocols (`Planner`, `ExecutionRouter`, `PlanningModel`, `MemoryStore`, `DataSource`) MUST be exported from the top-level `aether_forge` package with `__all__` discipline and contract docstrings (one-paragraph summary + canonical signature + minimum-viable implementation example + pointer to the in-tree reference impl).
+- Plugin discovery MUST use `importlib.metadata` entry points (`aether_forge.{planners,execution_routers,data_sources,skill_registries}` groups). A plugin whose `load()` raises MUST be logged at WARNING and skipped, never re-raised — third-party plugins MUST NOT be able to crash the framework on import.
+- Generated agents MUST ship production batteries (`Dockerfile`, `.dockerignore`, `Makefile`, `.env.example`, `tests/__init__.py`, `tests/test_agent.py`) so a developer can `forge generate-fast → make test → make validate → make eval-pack` on day one with no further setup.
+- The shared `tests/conftest.py` fixture surface (`tmp_agent_dir`, `memory_store`, `in_memory_store`, `static_planner`, `static_planning_model`, `mock_router`, `policy_gate`, `runtime_session`, `reset_plugin_cache`) is part of the contributor contract — fixture names and types MUST NOT change without a migration note.
 
 ## 4. Documentation Rules
 

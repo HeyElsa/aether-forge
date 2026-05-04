@@ -137,6 +137,37 @@ class MemoryPromotionResult:
 
 
 class MemoryStore(Protocol):
+    """Layer-3 typed memory backend (durable, per-agent).
+
+    Memory stores hold ``MemoryRecord`` rows scoped by agent, environment, and
+    sensitivity. Implementations must:
+
+    - apply the sensitivity ceiling and environment filter inside ``read``
+      (the runtime trusts the store, not the caller),
+    - upsert by ``memory_id`` in ``write`` (idempotent re-writes during
+      replay),
+    - never mutate a record in place during ``promote`` — issue a new
+      ``memory_id`` with ``provenance_refs`` pointing back at the source so
+      the audit trail is preserved.
+
+    Records that fail secret-pattern scans (see
+    :func:`memory._find_secret_like_paths`) are rejected before reaching the
+    store; implementations do not need to repeat that check.
+
+    Minimum viable implementation::
+
+        class DictStore:
+            def __init__(self) -> None: self._rows: dict[str, MemoryRecord] = {}
+            def read(self, q): return [r for r in self._rows.values()
+                                       if r.scope == q.scope]
+            def write(self, r): self._rows[r.memory_id] = r; return r
+            def promote(self, req): ...  # see InMemoryMemoryStore
+
+    Built-in implementations: :class:`aether_forge.InMemoryMemoryStore`
+    (testing) and :class:`aether_forge.SqliteMemoryStore` (production,
+    optional Fernet encryption).
+    """
+
     def read(self, query: MemoryQuery) -> list[MemoryRecord]: ...
 
     def write(self, record: MemoryRecord) -> MemoryRecord: ...

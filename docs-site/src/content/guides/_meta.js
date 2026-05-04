@@ -5,4 +5,5 @@ export default {
   "multi-agent": "Multi-Agent Teams",
   "accept-payments": "Accept Payments",
   "go-onchain": "Go On-Chain",
+  "extending": "Extending the Framework",
 };

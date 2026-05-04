@@ -1,0 +1,168 @@
+# Two-Agent Marketplace
+
+A working end-to-end example: **Buyer agent pays Oracle agent for ETH price data on Base mainnet.** Real USDC moves between two wallets. Live terminal dashboard shows the whole thing.
+
+<video src="/videos/29-two-agent-marketplace.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
+## What it demonstrates
+
+| Capability | How |
+|---|---|
+| **LLM-driven planner** | Each agent runs Claude Sonnet 4 via OpenRouter, deciding actions per tick |
+| **Real wallets** | OWS wallets on 9 chains, encrypted at rest |
+| **Policy gate** | Buyer's `policy-bundle.json` opts into direct transfers with a recipient whitelist |
+| **Real on-chain payment** | `execute_payment(method="transfer")` signs via OWS, broadcasts on Base mainnet |
+| **Live observability** | Terminal dashboard scrapes `/status`, `/ready`, on-chain balances, audit logs |
+| **A2A communication** | Both agents expose Agent Cards on different ports |
+
+## Architecture
+
+```
+              ┌────────────────────────────────────────┐
+              │   Terminal Dashboard (refresh 2s)      │
+              │   /status + /ready + balances + audit  │
+              └──────┬──────────────────────┬──────────┘
+                     │                      │
+           ┌─────────▼─────────┐  ┌────────▼─────────────┐
+           │ BUYER             │  │ ORACLE               │
+           │ A2A :9001         │  │ A2A :9002            │
+           │ Health :8001      │  │ Health :8002         │
+           │ Wallet 0x859F...  │  │ Wallet 0x6dA3...     │
+           └────────┬──────────┘  └──────┬───────────────┘
+                    │ x402 / direct transfer  │
+                    └─────────────────────────►│
+                                                ▼
+                                       Base mainnet (USDC)
+```
+
+## Files
+
+The full example lives at [`examples/two-agent-marketplace/`](https://github.com/HeyElsa/aether-forge/tree/main/examples/two-agent-marketplace) in the repo:
+
+| File | Purpose |
+|---|---|
+| `setup.sh` | Generates buyer + oracle, patches buyer policy to allow transfers to oracle |
+| `run.sh` | Launches both agents (paper mode) + dashboard |
+| `terminal-dashboard.py` | Pure-stdlib ANSI live dashboard |
+| `dashboard.py` | Flask web alternative |
+| `pay-once.py` | Triggers one A→B real-money transfer |
+| `README.md` | Quick start + architecture diagram |
+
+## Quick start
+
+```bash
+# Clone the repo
+git clone https://github.com/HeyElsa/aether-forge.git
+cd aether-forge/examples/two-agent-marketplace
+
+# Set up your LLM + Aether Forge install
+export OPENROUTER_API_KEY=sk-or-v1-...
+pip install -e ../..
+
+# Generate both agents
+./setup.sh
+```
+
+Output:
+```
+=== Generating Agent B (oracle) ===
+  Wallet: 0x6dA34D1a14bA78865064A91C911Dda8284AaA7cb
+
+=== Generating Agent A (buyer) ===
+  Wallet: 0x859F8647b620A6680b1eD4fa56A2405809Bcd018
+
+Patching buyer policy: allow transfers to oracle
+```
+
+## Fund the buyer
+
+Send small amounts to the buyer wallet:
+- **~$0.50 in ETH on Base** (for gas — covers ~150 transactions)
+- **~$0.10 in USDC on Base** (for actual payments)
+
+Total cost to fully run this demo: under $1.
+
+## Run
+
+```bash
+./run.sh
+```
+
+This launches:
+- Oracle agent on port 9002 (A2A) and 8002 (health)
+- Buyer agent on port 9001 (A2A) and 8001 (health)
+- Terminal dashboard
+
+## Dashboard
+
+```
+TWO-AGENT MARKETPLACE — live dashboard
+─────────────────────────────────────────────────────
+● BUYER       running           ● ORACLE       running
+addr  0x859F8647...              addr  0x6dA34D1a...
+ticks 5                          ticks 5
+ETH   0.000300 ETH               ETH   0.000000 ETH
+USDC  $1.9990 USDC               USDC  $0.0000 USDC
+ready ok                         ready ok
+
+── recent audit events ──
+
+15:54:23  BUYER    payment_settled         $0.001   0x8b2c0df7ef58...
+15:54:17  BUYER    payment_attempted       $0.001
+```
+
+## Trigger a payment
+
+```bash
+python3 pay-once.py
+```
+
+Output:
+```
+Buyer  → Oracle: $0.001 USDC on Base mainnet
+  to: 0x6dA34D1a14bA78865064A91C911Dda8284AaA7cb
+
+  success:  True
+  amount:   $0.001
+  tx_hash:  0x8b2c0df7ef585da602304a42219ca3c89d380c8865b149eaff7d2d9ce708dbf1
+
+  basescan: https://basescan.org/tx/0x8b2c0df7...
+```
+
+After ~10 seconds the dashboard will reflect the new balances:
+- Buyer USDC: `$1.998`  (↓ -$0.001)
+- Oracle USDC: `$0.001` (↑ +$0.001)
+
+## Policy gate (the safety part)
+
+The buyer's `policy-bundle.json` was patched by `setup.sh` to include:
+
+```json
+{
+  "agentPayments": {
+    "directTransferEnabled": true,
+    "maxPerTransferUsd": 0.10,
+    "allowedRecipients": ["0x6dA34D1a14bA78865064A91C911Dda8284AaA7cb"],
+    "allowedChains": ["base"]
+  }
+}
+```
+
+This means the buyer can ONLY:
+- Send transfers (no escrow, no other channels)
+- Up to $0.10 per transfer
+- Only to the oracle's address (no random recipients)
+- Only on Base (no Ethereum, no Polygon)
+
+Try editing `pay-once.py` to send to a different address — it'll be rejected:
+
+```
+ERROR: policy denied: recipient 0xDEADBEEF... not in policy.allowedRecipients
+```
+
+## What to try next
+
+- **Loop it**: change `pay-once.py` into `for i in range(10)` to fire 10 payments
+- **Make it autonomous**: write a `strategy.md` for the buyer that decides when to pay (instead of manual triggers). See [Custom Agent guide](/docs/guides/custom-agent).
+- **Add a third agent**: a `risk-engine` that buyer queries before paying. See [Multi-Agent Teams](/docs/guides/multi-agent).
+- **Swap the LLM**: change `--planner-mode` to `ollama` for free local inference (slower but $0).

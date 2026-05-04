@@ -1,5 +1,57 @@
 # PRD Changelog
 
+## v0.20.0 - 2026-05-03
+
+DX & extensibility release. Public extension Protocols, plugin discovery via `importlib.metadata` entry points, generator emits production batteries (Makefile, .env.example, tests/test_agent.py, .dockerignore), shared `tests/conftest.py` fixtures, ARCHITECTURE.md, extending.mdx guide, mypy + pre-commit. For users with no third-party plugins: zero behavior change.
+
+### Public extension Protocol surface
+- `Planner`, `ExecutionRouter`, `PlanningModel`, `MemoryStore`, `DataSource` (and `Subscription`, `DataResult`, `DataRouter`, `DataSourceCost`, supporting concrete sources) are now exported from `aether_forge` with `__all__` discipline
+- Each Protocol gets a contract docstring: one-paragraph summary, canonical method signature, 5-line minimum-viable example, pointer to in-tree reference impl
+- `StaticPlanningModel` also exported for deterministic planner testing
+
+### Plugin discovery (`importlib.metadata`)
+- New `src/aether_forge/plugins.py` — cached lazy entry-point discovery
+- 4 entry-point groups in `pyproject.toml`: `aether_forge.{planners,execution_routers,data_sources,skill_registries}`
+- `config.py:build_planner_factory` falls back to `aether_forge.planners` lookup when `mode` doesn't match a built-in
+- `skills.py:get_registries()` merges built-in `REGISTRIES` with `aether_forge.skill_registries` plugins
+- A failing plugin `load()` is logged and skipped; **never** raised — third-party plugins cannot crash the framework
+- Tests: `tests/test_plugins.py` (5 cases including failure-skip and cache behavior)
+
+### Generator batteries
+- `forge generate-fast` now emits `.dockerignore` (excludes `.env`, `.ows/`, `replays/`, `memory.db`, `knowledge/`)
+- `Makefile` with: `validate`, `eval-pack`, `test`, `run-{paper,sandbox,live}` (live gated by `CONFIRM_LIVE=yes`), `doctor`, `halt`, `resume`, `docker-build`, `docker-run`, `clean`
+- `.env.example` covering every env var an agent might read at runtime
+- `tests/__init__.py` + `tests/test_agent.py` — green smoke test on day one (artifacts validate + scenario pack meets expectations) using offline `HeuristicPlanner`, no LLM key required
+- Fixed: generator-emitted `Makefile` previously called `forge doctor ./aether-forge.json` which fails — `forge doctor` doesn't take a positional config arg
+
+### Documentation
+- New `docs-site/src/content/guides/extending.mdx` — worked examples for custom Planner (xAI), DataSource, MemoryStore, skill registry, and PyPI plugin distribution. Linked from README + CONTRIBUTING + `_meta.js`
+- New `ARCHITECTURE.md` at repo root — runtime tick lifecycle, four-layer memory, policy gate sequence, payment channels, "where to change things" table
+- New `docs/README.md` index — every topic mapped to its authoritative source
+- `cli.mdx` adds 12 missing commands (`artifact-{compat,migration-plan}`, `scaffold-{run,policy-sync,live-status}`, `resume-replay`, `x402-call`, `models-list`, `config-validate`, `init`, `wallet-info`, `completions`, `eval`)
+- `configuration.mdx` adds the precedence chain (CLI > env > config > defaults), all `AETHER_FORGE_*` env vars, plugin-mode resolution pointer
+
+### Contributor tooling
+- `mypy` added to `[dev]` extras + `[tool.mypy]` strict config on the public-API surface (`__init__`, `runtime`, `planner`, `policy`, `memory`, `data_layer`, `plugins`); CI step is `continue-on-error: true` (informational)
+- `.pre-commit-config.yaml` — ruff format/check, file-hygiene hooks, fast `pytest --collect-only`. `CONTRIBUTING.md` documents `pre-commit install`
+- New `tests/conftest.py` with shared fixtures (`tmp_agent_dir`, `memory_store`, `static_planner`, `static_planning_model`, `mock_router`, `policy_gate`, `runtime_session`, `reset_plugin_cache`); `tests/test_conftest_fixtures.py` demonstrates each (9 tests)
+
+### Verification
+- 105 targeted tests + 387 broader sanity tests pass (full suite minus 10 known-network-bound integration files)
+- Public API import smoke: 15 newly-exported symbols resolve
+- Generated agent end-to-end: `forge generate-fast` → `make test` → `make validate` → `make eval-pack` → 3-tick runtime — all green
+- 0 fixture-name collisions across the 47 test files
+- ruff lint clean
+
+### Non-Negotiables added (AGENTS.md §3)
+- Extension Protocols MUST be exported with contract docstrings
+- Plugin discovery MUST log+skip failures, never raise
+- Generated agents MUST ship production batteries (Dockerfile, Makefile, .env.example, tests/test_agent.py)
+- The shared `conftest.py` fixture surface is contributor contract — names + types not changeable without migration
+
+### Files
+- 23 files: 15 modified + 8 new (+1916 / −7 lines)
+
 ## v0.19.0 - 2026-04-16
 
 Real on-chain agent-to-agent USDC transfers (autonomous, policy-gated). Production observability fixes. Two-agent marketplace example.

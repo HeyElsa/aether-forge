@@ -90,7 +90,39 @@ class Subscription(Protocol):
 # ---------------------------------------------------------------------------
 
 class DataSource(ABC):
-    """Abstract base for all data sources."""
+    """Pluggable backend for the :class:`DataRouter` capability fan-out.
+
+    A data source advertises which capabilities it can serve via
+    :meth:`supports` and delivers results via :meth:`fetch`. The router calls
+    sources in order and stops at the first one whose ``supports`` returns
+    ``True`` — implement the cheapest / most authoritative source first.
+    Sources may also offer streaming via :meth:`subscribe` (default: not
+    supported, returns ``None``).
+
+    Implementations should record cost (free, x402, paid API), fetch count,
+    and error count on the base attributes — :meth:`status` returns those for
+    observability.
+
+    Minimum viable implementation::
+
+        class StaticPriceSource(DataSource):
+            def __init__(self, prices: dict[str, float]) -> None:
+                super().__init__("static")
+                self._prices = prices
+            def supports(self, capability: str) -> bool:
+                return capability == "spot-price"
+            def fetch(self, capability: str, **params) -> DataResult:
+                self.fetch_count += 1
+                symbol = params["symbol"]
+                return DataResult(success=True, data={"price": self._prices[symbol]},
+                                  source="static", capability=capability,
+                                  cost=DataSourceCost(amount_usd=0.0, paid=False))
+
+    Built-in implementations: :class:`HTTPDataSource` (free REST APIs),
+    :class:`X402DataSource` (HTTP 402 micropayments),
+    :class:`WebSocketDataSource`, :class:`McpDataSource` (Model Context
+    Protocol), :class:`MockDataSource` (testing).
+    """
 
     def __init__(self, name: str) -> None:
         self.name = name

@@ -15,6 +15,29 @@ from .runtime import RuntimeSession, StepKind, StepProposal
 
 
 class PlanningModel(Protocol):
+    """A text-completion backend used by :class:`PromptDrivenPlanner`.
+
+    The runtime hands the model a fully assembled planning prompt (objective,
+    environment, declared capabilities, runtime state, memory, knowledge) and
+    expects raw text back. The text must contain a JSON object with a
+    ``"steps"`` array — the planner parses, validates, and translates it into
+    typed ``StepProposal`` objects. Models that emit invalid or undeclared
+    capabilities are tolerated: the planner falls back to a heuristic plan.
+
+    Minimum viable implementation::
+
+        class StaticModel:
+            def __init__(self, response: str) -> None:
+                self.response = response
+            def complete(self, planning_prompt: str) -> str:
+                return self.response
+
+    Built-in implementations: :class:`aether_forge.AnthropicPlanningModel`,
+    :class:`aether_forge.OpenAICompatiblePlanningModel` (covers OpenAI,
+    Ollama, OpenRouter, and any compatible endpoint), and
+    :class:`aether_forge.GeminiPlanningModel`.
+    """
+
     def complete(self, planning_prompt: str) -> str: ...
 
 

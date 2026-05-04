@@ -2,7 +2,29 @@
 
 User-facing changes to Aether Forge. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] — 2026-04-16
+## [Unreleased] — 2026-05-03 — DX & extensibility (v0.20.0 PRD)
+
+### Added
+- **Public extension Protocols** — `Planner`, `ExecutionRouter`, `PlanningModel`, `MemoryStore`, `DataSource` (and `Subscription`, `DataResult`, `DataRouter`, `DataSourceCost`, `HTTPDataSource`, `X402DataSource`, `WebSocketDataSource`, `McpDataSource`, `MockDataSource`, `StaticPlanningModel`) are now exported from `aether_forge` with contract docstrings (one-paragraph summary, canonical signature, 5-line minimum impl, pointer to in-tree reference).
+- **Plugin discovery via `importlib.metadata`** — new `aether_forge/plugins.py` (cached, lazy). Four entry-point groups in `pyproject.toml`: `aether_forge.{planners,execution_routers,data_sources,skill_registries}`. Wired into `config.build_planner_factory` (mode fallback) and `skills.get_registries()`. Plugin failures are logged + skipped, never raised.
+- **Generator batteries** — `forge generate-fast` now also emits `.dockerignore`, `Makefile` (validate / eval-pack / test / run-paper / run-sandbox / run-live with `CONFIRM_LIVE=yes` guard / doctor / halt / resume / docker-build / docker-run / clean), `.env.example`, and `tests/test_agent.py` (offline-`HeuristicPlanner` smoke test that validates artifacts + asserts every scenario meets its expected outcome — green on day one, no LLM key needed).
+- **Shared test fixtures** — `tests/conftest.py` with `tmp_agent_dir`, `memory_store`, `in_memory_store`, `static_planner`, `static_planning_model`, `mock_router`, `policy_gate`, `runtime_session`, `reset_plugin_cache`. Demonstrated by `tests/test_conftest_fixtures.py`.
+- **`docs-site/.../guides/extending.mdx`** — worked examples for custom Planner (xAI), DataSource, MemoryStore, skill registry, and PyPI plugin distribution. Linked from README + CONTRIBUTING + `_meta.js`.
+- **`ARCHITECTURE.md`** at repo root — runtime tick lifecycle, four-layer memory, policy gate sequence, payment channels, "where to change things" table.
+- **`docs/README.md`** — index mapping every topic to its authoritative source.
+- **CLI reference gap-fill** — added 12 commands to `cli.mdx` (`artifact-{compat,migration-plan}`, `scaffold-{run,policy-sync,live-status}`, `resume-replay`, `x402-call`, `models-list`, `config-validate`, `init`, `wallet-info`, `completions`, `eval`).
+- **Configuration reference walkthrough** — `configuration.mdx` adds the precedence chain (CLI > env > config > defaults), all `AETHER_FORGE_*` env vars, and a pointer to plugin-mode resolution.
+- **mypy** — `[tool.mypy]` strict on the public-API surface (`__init__`, `runtime`, `planner`, `policy`, `memory`, `data_layer`, `plugins`); CI step is `continue-on-error: true` (informational).
+- **pre-commit** — `.pre-commit-config.yaml` with `ruff format`/`ruff check`, file-hygiene hooks, and `pytest --collect-only`. `CONTRIBUTING.md` documents `pre-commit install`.
+
+### Fixed
+- Generator-emitted `Makefile`'s `doctor` target previously called `forge doctor ./aether-forge.json`, but `forge doctor` doesn't take a positional config arg. Now just runs `forge doctor`. CLI reference `forge doctor` example similarly corrected.
+
+### Notes
+- For existing users with no third-party plugins installed, behavior is unchanged. The new entry-point fallback only triggers when `mode` doesn't match a built-in; same `ValueError("Unsupported planner mode: …")` is raised if no matching plugin is found.
+- Pre-existing generated agents on disk are not modified; only newly-generated agents include the new templates.
+
+## [0.19.0] — 2026-04-16
 
 ### Added
 - **Direct USDC transfers wired end-to-end** — `agent_payments.execute_payment(method="transfer")` now signs via OWS and broadcasts to Base mainnet. Previously returned only the unsigned tx. Verified live: TX `0x8b2c0df7ef58...` moved $0.001 USDC between two agent wallets.

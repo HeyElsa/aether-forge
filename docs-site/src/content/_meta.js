@@ -5,6 +5,8 @@ export default {
   guides: "",
   "---features": { type: "separator", title: "Features" },
   features: "",
+  "---examples": { type: "separator", title: "Examples" },
+  examples: "",
   "---cookbook": { type: "separator", title: "Cookbook" },
   cookbook: "",
   "---reference": { type: "separator", title: "Reference" },

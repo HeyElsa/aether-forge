@@ -1,5 +1,7 @@
 # Python SDK
 
+<video src="/videos/32-python-sdk.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
 Aether Forge is fully importable. You can run agents, build prompts, query memory, and verify attestations from your own Python code without the CLI.
 
 ## Install
@@ -212,6 +214,51 @@ All public APIs use Python 3.12+ type hints. Your IDE (Pyright, mypy) gets full 
 from aether_forge.runtime import StepProposal, StepKind, ExecutionResult
 from aether_forge.policy import PolicyDecision
 ```
+
+## Extension Protocols
+
+Every major moving part is a Python `Protocol` (or ABC) you can implement.
+Each one is exported from the top-level `aether_forge` package with a
+contract docstring containing a one-paragraph summary, the canonical
+method signature, and a 5-line minimum-viable implementation. Inspect
+with `help(aether_forge.Planner)` or read the source.
+
+```python
+from aether_forge import (
+    Planner,            # propose_plan(session) -> list[StepProposal]
+    ExecutionRouter,    # execute(session, proposal, capability) -> ExecutionResult
+    PlanningModel,      # complete(prompt) -> str
+    MemoryStore,        # read / write / promote
+    DataSource,         # ABC with supports / fetch / subscribe
+    Subscription,       # stop(), active
+    SecretsProvider,    # get_secret / resolve_api_key
+    MarketDataVenue,    # get_price / get_candles
+)
+```
+
+Supporting types and concrete reference implementations are also
+exported:
+
+```python
+from aether_forge import (
+    # Planning model implementations
+    AnthropicPlanningModel, OpenAICompatiblePlanningModel,
+    GeminiPlanningModel, StaticPlanningModel,
+    # Data layer concrete sources + types
+    HTTPDataSource, X402DataSource, WebSocketDataSource,
+    McpDataSource, MockDataSource,
+    DataResult, DataRouter, DataSourceCost,
+    # Memory
+    InMemoryMemoryStore, SqliteMemoryStore,
+    # Execution
+    MockCryptoExecutionRouter,
+)
+```
+
+For full walkthroughs (custom planner, custom data source, custom
+memory store, PyPI plugin distribution), see the
+[Extending the Framework](/guides/extending) guide. Plugin discovery is
+documented in the [Configuration reference](/reference/configuration#custom-modes-via-plugins).
 
 ## Stable vs Experimental
 
