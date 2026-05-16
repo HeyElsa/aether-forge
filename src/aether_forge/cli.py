@@ -500,18 +500,29 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         planner_model = getattr(args, "planner_model", None)
         planner_base_url = getattr(args, "planner_base_url", None)
         planner_api_key_env = getattr(args, "planner_api_key_env", None)
+        planner_source = "explicit" if planner_mode else None
+        planner_detected_at: str | None = None
         if planner_mode is None:
             detected = _autodetect_planner()
             planner_mode = detected["mode"]
             planner_model = planner_model or detected.get("model")
             planner_base_url = planner_base_url or detected.get("base_url")
             planner_api_key_env = planner_api_key_env or detected.get("api_key_env")
+            planner_source = "autodetected"
+            planner_detected_at = datetime.now(UTC).isoformat()
+            origin = detected.get("source", "?")
             print(
-                f"[planner] auto-detected: mode={planner_mode}"
+                f"[planner] auto-detected ({origin}): mode={planner_mode}"
                 + (f" model={planner_model}" if planner_model else "")
                 + (f" baseUrl={planner_base_url}" if planner_base_url else "")
                 + (f" apiKeyEnv={planner_api_key_env}" if planner_api_key_env else "")
             )
+            if planner_mode == "heuristic":
+                print(
+                    "[planner] WARNING: heuristic fallback selected — no LLM is configured. "
+                    "Set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY, "
+                    "or run a local Ollama daemon, before generating a production agent."
+                )
 
         request = FastGenerateRequest(
             name=args.name,
@@ -525,6 +536,8 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
             planner_model=planner_model,
             planner_base_url=planner_base_url,
             planner_api_key_env=planner_api_key_env,
+            planner_source=planner_source,
+            planner_detected_at=planner_detected_at,
         )
         generated = generate_fast_artifact_set(request)
         if generated.agent_summary:
@@ -1543,28 +1556,49 @@ def main_cli() -> None:
 def _autodetect_planner() -> dict[str, str | None]:
     """Pick the best planner available on this machine for a freshly built agent.
 
-    Aether Forge agents are LLM-driven by design. Try, in order:
-      1. Local Ollama daemon — if reachable AND has at least one model, use it.
-         No API key, no cost, no network round-trip beyond localhost.
-      2. Anthropic — if ``ANTHROPIC_API_KEY`` is set.
-      3. OpenAI — if ``OPENAI_API_KEY`` is set.
-      4. Gemini — if ``GOOGLE_API_KEY`` or ``GEMINI_API_KEY`` is set.
-      5. OpenRouter — if ``OPENROUTER_API_KEY`` is set.
-      6. Heuristic fallback — last resort, no LLM, no real planning.
+    Aether Forge agents are LLM-driven by design. Resolution order (Sprint 1.2,
+    FP-2 fix — was Ollama-first):
+
+      1. Cloud provider via env var — Anthropic, OpenAI, Gemini, OpenRouter.
+         If ANY cloud key is set, cloud wins. Production deploys with a host
+         Ollama daemon no longer silently get picked up.
+      2. Local Ollama daemon — only when NO cloud key is set, and only if
+         reachable AND has at least one model. Preserves the local-dev
+         convenience case.
+      3. Heuristic fallback — last resort, no LLM, no real planning.
+
+    Force Ollama even when cloud keys exist by setting
+    ``AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`` or by passing
+    ``--planner-mode ollama`` explicitly (the latter bypasses this function).
+
+    Returns a dict with ``mode``, ``model``, ``base_url``, ``api_key_env``, and
+    a ``source`` discriminant ("cloud", "ollama", "heuristic") so callers can
+    stamp the choice into the generated config for later audit.
     """
     import json as _json
     import os as _os
     from urllib import error as _urllib_error
     from urllib import request as _urllib_request
 
-    # 1. Local Ollama
-    base_url = _os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
-    try:
-        req = _urllib_request.Request(f"{base_url}/api/tags")
-        with _urllib_request.urlopen(req, timeout=2) as resp:  # noqa: S310
-            payload = _json.loads(resp.read().decode("utf8"))
-            models = payload.get("models") or []
-            if models:
+    allow_ollama_override = _is_truthy_env("AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT")
+    cloud_chain = [
+        ("anthropic", "ANTHROPIC_API_KEY", "claude-sonnet-4-5"),
+        ("openai", "OPENAI_API_KEY", "gpt-4o"),
+        ("gemini", "GOOGLE_API_KEY", "gemini-2.5-flash"),
+        ("gemini", "GEMINI_API_KEY", "gemini-2.5-flash"),
+        ("openrouter", "OPENROUTER_API_KEY", "anthropic/claude-sonnet-4.5"),
+    ]
+    cloud_keys_present = any(_os.getenv(env_var) for _, env_var, _ in cloud_chain)
+
+    def _try_ollama() -> dict[str, str | None] | None:
+        base_url = _os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
+        try:
+            req = _urllib_request.Request(f"{base_url}/api/tags")
+            with _urllib_request.urlopen(req, timeout=2) as resp:  # noqa: S310
+                payload = _json.loads(resp.read().decode("utf8"))
+                models = payload.get("models") or []
+                if not models:
+                    return None
                 # Prefer a Gemma model if present, otherwise first available.
                 preferred = next(
                     (m["name"] for m in models if "gemma" in m.get("name", "").lower()),
@@ -1575,18 +1609,18 @@ def _autodetect_planner() -> dict[str, str | None]:
                     "model": preferred,
                     "base_url": base_url,
                     "api_key_env": None,
+                    "source": "ollama",
                 }
-    except (_urllib_error.URLError, _urllib_error.HTTPError, TimeoutError, OSError, ValueError):
-        pass
+        except (_urllib_error.URLError, _urllib_error.HTTPError, TimeoutError, OSError, ValueError):
+            return None
 
-    # 2-5. Cloud provider via env var
-    cloud_chain = [
-        ("anthropic", "ANTHROPIC_API_KEY", "claude-sonnet-4-5"),
-        ("openai", "OPENAI_API_KEY", "gpt-4o"),
-        ("gemini", "GOOGLE_API_KEY", "gemini-2.5-flash"),
-        ("gemini", "GEMINI_API_KEY", "gemini-2.5-flash"),
-        ("openrouter", "OPENROUTER_API_KEY", "anthropic/claude-sonnet-4.5"),
-    ]
+    # 0. Explicit override — Ollama wins even with cloud keys present.
+    if allow_ollama_override:
+        ollama = _try_ollama()
+        if ollama is not None:
+            return ollama
+
+    # 1. Cloud provider — first cloud key wins (Anthropic → OpenAI → Gemini → OpenRouter).
     for mode, env_var, default_model in cloud_chain:
         if _os.getenv(env_var):
             return {
@@ -1594,15 +1628,33 @@ def _autodetect_planner() -> dict[str, str | None]:
                 "model": default_model,
                 "base_url": None,
                 "api_key_env": env_var,
+                "source": "cloud",
             }
 
-    # 6. Heuristic fallback
+    # 2. Ollama as fallback only when no cloud key is present.
+    if not cloud_keys_present:
+        ollama = _try_ollama()
+        if ollama is not None:
+            return ollama
+
+    # 3. Heuristic fallback.
     return {
         "mode": "heuristic",
         "model": None,
         "base_url": None,
         "api_key_env": None,
+        "source": "heuristic",
     }
+
+
+def _is_truthy_env(name: str) -> bool:
+    """Common env-flag predicate: ``"1"``, ``"true"``, ``"yes"``, ``"on"`` (case-insensitive)."""
+    import os as _os
+
+    value = _os.getenv(name)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _add_planner_options(parser: argparse.ArgumentParser) -> None:

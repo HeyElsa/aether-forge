@@ -40,10 +40,75 @@ def run_doctor_checks(*, config_path: Path | None = None, verbose: bool = False)
     results.append(_check_mempalace_knowledge_layer())
     if config_path:
         results.append(_check_config_file(config_path))
+        results.append(_check_planner_source(config_path))
         # Probe any MCP servers declared in the config file. Informational —
         # a failed MCP probe does not fail the overall doctor check.
         results.extend(_check_mcp_servers(config_path))
     return results
+
+
+def _check_planner_source(config_path: Path) -> CheckResult:
+    """Surface ``planner.source`` from aether-forge.json (Sprint 1.2 / FP-2).
+
+    A generated agent stamps either ``"explicit"`` (operator passed
+    ``--planner-mode`` or set ``AETHER_FORGE_PLANNER_MODE``) or
+    ``"autodetected"`` (cli._autodetect_planner picked it). Production
+    deploys should prefer "explicit" so a host Ollama or cloud-key change
+    never silently re-routes the planner. The Sprint 2 deployment-profile
+    work upgrades this to a fail-state when profile=production; for now
+    we only emit an advisory.
+    """
+    if not config_path.exists():
+        return CheckResult(
+            name="Planner source",
+            passed=True,
+            message="No config file — skipping",
+            optional=True,
+        )
+    try:
+        data = json.loads(config_path.read_text(encoding="utf8"))
+    except (json.JSONDecodeError, OSError):
+        return CheckResult(
+            name="Planner source",
+            passed=True,
+            message="Could not parse config (see Config file check)",
+            optional=True,
+        )
+    planner = data.get("planner") if isinstance(data, dict) else None
+    if not isinstance(planner, dict):
+        return CheckResult(
+            name="Planner source",
+            passed=True,
+            message="No planner block declared (heuristic fallback at runtime)",
+            optional=True,
+        )
+    source = planner.get("source")
+    mode = planner.get("mode", "?")
+    detected_at = planner.get("detectedAt")
+    if source == "explicit":
+        return CheckResult(
+            name="Planner source",
+            passed=True,
+            message=f"explicit (mode={mode}) — production-safe",
+        )
+    if source == "autodetected":
+        suffix = f" at {detected_at}" if detected_at else ""
+        return CheckResult(
+            name="Planner source",
+            passed=True,
+            message=(
+                f"autodetected (mode={mode}){suffix}. Set AETHER_FORGE_PLANNER_MODE "
+                f"or --planner-mode to pin this for production."
+            ),
+            optional=True,
+        )
+    # Older agents predate this field — informational only.
+    return CheckResult(
+        name="Planner source",
+        passed=True,
+        message=f"unstamped (mode={mode}). Regenerate to record planner provenance.",
+        optional=True,
+    )
 
 
 def _check_python_version() -> CheckResult:

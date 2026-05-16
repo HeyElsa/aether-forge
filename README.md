@@ -123,10 +123,10 @@ Every check is a functional round-trip, not just an import test. The doctor veri
 
 ```bash
 # Fast mode — instant scaffold. Auto-detects the best LLM planner on your
-# machine (Ollama → Anthropic → OpenAI → Gemini → OpenRouter → heuristic)
+# machine (cloud keys → Ollama-fallback → heuristic; v0.21.0+ — was Ollama-first)
 # and bakes it into the generated agent's aether-forge.json. No flags needed.
 forge generate-fast --name "My Agent" --idea "your idea" --output ./my-agent
-# [planner] auto-detected: mode=ollama model=gemma4:latest baseUrl=http://localhost:11434
+# [planner] auto-detected (cloud): mode=anthropic model=claude-sonnet-4-5 apiKeyEnv=ANTHROPIC_API_KEY
 
 # Slow mode — autoresearch refinement
 forge generate-slow --name "My Agent" --idea "your idea" --output ./my-agent --max-iterations 5
@@ -693,20 +693,38 @@ The `mcp_servers:` block is optional — declare one entry per [Model Context Pr
 
 ### LLM Provider Setup
 
-**Aether Forge agents are LLM-driven by default.** `forge generate-fast` auto-detects the best planner on the host machine and bakes the choice into the generated agent's `aether-forge.json`. The probe order is:
+**Aether Forge agents are LLM-driven by default.** `forge generate-fast` auto-detects the best planner on the host machine and bakes the choice into the generated agent's `aether-forge.json`. The probe order is (changed in v0.21.0 — cloud now wins over Ollama by default):
 
-1. **Local Ollama** at `http://localhost:11434` — preferred when present (free, fast, no key, no network). Auto-picks a Gemma model if one is pulled.
+1. **`AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`** — explicit override; Ollama wins even when a cloud key is present (escape hatch for local devs whose shell carries a cloud key from another project).
 2. **`ANTHROPIC_API_KEY`** → Claude Sonnet 4.5
 3. **`OPENAI_API_KEY`** → GPT-4o
 4. **`GOOGLE_API_KEY` / `GEMINI_API_KEY`** → Gemini 2.5 Flash
 5. **`OPENROUTER_API_KEY`** → Claude Sonnet 4.5 via OpenRouter
-6. **`heuristic`** fallback — labeled, not silent. Only used when nothing above is available.
+6. **Local Ollama** at `http://localhost:11434` — only when no cloud key is set (local-dev convenience). Auto-picks a Gemma model if one is pulled.
+7. **`heuristic`** fallback — labeled, not silent. Only used when nothing above is available; `forge generate-fast` emits a `[planner] WARNING:` line in this case.
 
-The auto-detected choice is logged at generation time:
+> Why the change? Before v0.21.0, Ollama was probed first — a production host with both a cloud key and a stray Ollama daemon silently got Ollama. The new order makes production deploys deterministic. To force Ollama with a cloud key present, set `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`.
+
+The auto-detected choice is logged at generation time and stamped into `aether-forge.json` for audit:
 
 ```
-[planner] auto-detected: mode=ollama model=gemma4:latest baseUrl=http://localhost:11434
+[planner] auto-detected (cloud): mode=anthropic model=claude-sonnet-4-5 apiKeyEnv=ANTHROPIC_API_KEY
 ```
+
+```jsonc
+// aether-forge.json (excerpt)
+{
+  "planner": {
+    "mode": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "source": "autodetected",                 // or "explicit" when --planner-mode is passed
+    "detectedAt": "2026-05-16T18:00:00+00:00"
+  }
+}
+```
+
+Run `forge doctor` against the generated config to surface an advisory when the planner was autodetected — Sprint 2 will upgrade this to a hard fail when `deploymentProfile: production`.
 
 The full provider table:
 
@@ -756,6 +774,7 @@ forge generate-slow --name "My Agent" --idea "your idea" --output ./agent \
 | `AETHER_FORGE_PLANNER_BASE_URL` | Default base URL |
 | `AETHER_FORGE_PLANNER_API_KEY` | API key (direct) |
 | `AETHER_FORGE_PLANNER_API_KEY_ENV` | Name of env var holding the API key (indirect) |
+| `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT` | When `1`/`true`/`yes`/`on`, force Ollama probe ahead of any cloud key (escape hatch — v0.21.0+) |
 | `AETHER_FORGE_CRYPTO_ROUTER` | Default crypto router backend |
 
 ### Memory Store

@@ -16,6 +16,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from .memory import (
+    MEMORY_RECORD_SCHEMA_VERSION,
     SENSITIVITY_LEVELS,
     MemoryPromotionPolicy,
     MemoryPromotionRequest,
@@ -232,6 +233,14 @@ class SqliteMemoryStore:
                 "INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, ?)",
                 ("version", "1"),
             )
+            # Stamp the current MemoryRecord schema version (idempotent — pre-existing
+            # databases get the row populated on next open). Read back via
+            # ``memory_record_schema_version`` to know whether persisted rows match
+            # the current code; MigrationRunner will use this to gate transforms.
+            self._conn.execute(
+                "INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, ?)",
+                ("memory_record_schema_version", MEMORY_RECORD_SCHEMA_VERSION),
+            )
         # Check current version and run migrations if needed
         cursor = self._conn.execute("SELECT value FROM schema_meta WHERE key = 'version'")
         row = cursor.fetchone()
@@ -239,6 +248,18 @@ class SqliteMemoryStore:
         if current < _SCHEMA_VERSION:
             logger.info("Migrating memory database from schema v%d to v%d", current, _SCHEMA_VERSION)
             _run_migrations(self._conn, current, _SCHEMA_VERSION)
+
+    def memory_record_schema_version(self) -> str:
+        """Return the MemoryRecord schema version persisted in this database.
+
+        Falls back to the in-code constant if the meta row is somehow absent
+        (which should never happen after ``_init_schema``).
+        """
+        cursor = self._conn.execute(
+            "SELECT value FROM schema_meta WHERE key = 'memory_record_schema_version'"
+        )
+        row = cursor.fetchone()
+        return row["value"] if row else MEMORY_RECORD_SCHEMA_VERSION
 
     def read(self, query: MemoryQuery, *, include_expired: bool = False) -> list[MemoryRecord]:
         logger.debug("Memory query: scope=%s env=%s results=pending", query.scope, query.environment)

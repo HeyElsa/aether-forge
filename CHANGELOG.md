@@ -2,6 +2,29 @@
 
 User-facing changes to Aether Forge. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased] — 2026-05-16 — Resilience & schema hardening (v0.21.0 PRD)
+
+Sprint 1 of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.21.0.md`). Closes three silent-failure paths a real dev hit; preparation for Sprint 2 delegated-signer + migration-execution work.
+
+### Added
+- **Resilient planner JSON extraction (FP-1)** — new `_extract_json(response)` helper in `src/aether_forge/planner.py` recovers JSON from fenced code blocks (` ```json `), reasoning preambles (`Let me think… {…}`), trailing prose, double-fenced responses, and braces-inside-strings. Raises `PlannerParseError` on miss instead of silently returning `[]`.
+- **Observable parse-failure events** — `PromptDrivenPlanner.propose_plan()` now records a structured `last_planner_parse_failure` event on `session.session_state` whenever the heuristic fallback is triggered. Discriminator `kind` is one of `parse-failure`, `parse-exception`, `model-error`, or `empty-plan`. Response preview is truncated to 500 chars. Replays gain an audit trail for what previously failed silently.
+- **Provider retry envelope with jittered exponential backoff (FP-1)** — new `_with_retry(call, attempts, sleep)` helper in `src/aether_forge/models.py` retries `URLError`, `TimeoutError`, and HTTP `408/425/429/500/502/503/504`. Honors `Retry-After` on 429/503. All three providers (`OpenAICompatiblePlanningModel`, `AnthropicPlanningModel`, `GeminiPlanningModel`) gained a `retry_attempts: int = 3` dataclass field. Pass `retry_attempts=1` to opt out. Stdlib-only — no new dependency.
+- **Planner provenance audit fields (FP-2)** — `FastGenerateRequest` gained `planner_source` (`"explicit"` / `"autodetected"`) and `planner_detected_at` (ISO timestamp). `_project_config_json` stamps both into generated `aether-forge.json` as `planner.source` and `planner.detectedAt`. `forge doctor` surfaces them via new `_check_planner_source` advisory.
+- **`AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT` escape hatch (FP-2)** — set to `1`/`true`/`yes`/`on` to force Ollama probe ahead of any cloud key. Local devs whose shell carries a cloud key from another project keep their Ollama default. Default off.
+- **`MEMORY_RECORD_SCHEMA_VERSION` module constant (FP-4 prep)** — `src/aether_forge/memory.py` exposes `MEMORY_RECORD_SCHEMA_VERSION = "1.0.0"`; `MemoryRecord.schema_version` default and `MemoryRecord.from_dict` fallback both reference it so a future bump propagates atomically. `SqliteMemoryStore` stamps `('memory_record_schema_version', '1.0.0')` into `schema_meta` (idempotent — pre-existing DBs backfill on open) and exposes `memory_record_schema_version()` reader. Foundation for the Sprint 2 `MigrationRunner`.
+- **41 new tests** — `tests/test_planner_parse_resilience.py` (18: fenced, preamble, trailing prose, truncation, bare scalars, top-level array, observability events), `tests/test_models_retry.py` (11: helper unit + provider integration + 429 Retry-After + opt-out), `tests/test_planner_autodetect.py` (11: cloud-wins-over-Ollama regression, no-cloud-key fallback, override flag, no-probe contract, doctor advisory), `tests/test_memory_schema_version_stamp.py` (3: new DB stamps, legacy DB backfill, constant reference). Suite: 485 → 526 tests, all green.
+
+### Changed
+- **Auto-detect order reversed (FP-2, behavior change)** — `cli._autodetect_planner` now probes the cloud chain (`ANTHROPIC_API_KEY` → `OPENAI_API_KEY` → `GOOGLE_API_KEY` → `GEMINI_API_KEY` → `OPENROUTER_API_KEY`) before falling through to Ollama. Production deploys with both a cloud key and a host Ollama daemon no longer silently pick Ollama. Ollama remains the auto-pick when no cloud key is present (local-dev convenience preserved). Returned dict gains a `source` discriminant (`"cloud"|"ollama"|"heuristic"`).
+- `forge generate-fast` now prints a `[planner] WARNING:` line when heuristic fallback is selected because no LLM is reachable. Surfaces the silent "your agent has no LLM" case at the moment of decision.
+
+### Notes
+- **Back-compat**: Existing agents on disk are untouched. The new `planner.source` / `planner.detectedAt` fields are written only by new `forge generate-fast` runs; older configs that omit them are tagged "unstamped" by `forge doctor` (advisory, not failure).
+- **Local-dev impact**: A developer with cloud keys set in their shell who previously got Ollama at generation time will now get the cloud provider. Set `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1` to invert this. The exact provider used is now visible via `forge doctor` and the new `planner.source` field.
+- **Memory DB**: The `schema_meta` upsert is idempotent and additive — no migration required for v0.20.0 databases.
+- **No new dependencies**: `_with_retry` and `_extract_json` are stdlib-only. `time.sleep` is injectable in `_with_retry` so tests run instantly without real backoff.
+
 ## [Unreleased] — 2026-05-03 — DX & extensibility (v0.20.0 PRD)
 
 ### Added

@@ -96,14 +96,35 @@ Every agent's runtime behavior is controlled by `aether-forge.json` in the agent
 
 ### Auto-Detection Priority
 
-When no `planner.mode` is specified, Aether Forge probes in order:
+When no `planner.mode` is specified (and `AETHER_FORGE_PLANNER_MODE` is not set), Aether Forge probes in order (changed in v0.21.0 — cloud now wins over Ollama by default):
 
-1. Ollama at `localhost:11434` → if running, use it
+1. **`AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`** override — Ollama wins even when a cloud key is present.
 2. `ANTHROPIC_API_KEY` env var → Anthropic
 3. `OPENAI_API_KEY` env var → OpenAI
 4. `GEMINI_API_KEY` / `GOOGLE_API_KEY` → Google
 5. `OPENROUTER_API_KEY` → OpenRouter
-6. Heuristic fallback (no LLM)
+6. **Ollama** at `localhost:11434` — only when no cloud key is set (local-dev convenience).
+7. Heuristic fallback (no LLM) — emits a `[planner] WARNING:` line at generation time.
+
+**Why the change?** Before v0.21.0, Ollama was probed first. A production host with both a cloud key and a stray Ollama daemon silently picked Ollama. The new order makes production deploys deterministic. To force Ollama with a cloud key present, set `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`. Generated configs also stamp `planner.source` (`"explicit"` or `"autodetected"`) and `planner.detectedAt` so `forge doctor` and log greppers can audit the choice post-hoc.
+
+### Provenance Fields (v0.21.0+)
+
+Each generated `aether-forge.json` records how the planner was chosen:
+
+```jsonc
+{
+  "planner": {
+    "mode": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "source": "autodetected",                 // or "explicit" when --planner-mode was passed
+    "detectedAt": "2026-05-16T18:00:00+00:00"
+  }
+}
+```
+
+`forge doctor` surfaces three states: `explicit` → "production-safe"; `autodetected` → advisory to pin via `AETHER_FORGE_PLANNER_MODE` or `--planner-mode`; `unstamped` (legacy v0.20.0 configs) → advisory to regenerate.
 
 ### Custom modes via plugins
 

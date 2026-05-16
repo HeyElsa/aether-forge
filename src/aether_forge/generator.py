@@ -41,6 +41,13 @@ class FastGenerateRequest:
     planner_model: str | None = None
     planner_base_url: str | None = None
     planner_api_key_env: str | None = None
+    # Provenance fields stamped into aether-forge.json so `forge doctor` and
+    # log greppers can tell autodetected planners apart from explicit ones.
+    # ``planner_source`` ∈ {"autodetected", "explicit", None}; "autodetected"
+    # values originate from cli._autodetect_planner and should trigger a
+    # production-profile warning (see FP-2 deployment profiles, Sprint 2).
+    planner_source: str | None = None
+    planner_detected_at: str | None = None
 
 
 @dataclass(slots=True)
@@ -790,7 +797,13 @@ def _common_envelope(artifact_set_id: str, title: str) -> dict[str, Any]:
 def _project_config_json(request: FastGenerateRequest | None = None) -> str:
     """Build the per-agent aether-forge.json. Honors the planner choice from
     the operator so the generated agent's `forge run .` (no flags) resolves to
-    the same model that was selected at generation time."""
+    the same model that was selected at generation time.
+
+    Also stamps ``planner.source`` and ``planner.detectedAt`` when the choice
+    came from cli._autodetect_planner — gives ``forge doctor`` and future
+    deployment-profile checks (FP-2 Sprint 2) the audit trail to flag silent
+    autodetect picks in production.
+    """
     planner_block: dict[str, Any] = {
         "mode": (request.planner_mode if request else None) or "heuristic",
     }
@@ -800,6 +813,10 @@ def _project_config_json(request: FastGenerateRequest | None = None) -> str:
         planner_block["baseUrl"] = request.planner_base_url
     if request and request.planner_api_key_env:
         planner_block["apiKeyEnv"] = request.planner_api_key_env
+    if request and request.planner_source:
+        planner_block["source"] = request.planner_source
+    if request and request.planner_detected_at:
+        planner_block["detectedAt"] = request.planner_detected_at
 
     payload = {
         "planner": planner_block,

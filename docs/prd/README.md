@@ -4,8 +4,8 @@ This directory contains the canonical Product Requirements Documents for `Aether
 
 ## Current PRD
 
-- Current version: `v0.20.0`
-- Canonical file: `docs/prd/aether-forge-prd-v0.20.0.md`
+- Current version: `v0.21.0`
+- Canonical file: `docs/prd/aether-forge-prd-v0.21.0.md`
 - Change log: `docs/prd/CHANGELOG.md`
 
 Note: v0.13.0 changes (security hardening, x402 client, data layer, generated-router data layer wiring, real-money live mode validation) live in the changelog only — they were merged into v0.14.0 as inherited baseline rather than written as a standalone PRD file. v0.19.0 (real on-chain agent-to-agent USDC transfers, two-agent marketplace) also lives only in the changelog.
@@ -14,9 +14,10 @@ Note: v0.13.0 changes (security hardening, x402 client, data layer, generated-ro
 
 Use these files in this order:
 
-1. `docs/prd/aether-forge-prd-v0.20.0.md` (most current — DX & extensibility: public Protocols, plugin discovery, generator batteries, conftest, ARCHITECTURE.md)
-2. `docs/prd/aether-forge-prd-v0.18.0.md` (docs site, cloud LLM, branding, demo)
-3. `docs/prd/CHANGELOG.md` (v0.17.0 + v0.18.0 + v0.19.0 + v0.20.0 entries)
+1. `docs/prd/aether-forge-prd-v0.21.0.md` (most current — Resilience & schema hardening: planner JSON resilience, provider retry, auto-detect downgrade, MemoryRecord schema version pin; Sprint 1 of the dev-feedback retrospective)
+2. `docs/prd/aether-forge-prd-v0.20.0.md` (DX & extensibility: public Protocols, plugin discovery, generator batteries, conftest, ARCHITECTURE.md)
+3. `docs/prd/aether-forge-prd-v0.18.0.md` (docs site, cloud LLM, branding, demo)
+4. `docs/prd/CHANGELOG.md` (v0.17.0 + v0.18.0 + v0.19.0 + v0.20.0 + v0.21.0 entries)
 4. `docs/prd/aether-forge-prd-v0.15.0.md`
 4. `docs/prd/aether-forge-prd-v0.14.0.md`
 4. `docs/prd/aether-forge-prd-v0.12.0.md`

@@ -12,6 +12,12 @@ SECRET_LIKE_KEY = re.compile(r"(secret|token|private[-_]?key|seed[-_]?phrase|mne
 
 SENSITIVITY_LEVELS = ["public", "internal", "confidential", "restricted"]
 
+# Current schema version stamped on every persisted MemoryRecord. Bump on any
+# breaking change to MemoryRecord's serialized shape so MigrationRunner (see
+# plan FP-4) can route old rows through a transform. Persisted alongside the
+# DB schema version in storage.SqliteMemoryStore.schema_meta.
+MEMORY_RECORD_SCHEMA_VERSION = "1.0.0"
+
 _SENTINEL = object()
 
 
@@ -28,7 +34,7 @@ class MemoryRecord:
     sensitivity: str
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    schema_version: str = "1.0.0"
+    schema_version: str = MEMORY_RECORD_SCHEMA_VERSION
     artifact_type: str = "memory-record"
     owner_agent_id: str | None = None
     artifact_set_id: str | None = None
@@ -97,7 +103,7 @@ class MemoryRecord:
             sensitivity=data["sensitivity"],
             created_at=_parse_dt(_get("createdAt", "created_at")),  # type: ignore[arg-type]
             updated_at=_parse_dt(_get("updatedAt", "updated_at")),  # type: ignore[arg-type]
-            schema_version=_get("schemaVersion", "schema_version", "1.0.0"),
+            schema_version=_get("schemaVersion", "schema_version", MEMORY_RECORD_SCHEMA_VERSION),
             artifact_type=_get("artifactType", "artifact_type", "memory-record"),
             owner_agent_id=_get("ownerAgentId", "owner_agent_id", None),
             artifact_set_id=_get("artifactSetId", "artifact_set_id", None),
