@@ -1,5 +1,44 @@
 # PRD Changelog
 
+## v0.23.0 - 2026-05-16
+
+TypeScript SDK + cross-language conformance. Sprint 3 / closing sprint of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.23.0.md` for full context). Closes FP-5 (Python-only barrier) end-to-end and codifies FP-1 (planner resilience) as a language-neutral spec both reference implementations conform to. After this release, all five reported friction points are closed.
+
+### Language-agnostic planner-output spec (FP-1, cross-language)
+- New `docs/specs/planner-output.md` — normative behavioral spec at version 1.0.0. Covers recovery algorithm, observability contract, retry envelope, fixture protocol, versioning policy.
+- New `src/aether_forge/schemas/runtime/planner-output.schema.json` — structural contract pinning the JSON shape.
+- New `tests/fixtures/planner-outputs/` — 13 baseline conformance fixtures covering every recovery case in the spec.
+- New `tests/test_planner_output_spec.py` — Python parametrized conformance + two meta-tests (tripwire, shape).
+
+### @aether-forge/sdk TypeScript SDK v0.1.0 (FP-5)
+- New `sdk-ts/` sibling directory. Standalone package; no monorepo refactor.
+- Generated types for all 19 schemas (8 artifacts, 4 common, 7 runtime) bundled into a single committed `src/schemas/generated/index.ts`. Generator script uses `json-schema-to-typescript` with in-bundle JSON-Pointer rewrites for cross-schema `$ref`s.
+- Ajv-backed validators per artifact + composite `validateArtifactBundle` + `assertValid<T>`. Returns Result objects or throws `ValidationError`. All schemas pre-registered on the ajv instance for in-memory `$ref` resolution.
+- `parsePlannerOutput` — TS reference implementation of the spec. Pure stdlib function, no dependencies. Identical recovery behavior to Python `_extract_json`.
+- Protocol interfaces mirror the Python Protocols: `Planner`, `ExecutionRouter`, `MemoryStore`, `DataSource`, `PlanningModel`, `DelegatedSigner`, etc. Interface-only — no runtime tick loop in v0.1.0 (deliberately deferred).
+- Error hierarchy: `AetherForgeError` base + `PlannerParseError`, `ValidationError`, `SchemaCompatError`. Prototype-chain-preserving so `instanceof` works across bundler boundaries.
+- Build stack: tsup (esm + cjs + .d.ts), vitest, TypeScript 5.6, ajv 8, ajv-formats 3.
+
+### CI: schema conformance gate
+- New `.github/workflows/sdk-ts.yml` runs on `sdk-ts/**`, `src/aether_forge/schemas/**`, `tests/fixtures/planner-outputs/**`, or `docs/specs/planner-output.md` changes.
+- Pipeline: Bun setup → install (frozen lockfile) → regenerate schemas → `git diff --exit-code` (fails on drift) → typecheck → build → vitest (including cross-language conformance fixtures).
+
+### Non-Negotiables added (AGENTS.md §3)
+- The planner-output spec is the cross-language contract. Both reference implementations MUST conform to every shared fixture. Adding a fixture is the canonical way to extend the contract.
+- The committed `sdk-ts/src/schemas/generated/index.ts` MUST match a fresh regeneration; CI fails on drift.
+- The TS SDK MUST pre-register every schema on its ajv instance — no network fetches at runtime. New schemas under `src/aether_forge/schemas/` MUST also be wired into `sdk-ts/src/validate/index.ts`.
+- `parsePlannerOutput` MUST remain a pure function with zero dependencies beyond the stdlib.
+- v0.1.0 of `@aether-forge/sdk` ships ZERO runtime behavior beyond validation and the planner-output parser. Tick loop / policy gate / memory store implementations are explicitly out of scope.
+
+### Verification
+- Python suite: 620 → 635 tests (+15 from the parametrized fixture suite). All pass.
+- TypeScript suite: 0 → 37 tests (14 parser unit + 9 validator + 14 conformance). All pass.
+- Build: `bun run build` clean — dist/index.js (51.65 KB ESM), dist/index.cjs (54.34 KB CJS), dist/index.d.ts (29.21 KB).
+- Same 13 fixtures pass under both Python `_extract_json` and TS `parsePlannerOutput`.
+
+### Files
+- 20 new files, ~+2370 lines. No existing source files modified (the Python parser already conforms to the spec it now formalizes).
+
 ## v0.22.0 - 2026-05-16
 
 Spec-first the missing seams release. Sprint 2 of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.22.0.md` for full context). Ships four schema-first features the Sprint 1 hardening was preparation for: deployment-profile escalation in `forge doctor`, an executable `MigrationRunner` over the existing migration-contract schema, provider-native tool-use for Anthropic + OpenAI-compatible models, and the `DelegatedSigner` Protocol that codifies the hosted-marketplace trust model. Sprint 3 (TypeScript SDK) follows.

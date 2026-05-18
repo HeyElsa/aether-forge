@@ -4,8 +4,8 @@ This directory contains the canonical Product Requirements Documents for `Aether
 
 ## Current PRD
 
-- Current version: `v0.22.0`
-- Canonical file: `docs/prd/aether-forge-prd-v0.22.0.md`
+- Current version: `v0.23.0`
+- Canonical file: `docs/prd/aether-forge-prd-v0.23.0.md`
 - Change log: `docs/prd/CHANGELOG.md`
 
 Note: v0.13.0 changes (security hardening, x402 client, data layer, generated-router data layer wiring, real-money live mode validation) live in the changelog only — they were merged into v0.14.0 as inherited baseline rather than written as a standalone PRD file. v0.19.0 (real on-chain agent-to-agent USDC transfers, two-agent marketplace) also lives only in the changelog.
@@ -14,11 +14,12 @@ Note: v0.13.0 changes (security hardening, x402 client, data layer, generated-ro
 
 Use these files in this order:
 
-1. `docs/prd/aether-forge-prd-v0.22.0.md` (most current — Spec-first the missing seams: deployment profiles, MigrationRunner, provider-native tool-use, DelegatedSigner; Sprint 2 of the dev-feedback retrospective)
-2. `docs/prd/aether-forge-prd-v0.21.0.md` (Resilience & schema hardening: planner JSON resilience, provider retry, auto-detect downgrade, MemoryRecord schema version pin; Sprint 1 of the dev-feedback retrospective)
-3. `docs/prd/aether-forge-prd-v0.20.0.md` (DX & extensibility: public Protocols, plugin discovery, generator batteries, conftest, ARCHITECTURE.md)
-4. `docs/prd/aether-forge-prd-v0.18.0.md` (docs site, cloud LLM, branding, demo)
-5. `docs/prd/CHANGELOG.md` (v0.17.0 + v0.18.0 + v0.19.0 + v0.20.0 + v0.21.0 + v0.22.0 entries)
+1. `docs/prd/aether-forge-prd-v0.23.0.md` (most current — TypeScript SDK + cross-language conformance: language-agnostic planner-output spec, @aether-forge/sdk v0.1.0, shared fixtures; Sprint 3 / closing sprint of the dev-feedback retrospective. All five FPs closed end-to-end.)
+2. `docs/prd/aether-forge-prd-v0.22.0.md` (Spec-first the missing seams: deployment profiles, MigrationRunner, provider-native tool-use, DelegatedSigner; Sprint 2)
+3. `docs/prd/aether-forge-prd-v0.21.0.md` (Resilience & schema hardening: planner JSON resilience, provider retry, auto-detect downgrade, MemoryRecord schema version pin; Sprint 1)
+4. `docs/prd/aether-forge-prd-v0.20.0.md` (DX & extensibility: public Protocols, plugin discovery, generator batteries, conftest, ARCHITECTURE.md)
+5. `docs/prd/aether-forge-prd-v0.18.0.md` (docs site, cloud LLM, branding, demo)
+6. `docs/prd/CHANGELOG.md` (v0.17.0 → v0.23.0 entries)
 4. `docs/prd/aether-forge-prd-v0.15.0.md`
 4. `docs/prd/aether-forge-prd-v0.14.0.md`
 4. `docs/prd/aether-forge-prd-v0.12.0.md`

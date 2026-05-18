@@ -1,0 +1,12 @@
+{
+  "description": "Brace-like characters inside JSON string literals must not confuse the balanced-brace scanner.",
+  "input": "Note: {{handlebars}} are fine inside descriptions.\n{\"steps\": [{\"kind\": \"reason\", \"description\": \"use {{var}}\"}]}",
+  "expected": {
+    "outcome": "parsed",
+    "value": {
+      "steps": [
+        {"kind": "reason", "description": "use {{var}}"}
+      ]
+    }
+  }
+}

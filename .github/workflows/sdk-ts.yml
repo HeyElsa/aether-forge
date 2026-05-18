@@ -1,0 +1,62 @@
+name: SDK (TypeScript)
+
+# Builds and tests `@aether-forge/sdk` (sdk-ts/) on every change.
+# Also verifies cross-language schema parity:
+#   1. The committed `src/schemas/generated/index.ts` matches a fresh
+#      regeneration from the source JSON schemas (no drift).
+#   2. The TS conformance suite passes against every shared fixture
+#      under `tests/fixtures/planner-outputs/` — the same fixtures the
+#      Python `tests/test_planner_output_spec.py` runs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sdk-ts/**"
+      - "src/aether_forge/schemas/**"
+      - "tests/fixtures/planner-outputs/**"
+      - "docs/specs/planner-output.md"
+      - ".github/workflows/sdk-ts.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "sdk-ts/**"
+      - "src/aether_forge/schemas/**"
+      - "tests/fixtures/planner-outputs/**"
+      - "docs/specs/planner-output.md"
+      - ".github/workflows/sdk-ts.yml"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk-ts
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify generated schemas are up to date
+        # Regenerate the committed bundle and fail if it drifted from the
+        # source JSON schemas. Authors who change a schema MUST run
+        # `bun run generate:schemas` before committing.
+        run: |
+          bun run generate:schemas
+          git diff --exit-code src/schemas/generated/ \
+            || (echo "::error::sdk-ts/src/schemas/generated/ is out of date. Run 'bun run generate:schemas' and commit the result." && exit 1)
+
+      - name: Type-check
+        run: bun run typecheck
+
+      - name: Build (esm + cjs + .d.ts)
+        run: bun run build
+
+      - name: Test (vitest including cross-language conformance fixtures)
+        run: bun run test

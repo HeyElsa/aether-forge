@@ -1,0 +1,8 @@
+{
+  "description": "Parses cleanly but produces zero steps — the runtime distinguishes this from a parse failure via the `empty-plan` event kind.",
+  "input": "{\"steps\": []}",
+  "expected": {
+    "outcome": "parsed",
+    "value": {"steps": []}
+  }
+}

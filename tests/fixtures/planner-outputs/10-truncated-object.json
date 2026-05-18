@@ -1,0 +1,7 @@
+{
+  "description": "Mid-JSON truncation — the most common provider failure mode under tight token budgets. Must raise PlannerParseError, not return a partial value.",
+  "input": "{\"steps\": [{\"kind\": \"reason\", \"description\": \"tru",
+  "expected": {
+    "outcome": "parse-failure"
+  }
+}

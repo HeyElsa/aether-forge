@@ -1,0 +1,8 @@
+{
+  "description": "JSON wrapped in a bare ``` fenced block (no language tag).",
+  "input": "```\n{\"steps\": []}\n```",
+  "expected": {
+    "outcome": "parsed",
+    "value": {"steps": []}
+  }
+}

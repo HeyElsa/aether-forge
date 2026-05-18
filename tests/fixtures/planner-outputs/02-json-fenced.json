@@ -1,0 +1,17 @@
+{
+  "description": "JSON wrapped in a ```json fenced block. Most common case for Anthropic / GPT-4 in default mode.",
+  "input": "```json\n{\"steps\": [{\"kind\": \"use-capability\", \"description\": \"read basis\", \"capabilityId\": \"cap-market-basis\", \"payload\": {\"basis_bps\": 25}}]}\n```",
+  "expected": {
+    "outcome": "parsed",
+    "value": {
+      "steps": [
+        {
+          "kind": "use-capability",
+          "description": "read basis",
+          "capabilityId": "cap-market-basis",
+          "payload": {"basis_bps": 25}
+        }
+      ]
+    }
+  }
+}

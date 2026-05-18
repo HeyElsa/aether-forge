@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.vitest-temp/
+.DS_Store

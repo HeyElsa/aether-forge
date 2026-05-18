@@ -97,6 +97,24 @@ pip install 'aether-forge[security]'    # cryptography for encrypted backups
 pip install aether-forge                # Core only — heuristic planner, no extras
 ```
 
+### TypeScript SDK (v0.23.0+)
+
+For JS / TS / browser / edge consumers, the companion `@aether-forge/sdk` package ships validators + types + the cross-language planner-output parser. Lives under [`sdk-ts/`](./sdk-ts/) in this repo. Conforms to the same JSON schemas as the Python core.
+
+```bash
+npm install @aether-forge/sdk
+# or: bun add @aether-forge/sdk
+```
+
+```ts
+import { validateAgentSpec, parsePlannerOutput, assertValid } from "@aether-forge/sdk";
+
+const spec = assertValid(validateAgentSpec(jsonFromDisk));
+const plan = parsePlannerOutput(rawLlmResponse);
+```
+
+v0.1.0 is interface-only (no TS runtime tick loop — that stays Python-side). v0.1.1 will add `@aether-forge/sdk/x402` for browser sign-and-relay hosted-marketplace patterns. See [`sdk-ts/README.md`](./sdk-ts/README.md) and the cross-language conformance spec at [`docs/specs/planner-output.md`](./docs/specs/planner-output.md).
+
 Requires Python 3.12+. Single core dependency (`jsonschema`). Verify the install with:
 
 ```bash

@@ -1,0 +1,12 @@
+{
+  "description": "JSON preceded by chain-of-thought reasoning prose. Recovered via balanced-brace scan.",
+  "input": "Let me think through this carefully. The session needs a basis read before any trade decision.\nHere is my plan: {\"steps\": [{\"kind\": \"reason\", \"description\": \"go\"}]}",
+  "expected": {
+    "outcome": "parsed",
+    "value": {
+      "steps": [
+        {"kind": "reason", "description": "go"}
+      ]
+    }
+  }
+}

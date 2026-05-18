@@ -1,0 +1,8 @@
+{
+  "description": "Bare top-level scalar. RFC 8259 permits this — accept what's actually valid JSON even though the runtime will reject the shape.",
+  "input": "null",
+  "expected": {
+    "outcome": "parsed",
+    "value": null
+  }
+}
