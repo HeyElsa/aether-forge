@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from aether_forge.memory import MEMORY_RECORD_SCHEMA_VERSION, MemoryRecord, MemoryQuery
+from aether_forge.memory import MEMORY_RECORD_SCHEMA_VERSION, MemoryQuery, MemoryRecord
 from aether_forge.migrations import (
     MigrationContract,
     MigrationRunner,
@@ -33,7 +33,6 @@ from aether_forge.migrations import (
     TransformRegistry,
 )
 from aether_forge.storage import SqliteMemoryStore
-
 
 # ---------------------------------------------------------------------------
 # TransformRegistry
@@ -435,8 +434,8 @@ def _write_contract(tmp_path: Path, **overrides) -> Path:
 
 def test_cli_migrate_memory_dry_run(tmp_path: Path, monkeypatch, capsys) -> None:
     """Without --apply, the CLI must report dry-run and not mutate."""
-    from aether_forge.cli import main
     from aether_forge import plugins
+    from aether_forge.cli import main
 
     plugins.reset_cache()
 
@@ -487,9 +486,9 @@ def test_cli_migrate_memory_dry_run(tmp_path: Path, monkeypatch, capsys) -> None
 
 
 def test_cli_migrate_memory_apply(tmp_path: Path, monkeypatch, capsys) -> None:
-    from aether_forge.cli import main
-    from aether_forge import plugins
     import aether_forge.cli as cli_mod
+    from aether_forge import plugins
+    from aether_forge.cli import main
 
     plugins.reset_cache()
 

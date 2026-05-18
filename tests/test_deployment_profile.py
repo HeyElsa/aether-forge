@@ -31,7 +31,6 @@ from aether_forge.doctor import (
     _check_planner_source,
 )
 
-
 # ---------------------------------------------------------------------------
 # Env helpers — keep tests deterministic regardless of host shell state
 # ---------------------------------------------------------------------------

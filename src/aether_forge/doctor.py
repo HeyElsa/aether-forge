@@ -68,7 +68,7 @@ def _check_deployment_profile(config_path: Path) -> CheckResult:
     ``_check_planner_source`` uses this profile to escalate ``autodetected``
     or ``heuristic`` from advisory to hard fail in non-local profiles.
     """
-    from .config import DEPLOYMENT_PROFILES, DEFAULT_DEPLOYMENT_PROFILE
+    from .config import DEFAULT_DEPLOYMENT_PROFILE, DEPLOYMENT_PROFILES
 
     if not config_path.exists():
         return CheckResult(

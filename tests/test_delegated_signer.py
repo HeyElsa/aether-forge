@@ -42,13 +42,12 @@ from aether_forge.crypto.signers import (
 )
 from aether_forge.security import SessionKeyPolicy
 from aether_forge.x402_client import (
+    PaymentRequirement,
     PaymentSigningError,
     X402Client,
     X402Config,
-    PaymentRequirement,
 )
 from aether_forge.x402_server import X402PaymentGate
-
 
 # ---------------------------------------------------------------------------
 # SigningIntent / signer-kinds metadata

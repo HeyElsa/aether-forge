@@ -8,6 +8,7 @@ import random
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC
 from typing import Any
 from urllib import request as urllib_request
 from urllib.error import HTTPError, URLError
@@ -46,11 +47,11 @@ def _retry_after_seconds(error: HTTPError) -> float | None:
     if value.isdigit():
         return float(value)
     try:
+        from datetime import datetime
         from email.utils import parsedate_to_datetime
-        from datetime import datetime, timezone
 
         when = parsedate_to_datetime(value)
-        now = datetime.now(timezone.utc) if when.tzinfo else datetime.utcnow()
+        now = datetime.now(UTC) if when.tzinfo else datetime.utcnow()
         delta = (when - now).total_seconds()
         return max(0.0, delta)
     except (TypeError, ValueError):

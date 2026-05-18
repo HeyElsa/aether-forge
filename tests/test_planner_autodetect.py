@@ -23,7 +23,6 @@ import pytest
 from aether_forge.cli import _autodetect_planner
 from aether_forge.doctor import _check_planner_source
 
-
 # ---------------------------------------------------------------------------
 # Env helpers
 # ---------------------------------------------------------------------------
