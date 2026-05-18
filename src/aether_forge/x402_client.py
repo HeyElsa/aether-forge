@@ -52,6 +52,26 @@ CHAIN_IDS = {
 }
 
 
+# Sprint 2.3 helpers — used by _sign_authorization to build the SigningIntent
+# passed through the DelegatedSigner protocol. ``network`` here is the x402
+# network identifier as it appears in PaymentRequirement (string-form chain
+# slug like "base", "ethereum"). Returns None when unknown so the constrained
+# signer can refuse fail-closed.
+
+
+def _chain_id_for_network(network: str | None) -> int | None:
+    if not network:
+        return None
+    return CHAIN_IDS.get(network.lower())
+
+
+def _micros_to_usd(micros: int) -> float:
+    """Convert USDC's 6-decimal integer units into a USD float for SigningIntent.
+    Pure helper — does NOT replace ``_micro_to_usd`` if one exists elsewhere
+    for transport accounting."""
+    return micros / 1_000_000.0
+
+
 class X402Error(RuntimeError):
     """Base exception for x402 client errors."""
 
@@ -144,11 +164,27 @@ class X402Client:
         config: X402Config,
         request_fn: Callable | None = None,
         sign_typed_data_fn: Callable | None = None,
+        signer: Any | None = None,
     ) -> None:
+        """Construct an X402Client.
+
+        ``signer`` (v0.22.0+, Sprint 2.3 / FP-3) is the recommended hook for
+        delegated / browser-relay / HSM-backed signing. Must satisfy the
+        :class:`aether_forge.crypto.signers.DelegatedSigner` protocol. When
+        both ``signer`` and ``sign_typed_data_fn`` are passed, ``signer``
+        wins; ``sign_typed_data_fn`` is logged as deprecated.
+        """
         self.agent_directory = Path(agent_directory).resolve()
         self.config = config
         self._request_fn = request_fn  # Injectable for testing
-        self._sign_typed_data_fn = sign_typed_data_fn  # Injectable
+        self._sign_typed_data_fn = sign_typed_data_fn  # Injectable (deprecated; use ``signer``)
+        if sign_typed_data_fn is not None and signer is None:
+            logger.warning(
+                "X402Client(sign_typed_data_fn=...) is deprecated. "
+                "Pass a DelegatedSigner via signer= instead (aether_forge.crypto.signers). "
+                "The legacy callable will be removed in v0.24.0."
+            )
+        self._signer = signer
 
         # Audit log
         if config.audit_log_path:
@@ -526,46 +562,46 @@ class X402Client:
             "message": authorization,
         }
 
-        if self._sign_typed_data_fn is not None:
-            return self._sign_typed_data_fn(typed_data)
+        # Sprint 2.3 / FP-3: dispatch via the DelegatedSigner protocol so
+        # browser-relay, HSM, and constrained-session-key signers can all plug
+        # in through the same seam. ``signer`` wins; legacy callable runs
+        # next; OWS fallback only when neither is wired.
+        from .crypto.signers import (
+            LegacyCallableSigner,
+            OwsSigner,
+            SigningError,
+            SigningIntent,
+        )
 
-        # Default: use OWS sign_typed_data
-        # NOTE: OWS does not yet support EIP-712 signing via API key,
-        # so we fall back to the owner passphrase (empty by default for forge-created wallets)
-        try:
-            from importlib import import_module
-            ows = import_module("ows")
-            from .wallet import get_signing_credentials
+        # Build an intent for SessionKeyConstrainedSigner / audit downstream.
+        intent = SigningIntent(
+            chain_id=_chain_id_for_network(requirement.network),
+            contract_address=requirement.asset or None,
+            spend_usd=_micros_to_usd(int(requirement.max_amount_required or 0)),
+            purpose="x402-payment",
+        )
 
-            creds = get_signing_credentials(self.agent_directory)
-            if creds["provider"] != "ows":
-                raise PaymentSigningError("Live x402 requires real OWS wallet (provider=ows)")
-
-            # Try API key first (will fail until OWS adds support); fall back to passphrase
+        if self._signer is not None:
             try:
-                result = ows.sign_typed_data(
-                    creds["wallet_name"],
-                    "ethereum",
-                    json.dumps(typed_data),
-                    passphrase=creds["api_key"] if creds["api_key"].startswith("ows_key_") else None,
-                    vault_path_opt=creds.get("vault_path"),
-                )
-            except RuntimeError as api_error:
-                if "API key" in str(api_error):
-                    logger.debug("API key signing not supported for EIP-712, using passphrase")
-                    result = ows.sign_typed_data(
-                        creds["wallet_name"],
-                        "ethereum",
-                        json.dumps(typed_data),
-                        passphrase="",  # default passphrase
-                        vault_path_opt=creds.get("vault_path"),
-                    )
-                else:
-                    raise
+                return self._signer.sign_typed_data(typed_data, intent=intent)
+            except SigningError as error:
+                raise PaymentSigningError(str(error)) from error
 
-            return result.get("signature", "")
-        except ModuleNotFoundError as error:
-            raise PaymentSigningError("OWS SDK not installed") from error
+        if self._sign_typed_data_fn is not None:
+            shim = LegacyCallableSigner(self._sign_typed_data_fn)
+            try:
+                return shim.sign_typed_data(typed_data, intent=intent)
+            except SigningError as error:
+                raise PaymentSigningError(str(error)) from error
+
+        # Default fallback: today's OWS path, now extracted into OwsSigner.
+        try:
+            return OwsSigner(agent_directory=str(self.agent_directory)).sign_typed_data(
+                typed_data,
+                intent=intent,
+            )
+        except SigningError as error:
+            raise PaymentSigningError(str(error)) from error
 
     def _encode_payment_header(
         self,

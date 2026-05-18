@@ -143,14 +143,29 @@ class PromptDrivenPlanner:
     This planner stays inside the native runtime contract. Model output is only
     advisory and must translate into bounded native step proposals. Any invalid
     or unsafe response falls back to the native heuristic planner.
+
+    ``tool_mode`` (v0.22.0 / FP-1 deepening): when True and the wrapped model
+    exposes ``complete_with_tools(prompt, tools)``, the planner skips string
+    parsing entirely and uses the provider-native tool-use protocol
+    (Anthropic ``tool_use`` content blocks, OpenAI ``tool_calls``). The
+    capability-manifest is projected to tool definitions via
+    :func:`adapters.function_call.build_tool_schema_from_manifest`. Default
+    False — opt in via ``aether-forge.json:planner.toolMode``.
     """
 
     model: PlanningModel
     fallback_planner: HeuristicPlanner | None = None
     max_plan_steps: int = 5
+    tool_mode: bool = False
 
     def propose_plan(self, session: RuntimeSession) -> list[StepProposal]:
         declared_capability_ids = _declared_capability_ids(session)
+
+        # Tool-mode short-circuits the JSON-string parser. The branch is
+        # isolated so the legacy string path stays unchanged for back-compat.
+        if self.tool_mode:
+            return self._propose_plan_tool_mode(session, declared_capability_ids)
+
         prompt = build_planning_prompt_from_session(session, declared_capability_ids)
 
         response: str | None = None
@@ -181,6 +196,62 @@ class PromptDrivenPlanner:
         # tell "model returned empty plan" from "model returned garbage."
         self._record_planner_failure(session, kind="empty-plan", detail=None, response=response)
         return self._fallback(session)
+
+    def _propose_plan_tool_mode(
+        self,
+        session: RuntimeSession,
+        declared_capability_ids: set[str],
+    ) -> list[StepProposal]:
+        """Provider-native tool-use path. Falls back to heuristic on any error,
+        recording the failure kind on session.session_state just like the
+        legacy string path."""
+        from .adapters.function_call import (
+            FunctionCallTranslator,
+            build_tool_schema_from_manifest,
+        )
+
+        if not hasattr(self.model, "complete_with_tools"):
+            self._record_planner_failure(
+                session,
+                kind="model-error",
+                detail=f"tool_mode=True but model {type(self.model).__name__} lacks complete_with_tools",
+                response=None,
+            )
+            logger.warning(
+                "tool_mode=True but model lacks complete_with_tools; falling back to heuristic"
+            )
+            return self._fallback(session)
+
+        tools = build_tool_schema_from_manifest(session.artifacts.capability_manifest)
+        prompt = build_planning_prompt_from_session(session, declared_capability_ids)
+
+        try:
+            response = self.model.complete_with_tools(prompt, tools)  # type: ignore[attr-defined]
+        except Exception as error:
+            self._record_planner_failure(session, kind="model-error", detail=repr(error), response=None)
+            logger.warning("Tool-mode planner model raised, falling back to heuristic")
+            return self._fallback(session)
+
+        translator = FunctionCallTranslator(max_plan_steps=self.max_plan_steps)
+        proposals = translator.translate(response, declared_capability_ids)
+
+        # Translator always returns at least one proposal (a REPORT_GAP when
+        # nothing actionable). Detect the empty-plan case explicitly so the
+        # failure event is recorded the same way as the string path.
+        actionable = any(
+            p.kind != StepKind.REPORT_GAP or "Planner response did not contain" not in p.description
+            for p in proposals
+        )
+        if not actionable:
+            self._record_planner_failure(
+                session,
+                kind="empty-plan",
+                detail="tool-mode response contained no tool_calls",
+                response=None,
+            )
+            return self._fallback(session)
+
+        return proposals
 
     @staticmethod
     def _record_planner_failure(

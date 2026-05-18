@@ -261,6 +261,33 @@ class SqliteMemoryStore:
         row = cursor.fetchone()
         return row["value"] if row else MEMORY_RECORD_SCHEMA_VERSION
 
+    def iter_records_below(self, version: str, *, inclusive: bool = False):
+        """Yield every MemoryRecord whose persisted ``schema_version`` is
+        below (or equal to, when ``inclusive=True``) the given version.
+
+        Used by :class:`aether_forge.migrations.MigrationRunner` to walk
+        the cohort of rows a contract targets. Streams via the SQLite cursor
+        so a 100K-row DB does not load entirely into memory.
+        """
+        if inclusive:
+            sql = "SELECT * FROM memory_records WHERE schema_version <= ?"
+        else:
+            sql = "SELECT * FROM memory_records WHERE schema_version < ?"
+        cursor = self._conn.execute(sql, (version,))
+        for row in cursor:
+            yield self._decrypt_record(_row_to_record(row))
+
+    def count_records_below(self, version: str, *, inclusive: bool = False) -> int:
+        """Cheap row count for the same cohort as :meth:`iter_records_below`.
+        Useful for ``forge migrate`` dry-run summaries before iterating."""
+        operator = "<=" if inclusive else "<"
+        cursor = self._conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM memory_records WHERE schema_version {operator} ?",
+            (version,),
+        )
+        row = cursor.fetchone()
+        return int(row["cnt"]) if row else 0
+
     def read(self, query: MemoryQuery, *, include_expired: bool = False) -> list[MemoryRecord]:
         logger.debug("Memory query: scope=%s env=%s results=pending", query.scope, query.environment)
         clauses: list[str] = []

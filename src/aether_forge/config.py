@@ -8,7 +8,19 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+# Deployment profiles guide planner-source enforcement and (Sprint 2+) memory
+# / wallet behavior. ``local`` is the developer-machine default and tolerates
+# autodetected planners and heuristic fallback. ``staging`` is the pre-prod
+# tier — explicit planner choice required. ``production`` is strict: no
+# autodetected planners, no heuristic, ``forge doctor`` upgrades the planner-
+# source advisory to a hard fail. Resolution order: CLI flag > env var
+# (``AETHER_FORGE_DEPLOYMENT_PROFILE``) > ``aether-forge.json:deploymentProfile``
+# > default ``"local"``.
+DeploymentProfile = Literal["local", "staging", "production"]
+DEPLOYMENT_PROFILES: tuple[DeploymentProfile, ...] = ("local", "staging", "production")
+DEFAULT_DEPLOYMENT_PROFILE: DeploymentProfile = "local"
 
 from .adapters.function_call import (
     FunctionCallResponse,
@@ -41,6 +53,11 @@ class PlannerSettings:
     base_url: str | None = None
     api_key: str | None = None
     api_key_env: str | None = None
+    # v0.22.0 (FP-1 deepening). When True, the resulting PromptDrivenPlanner
+    # uses the provider-native tool-use protocol instead of string-parsed JSON
+    # — requires a model that exposes ``complete_with_tools``. Read from
+    # AETHER_FORGE_PLANNER_TOOL_MODE env var or aether-forge.json:planner.toolMode.
+    tool_mode: bool = False
 
 
 @dataclass(slots=True)
@@ -113,6 +130,13 @@ def resolve_planner_settings(
             resolved_base_url = default_url
         resolved_mode = backend_mode
 
+    # Resolve tool_mode: env var > config file > default False.
+    tool_mode_raw = os.getenv("AETHER_FORGE_PLANNER_TOOL_MODE")
+    if tool_mode_raw is not None:
+        tool_mode = tool_mode_raw.strip().lower() in {"1", "true", "yes", "on"}
+    else:
+        tool_mode = bool(planner_config.get("toolMode", False))
+
     return PlannerSettings(
         mode=resolved_mode,
         static_response_file=static_response_file or os.getenv("AETHER_FORGE_PLANNER_STATIC_RESPONSE_FILE") or planner_config.get("staticResponseFile"),
@@ -120,6 +144,7 @@ def resolve_planner_settings(
         base_url=resolved_base_url,
         api_key=resolved_api_key,
         api_key_env=resolved_api_key_env,
+        tool_mode=tool_mode,
     )
 
 
@@ -132,6 +157,32 @@ def resolve_runtime_settings(
     return RuntimeSettings(
         crypto_router=crypto_router or os.getenv("AETHER_FORGE_CRYPTO_ROUTER") or runtime_config.get("cryptoRouter", "mock"),
     )
+
+
+def resolve_deployment_profile(
+    *,
+    config: dict[str, Any] | None = None,
+    profile: str | None = None,
+) -> DeploymentProfile:
+    """Resolve the active deployment profile (v0.22.0+ / FP-2 deepening).
+
+    Order: explicit arg → ``AETHER_FORGE_DEPLOYMENT_PROFILE`` env var →
+    ``aether-forge.json:deploymentProfile`` field → :data:`DEFAULT_DEPLOYMENT_PROFILE`.
+
+    Raises ``ValueError`` if the resolved value is not one of
+    :data:`DEPLOYMENT_PROFILES`. Returns the validated literal.
+    """
+    raw = (
+        profile
+        or os.getenv("AETHER_FORGE_DEPLOYMENT_PROFILE")
+        or (config.get("deploymentProfile") if isinstance(config, dict) else None)
+        or DEFAULT_DEPLOYMENT_PROFILE
+    )
+    if raw not in DEPLOYMENT_PROFILES:
+        raise ValueError(
+            f"Invalid deployment profile {raw!r}. Must be one of {DEPLOYMENT_PROFILES}."
+        )
+    return raw  # type: ignore[return-value]
 
 
 class FunctionCallPlanner:
@@ -249,6 +300,7 @@ def build_planner_factory(
                 request_fn=request_fn,
             ),
             fallback_planner=HeuristicPlanner(),
+            tool_mode=settings.tool_mode,
         )
 
     if settings.mode == "anthropic":
@@ -272,6 +324,7 @@ def build_planner_factory(
                 request_fn=request_fn,
             ),
             fallback_planner=HeuristicPlanner(),
+            tool_mode=settings.tool_mode,
         )
 
     if settings.mode == "gemini":

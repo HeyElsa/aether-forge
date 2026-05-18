@@ -144,6 +144,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--planner-model", help="Model name to bake into the generated agent's planner config.")
     generate_parser.add_argument("--planner-base-url", help="Base URL to bake into the generated agent's planner config (e.g. http://localhost:11434 for Ollama).")
     generate_parser.add_argument("--planner-api-key-env", help="Env var name the generated agent should read its planner API key from.")
+    generate_parser.add_argument(
+        "--deployment-profile",
+        choices=["local", "staging", "production"],
+        help="Deployment profile baked into aether-forge.json (default: local). 'production' forbids autodetect and heuristic; explicit --planner-mode required.",
+    )
 
     slow_parser = subparsers.add_parser("generate-slow", help="Generate a slow-mode artifact set with autoresearch from an idea")
     slow_parser.add_argument("--name", required=True, help="Agent name")
@@ -187,6 +192,23 @@ def build_parser() -> argparse.ArgumentParser:
     wallet_restore_parser.add_argument("backup_file", help="Path to the backup JSON")
     wallet_restore_parser.add_argument("--into", required=True, help="Agent directory to restore into")
     wallet_restore_parser.add_argument("--passphrase", help="Decryption passphrase (will prompt if backup is encrypted and omitted)")
+
+    migrate_parser = subparsers.add_parser("migrate", help="Apply a schema migration contract (v0.22.0+, FP-4)")
+    migrate_sub = migrate_parser.add_subparsers(dest="migrate_command")
+
+    migrate_memory_parser = migrate_sub.add_parser("memory", help="Apply a migration contract to an agent's memory.db")
+    migrate_memory_parser.add_argument("artifact_directory", help="Path to the agent directory containing memory.db")
+    migrate_memory_parser.add_argument("--contract", required=True, help="Path to a migration-contract.schema.json document")
+    migrate_memory_parser.add_argument("--memory-db", help="Override path to memory.db (default: <artifact_directory>/memory.db)")
+    migrate_memory_parser.add_argument("--apply", action="store_true", help="Actually mutate the database (default: dry-run)")
+    migrate_memory_parser.add_argument("--lossy-ok", action="store_true", help="Override deny-by-default policy for contracts with lossyFields")
+
+    migrate_artifact_parser = migrate_sub.add_parser("artifact", help="Apply a migration contract to a single artifact JSON file")
+    migrate_artifact_parser.add_argument("artifact_file", help="Path to the artifact JSON file to migrate")
+    migrate_artifact_parser.add_argument("--contract", required=True, help="Path to a migration-contract.schema.json document")
+    migrate_artifact_parser.add_argument("--target", required=True, help="Artifact type identifier the contract targets (e.g. agent-spec)")
+    migrate_artifact_parser.add_argument("--apply", action="store_true", help="Actually rewrite the file (default: dry-run)")
+    migrate_artifact_parser.add_argument("--lossy-ok", action="store_true", help="Override deny-by-default policy for contracts with lossyFields")
 
     halt_parser = subparsers.add_parser("halt", help="Activate kill switch — blocks all live x402 calls")
     halt_parser.add_argument("artifact_directory", help="Path to the agent directory")
@@ -502,7 +524,25 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         planner_api_key_env = getattr(args, "planner_api_key_env", None)
         planner_source = "explicit" if planner_mode else None
         planner_detected_at: str | None = None
+
+        # Resolve the deployment profile (CLI > env > default). Sprint 2.2 / FP-2:
+        # 'production' refuses any autodetected planner choice — the generated
+        # agent must declare its provider explicitly so prod startup is
+        # deterministic and 'forge doctor' can fail fast.
+        from .config import resolve_deployment_profile
+        deployment_profile = resolve_deployment_profile(
+            profile=getattr(args, "deployment_profile", None),
+        )
+
         if planner_mode is None:
+            if deployment_profile == "production":
+                print(
+                    "[planner] ERROR: production deployment profile forbids autodetected planners. "
+                    "Pass --planner-mode (or set AETHER_FORGE_PLANNER_MODE) so the generated agent "
+                    "has a deterministic provider on startup.",
+                    file=sys.stderr,
+                )
+                return 2
             detected = _autodetect_planner()
             planner_mode = detected["mode"]
             planner_model = planner_model or detected.get("model")
@@ -518,11 +558,30 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
                 + (f" apiKeyEnv={planner_api_key_env}" if planner_api_key_env else "")
             )
             if planner_mode == "heuristic":
+                if deployment_profile == "staging":
+                    print(
+                        "[planner] ERROR: heuristic fallback not allowed in staging profile. "
+                        "Configure an LLM provider (cloud key or local Ollama) before generating.",
+                        file=sys.stderr,
+                    )
+                    return 2
                 print(
                     "[planner] WARNING: heuristic fallback selected — no LLM is configured. "
                     "Set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY, "
                     "or run a local Ollama daemon, before generating a production agent."
                 )
+        else:
+            # Explicit planner mode chosen. The 'heuristic' string still bypasses
+            # autodetect but is rejected in non-local profiles for the same
+            # determinism reason: a prod agent that explicitly opts into no-LLM
+            # is almost always a misconfiguration.
+            if planner_mode == "heuristic" and deployment_profile != "local":
+                print(
+                    f"[planner] ERROR: heuristic planner is not allowed in {deployment_profile} profile. "
+                    "Pick an LLM-backed planner (anthropic / openai / gemini / openrouter / ollama).",
+                    file=sys.stderr,
+                )
+                return 2
 
         request = FastGenerateRequest(
             name=args.name,
@@ -538,6 +597,7 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
             planner_api_key_env=planner_api_key_env,
             planner_source=planner_source,
             planner_detected_at=planner_detected_at,
+            deployment_profile=deployment_profile,
         )
         generated = generate_fast_artifact_set(request)
         if generated.agent_summary:
@@ -1058,6 +1118,9 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         except Exception as error:
             print(f"Error: {error}", file=sys.stderr)
             return 1
+
+    if args.command == "migrate":
+        return _dispatch_migrate(args)
 
     if args.command == "halt":
         directory = Path(args.artifact_directory).resolve()
@@ -1793,3 +1856,84 @@ def _memory_store_from_args(args: argparse.Namespace, *, artifact_directory: Pat
 def _ows_adapter_from_args(args: argparse.Namespace) -> OpenWalletStandardAdapter:
     vault_path = getattr(args, "vault_path", None)
     return OpenWalletStandardAdapter(vault_path=vault_path)
+
+
+def _dispatch_migrate(args: argparse.Namespace) -> int:
+    """Dispatch ``forge migrate <memory|artifact>`` (Sprint 2.4 / FP-4).
+
+    The runner consults an in-process :class:`TransformRegistry` populated
+    via the ``aether_forge.migrations`` plugin entry-point group (future
+    work — for v0.22.0 the registry is empty unless a downstream package
+    has registered transforms in its own startup). The CLI therefore acts
+    as the executor; transform authoring is a deliberate per-project act.
+    """
+    from .migrations import MigrationContract, MigrationRunner, TransformRegistry
+    from .plugins import GROUP_MIGRATIONS, iter_entry_points
+
+    sub = getattr(args, "migrate_command", None)
+    if sub not in {"memory", "artifact"}:
+        print(
+            "Error: `forge migrate` requires a sub-command (memory or artifact). "
+            "Run `forge migrate --help` for usage.",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Build the registry from every installed plugin in aether_forge.migrations.
+    # Each plugin entry point MUST resolve to a callable that takes a single
+    # TransformRegistry and registers its transforms. Plugin failures are
+    # logged + skipped per the framework-wide non-negotiable; the iterator
+    # already swallows load errors.
+    registry = TransformRegistry()
+    for name, target in iter_entry_points(GROUP_MIGRATIONS):
+        if not callable(target):
+            logger.warning("migrations plugin %r is not callable; ignoring", name)
+            continue
+        try:
+            target(registry)
+        except Exception as error:  # pragma: no cover — plugin contract is logged-and-skipped
+            logger.warning("migrations plugin %r failed during registration: %r", name, error)
+
+    try:
+        contract = MigrationContract.from_path(args.contract)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"Error: could not load migration contract: {error}", file=sys.stderr)
+        return 2
+
+    runner = MigrationRunner(registry)
+
+    if sub == "memory":
+        directory = Path(args.artifact_directory).resolve()
+        db_path = Path(args.memory_db).resolve() if args.memory_db else directory / "memory.db"
+        if not db_path.exists():
+            print(f"Error: memory database not found at {db_path}", file=sys.stderr)
+            return 2
+        store = SqliteMemoryStore(db_path)
+        try:
+            report = runner.apply_to_memory_store(
+                store,
+                contract,
+                dry_run=not args.apply,
+                lossy_ok=args.lossy_ok,
+            )
+        finally:
+            store.close()
+    else:
+        report = runner.apply_to_artifact_file(
+            args.artifact_file,
+            contract,
+            target=args.target,
+            dry_run=not args.apply,
+            lossy_ok=args.lossy_ok,
+        )
+
+    mode = "dry-run" if report.dry_run else "apply"
+    print(
+        f"[migrate] {report.target} {report.from_version} → {report.to_version} ({mode}): "
+        f"scanned={report.records_scanned} migrated={report.records_migrated} skipped={report.records_skipped}"
+    )
+    if report.backup_path:
+        print(f"[migrate] backup: {report.backup_path}")
+    for issue in report.issues:
+        print(f"[migrate] issue: {issue}", file=sys.stderr)
+    return 0 if report.ok else 1

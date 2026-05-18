@@ -40,6 +40,7 @@ def run_doctor_checks(*, config_path: Path | None = None, verbose: bool = False)
     results.append(_check_mempalace_knowledge_layer())
     if config_path:
         results.append(_check_config_file(config_path))
+        results.append(_check_deployment_profile(config_path))
         results.append(_check_planner_source(config_path))
         # Probe any MCP servers declared in the config file. Informational —
         # a failed MCP probe does not fail the overall doctor check.
@@ -47,17 +48,73 @@ def run_doctor_checks(*, config_path: Path | None = None, verbose: bool = False)
     return results
 
 
+def _load_config_safe(config_path: Path) -> dict | None:
+    """Read aether-forge.json defensively; return None on any failure so callers
+    can render a soft advisory rather than crashing the doctor pipeline."""
+    if not config_path.exists():
+        return None
+    try:
+        data = json.loads(config_path.read_text(encoding="utf8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _check_deployment_profile(config_path: Path) -> CheckResult:
+    """Surface ``deploymentProfile`` from aether-forge.json (Sprint 2.2 / FP-2).
+
+    Validates that the value is one of {local, staging, production}; absence
+    is treated as ``local`` (the safe default). The downstream
+    ``_check_planner_source`` uses this profile to escalate ``autodetected``
+    or ``heuristic`` from advisory to hard fail in non-local profiles.
+    """
+    from .config import DEPLOYMENT_PROFILES, DEFAULT_DEPLOYMENT_PROFILE
+
+    if not config_path.exists():
+        return CheckResult(
+            name="Deployment profile",
+            passed=True,
+            message="No config file — skipping",
+            optional=True,
+        )
+    data = _load_config_safe(config_path)
+    if data is None:
+        return CheckResult(
+            name="Deployment profile",
+            passed=True,
+            message="Could not parse config (see Config file check)",
+            optional=True,
+        )
+    profile = data.get("deploymentProfile", DEFAULT_DEPLOYMENT_PROFILE)
+    if profile not in DEPLOYMENT_PROFILES:
+        return CheckResult(
+            name="Deployment profile",
+            passed=False,
+            message=f"Invalid deploymentProfile={profile!r}. Must be one of {DEPLOYMENT_PROFILES}.",
+        )
+    note = "" if "deploymentProfile" in data else " (implicit default)"
+    return CheckResult(
+        name="Deployment profile",
+        passed=True,
+        message=f"{profile}{note}",
+    )
+
+
 def _check_planner_source(config_path: Path) -> CheckResult:
     """Surface ``planner.source`` from aether-forge.json (Sprint 1.2 / FP-2).
 
     A generated agent stamps either ``"explicit"`` (operator passed
     ``--planner-mode`` or set ``AETHER_FORGE_PLANNER_MODE``) or
-    ``"autodetected"`` (cli._autodetect_planner picked it). Production
-    deploys should prefer "explicit" so a host Ollama or cloud-key change
-    never silently re-routes the planner. The Sprint 2 deployment-profile
-    work upgrades this to a fail-state when profile=production; for now
-    we only emit an advisory.
+    ``"autodetected"`` (cli._autodetect_planner picked it). The Sprint 2.2
+    deployment-profile work escalates the verdict:
+
+    - profile=production AND source=autodetected → FAIL
+    - profile=production AND mode=heuristic → FAIL
+    - profile=staging AND source=autodetected → FAIL
+    - profile=local (or unset) → advisory only
     """
+    from .config import DEFAULT_DEPLOYMENT_PROFILE
+
     if not config_path.exists():
         return CheckResult(
             name="Planner source",
@@ -65,9 +122,8 @@ def _check_planner_source(config_path: Path) -> CheckResult:
             message="No config file — skipping",
             optional=True,
         )
-    try:
-        data = json.loads(config_path.read_text(encoding="utf8"))
-    except (json.JSONDecodeError, OSError):
+    data = _load_config_safe(config_path)
+    if data is None:
         return CheckResult(
             name="Planner source",
             passed=True,
@@ -85,6 +141,37 @@ def _check_planner_source(config_path: Path) -> CheckResult:
     source = planner.get("source")
     mode = planner.get("mode", "?")
     detected_at = planner.get("detectedAt")
+    profile = data.get("deploymentProfile", DEFAULT_DEPLOYMENT_PROFILE)
+
+    if mode == "heuristic" and profile != "local":
+        return CheckResult(
+            name="Planner source",
+            passed=False,
+            message=(
+                f"heuristic planner is not allowed in {profile} profile. "
+                "Configure an LLM provider before deploying."
+            ),
+        )
+    if source == "autodetected" and profile == "production":
+        suffix = f" at {detected_at}" if detected_at else ""
+        return CheckResult(
+            name="Planner source",
+            passed=False,
+            message=(
+                f"production profile forbids autodetected planner (mode={mode}{suffix}). "
+                "Pin with AETHER_FORGE_PLANNER_MODE or --planner-mode and regenerate."
+            ),
+        )
+    if source == "autodetected" and profile == "staging":
+        suffix = f" at {detected_at}" if detected_at else ""
+        return CheckResult(
+            name="Planner source",
+            passed=False,
+            message=(
+                f"staging profile forbids autodetected planner (mode={mode}{suffix}). "
+                "Pin explicitly before promoting to staging."
+            ),
+        )
     if source == "explicit":
         return CheckResult(
             name="Planner source",
@@ -384,7 +471,7 @@ def validate_config(config_path: Path) -> list[CheckResult]:
         return results
     results.append(CheckResult(name="Top-level object", passed=True, message="OK"))
 
-    valid_top_keys = {"planner", "runtime", "memory", "security", "market_data", "adapters", "mcp_servers"}
+    valid_top_keys = {"deploymentProfile", "planner", "runtime", "memory", "security", "market_data", "adapters", "mcp_servers"}
     unknown = set(data.keys()) - valid_top_keys
     if unknown:
         results.append(CheckResult(name="Known keys", passed=False, message=f"Unknown top-level keys: {unknown}"))

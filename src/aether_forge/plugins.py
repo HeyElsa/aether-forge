@@ -36,12 +36,18 @@ GROUP_PLANNERS = "aether_forge.planners"
 GROUP_EXECUTION_ROUTERS = "aether_forge.execution_routers"
 GROUP_DATA_SOURCES = "aether_forge.data_sources"
 GROUP_SKILL_REGISTRIES = "aether_forge.skill_registries"
+# v0.22.0+ (FP-4) — entry-point group for downstream packages that register
+# MemoryRecord / artifact transforms with ``migrations.TransformRegistry``.
+# A plugin entry point in this group MUST resolve to a callable taking a
+# single ``TransformRegistry`` argument and calling ``.register(...)`` on it.
+GROUP_MIGRATIONS = "aether_forge.migrations"
 
 ALL_GROUPS = (
     GROUP_PLANNERS,
     GROUP_EXECUTION_ROUTERS,
     GROUP_DATA_SOURCES,
     GROUP_SKILL_REGISTRIES,
+    GROUP_MIGRATIONS,
 )
 
 

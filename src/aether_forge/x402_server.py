@@ -226,6 +226,7 @@ class X402PaymentGate:
         capability: str,
         *,
         agent_directory: Path | None = None,
+        allowed_payers: set[str] | None = None,
     ) -> tuple[bool, str]:
         """Verify a payment header AND submit it on-chain.
 
@@ -234,6 +235,12 @@ class X402PaymentGate:
         ``transferWithAuthorization`` to the USDC contract on Base so
         the USDC moves from Agent A's wallet to Agent B's wallet before
         the capability result is delivered.
+
+        ``allowed_payers`` (Sprint 2.3 / FP-3) restricts which
+        ``authorization.from`` addresses the server will accept. When
+        provided, any signature whose ``from`` is outside the set is rejected
+        before any on-chain submit. Closes the "anyone can pay anything" gap.
+        Addresses are compared case-insensitively.
 
         Requires:
         - Agent B has a small amount of ETH on Base for gas (~$0.001/tx)
@@ -245,6 +252,26 @@ class X402PaymentGate:
         ok, reason = self.verify_payment(payment_header, capability)
         if not ok:
             return False, reason
+
+        # Step 1b (Sprint 2.3 / FP-3): payer allowlist gate. Done after
+        # structural verification so a malformed header still fails fast with
+        # the structural error rather than the allowlist error.
+        if allowed_payers is not None:
+            try:
+                if isinstance(payment_header, str):
+                    payment_for_payer = json.loads(base64.b64decode(payment_header))
+                else:
+                    payment_for_payer = payment_header
+                payer = (
+                    payment_for_payer.get("payload", {})
+                    .get("authorization", {})
+                    .get("from", "")
+                )
+            except Exception as error:
+                return False, f"Could not extract payer for allowlist check: {error}"
+            normalized = {addr.lower() for addr in allowed_payers}
+            if not payer or payer.lower() not in normalized:
+                return False, f"Payer {payer or '<empty>'} not in allowed_payers"
 
         # Step 2: extract the EIP-3009 authorization from the payment header
         try:

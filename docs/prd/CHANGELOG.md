@@ -1,5 +1,64 @@
 # PRD Changelog
 
+## v0.22.0 - 2026-05-16
+
+Spec-first the missing seams release. Sprint 2 of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.22.0.md` for full context). Ships four schema-first features the Sprint 1 hardening was preparation for: deployment-profile escalation in `forge doctor`, an executable `MigrationRunner` over the existing migration-contract schema, provider-native tool-use for Anthropic + OpenAI-compatible models, and the `DelegatedSigner` Protocol that codifies the hosted-marketplace trust model. Sprint 3 (TypeScript SDK) follows.
+
+### Deployment profiles (FP-2 deepening)
+- New `deploymentProfile` top-level field on `aether-forge.json` — enum `local` / `staging` / `production`, default `local`. Resolved via `config.resolve_deployment_profile()` (CLI > env > config > default).
+- `forge generate-fast --deployment-profile production` refuses autodetected planners AND `--planner-mode heuristic` (exit 2). Staging refuses heuristic fallback when no LLM is reachable.
+- `forge doctor` upgrades the v0.21.0 advisory: production + autodetected = HARD FAIL, production + heuristic = HARD FAIL, staging + autodetected = HARD FAIL. Local profile keeps autodetected advisory-only so dev machines aren't punished.
+- New `agent-config.schema.json` declares the full `aether-forge.json` contract. Permissive on unknown top-level keys for forward compatibility.
+- Tests: `tests/test_deployment_profile.py` (20 cases).
+
+### MigrationRunner (FP-4)
+- New `src/aether_forge/migrations.py`: `TransformRegistry`, `MigrationContract`, `MigrationRunner`, `MigrationReport`. Apply migrations to `SqliteMemoryStore` or single artifact files. Dry-run default; `--apply` required; auto-writes `.pre-migration-<ts>.bak`; per-row exception tolerance.
+- Lossy fields deny-by-default — refuses to apply unless `policy.lossyOk` or caller `lossy_ok=True`. Mirrors `_weakens_criteria` philosophy.
+- Contracts without `transformRef` refuse to execute (documentation-only vs runnable discriminant).
+- New `forge migrate memory|artifact` CLI subcommand. Loads transforms from new `aether_forge.migrations` entry-point group.
+- `SqliteMemoryStore.iter_records_below(version, *, inclusive)` + `count_records_below(...)` for streamed cohort iteration.
+- Schema extensions on `migration-contract.schema.json`: optional `transformRef` + `policy.lossyOk`.
+- Tests: `tests/test_migration_runner.py` (25 cases).
+
+### Provider-native tool-use (FP-1 deepening)
+- `adapters/function_call.py` adds `build_tool_schema_from_manifest`, `to_anthropic_tool_schema`, `from_anthropic_tool_use`, `from_openai_tool_calls`.
+- New `complete_with_tools(prompt, tools) -> FunctionCallResponse` on `OpenAICompatiblePlanningModel` and `AnthropicPlanningModel`. Raises if `tools` empty. Gemini deferred.
+- `PromptDrivenPlanner.tool_mode: bool = False` — when True, dispatches via provider-native tool-use, bypassing JSON string-parsing. Records `model-error` / `empty-plan` failures on `session.session_state` with the same shape as the legacy path.
+- Settings: `AETHER_FORGE_PLANNER_TOOL_MODE` env > `planner.toolMode` config > False. Threaded into the OpenAI-compatible + Anthropic factory branches.
+- New `planner-tool-use.schema.json`.
+- Tests: `tests/test_planner_tool_mode.py` (22 cases).
+
+### DelegatedSigner Protocol (FP-3 — hosted-marketplace trust model)
+- New `src/aether_forge/crypto/signers.py`: `DelegatedSigner` Protocol, `SigningIntent` frozen value object, `SignerKind` literal, `SigningError` + `SigningRefusedError`.
+- Three reference signers: `OwsSigner` (extracts v0.21.0 default), `BrowserRelaySigner` (POST to user-configured relay URL; surfaces user-rejection 4xx as `SigningRefusedError`), `DelegatedSecretsSigner` (resolves signing callable from `CredentialResolver` lease).
+- `SessionKeyConstrainedSigner` wrapper enforces `SessionKeyPolicy` constraints before delegating; refuses `intent=None` (fail-closed).
+- `LegacyCallableSigner` shim wraps the deprecated `sign_typed_data_fn` so it flows through the new protocol.
+- `X402Client(signer=...)` is the preferred hook; `sign_typed_data_fn` logged as deprecated (removal: v0.24.0); precedence is `signer` > legacy fn > `OwsSigner` fallback.
+- `SessionKeyPolicy.permits(*, chain_id, contract_address, spend_usd)` — explicit decision method used by the constrained wrapper.
+- `X402PaymentGate.verify_and_settle_onchain(allowed_payers=...)` — case-insensitive payer allowlist; closes the "anyone can pay anything" gap.
+- New `delegated-signer.schema.json` pins the four signer-kind variants + optional constrained-wrapper config.
+- Tests: `tests/test_delegated_signer.py` (25 cases).
+
+### Non-Negotiables added (AGENTS.md §3)
+- `forge doctor` MUST escalate production + autodetected / production + heuristic / staging + autodetected to hard fail.
+- Generated `aether-forge.json` MUST stamp `deploymentProfile` at the top level.
+- `MigrationRunner` MUST default to dry-run and refuse lossy contracts unless explicitly allowed.
+- `forge migrate` MUST require `--apply` for any mutation.
+- Migration contracts without `transformRef` MUST be treated as documentation-only.
+- `complete_with_tools` MUST raise on empty tools.
+- Tool-mode planner failures MUST record the same `last_planner_parse_failure` shape as the string path.
+- `DelegatedSigner` is the canonical signing surface; legacy `sign_typed_data_fn` removal target is v0.24.0.
+- `SessionKeyConstrainedSigner` MUST refuse `intent=None`.
+- `X402PaymentGate.verify_and_settle_onchain` MUST honor `allowed_payers` case-insensitively.
+
+### Verification
+- 620 tests pass (was 528; +92 net from Sprint 2). 15 skipped. 1 pre-existing deprecation warning.
+- Independent code audit: no blocking issues. OwsSigner extraction preserves legacy try-API-key-then-passphrase fallback exactly. Pre-v0.22.0 configs validate cleanly against the new agent-config schema.
+- Back-compat: v0.21.0 memory.db gets the new fields backfilled on open; legacy `sign_typed_data_fn` works with a deprecation warning; configs without `deploymentProfile` default to `local`.
+
+### Files
+- 14 source files modified, 7 new files (4 test, 3 schema, 1 module). Net ~+3160 lines.
+
 ## v0.21.0 - 2026-05-16
 
 Resilience & schema hardening release. Sprint 1 of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.21.0.md` for full context; full multi-sprint plan at `~/.claude/plans/friction-points-python-only-concurrent-lecun.md`). Closes the silent-failure subset of the five reported friction points: thin planner parsing, Ollama-first auto-detect, missing schema-version stamp on persisted memory rows. Sprints 2 (delegated signers + migration execution) and 3 (TypeScript SDK) follow.

@@ -44,10 +44,15 @@ class FastGenerateRequest:
     # Provenance fields stamped into aether-forge.json so `forge doctor` and
     # log greppers can tell autodetected planners apart from explicit ones.
     # ``planner_source`` ∈ {"autodetected", "explicit", None}; "autodetected"
-    # values originate from cli._autodetect_planner and should trigger a
-    # production-profile warning (see FP-2 deployment profiles, Sprint 2).
+    # values originate from cli._autodetect_planner and trigger a hard fail
+    # in ``forge doctor`` when ``deployment_profile == "production"``.
     planner_source: str | None = None
     planner_detected_at: str | None = None
+    # Deployment profile stamped into aether-forge.json (v0.22.0+, FP-2 deepening).
+    # ``local`` (default) tolerates autodetect / heuristic; ``staging`` requires
+    # explicit planner; ``production`` is strict (no autodetect, no heuristic,
+    # doctor fails loudly). Resolved by config.resolve_deployment_profile().
+    deployment_profile: str = "local"
 
 
 @dataclass(slots=True)
@@ -818,7 +823,10 @@ def _project_config_json(request: FastGenerateRequest | None = None) -> str:
     if request and request.planner_detected_at:
         planner_block["detectedAt"] = request.planner_detected_at
 
+    profile = (request.deployment_profile if request else None) or "local"
+
     payload = {
+        "deploymentProfile": profile,
         "planner": planner_block,
         "runtime": {
             "cryptoRouter": "mock",

@@ -175,6 +175,55 @@ class OpenAICompatiblePlanningModel:
 
         return _with_retry(_call, attempts=self.retry_attempts)
 
+    def complete_with_tools(self, planning_prompt: str, tools: list[dict[str, Any]]):
+        """Provider-native tool-use path (v0.22.0 / FP-1 deepening).
+
+        Sends the OpenAI ``tools=[…]`` shape and parses the response's
+        ``tool_calls`` array into a :class:`FunctionCallResponse` via
+        :func:`adapters.function_call.from_openai_tool_calls`. The model is
+        instructed to emit zero-or-more tool calls; partial responses are
+        tolerated. Falls through to the same retry envelope as ``complete``.
+
+        Empty ``tools`` raises — opting into tool_mode without a manifest is a
+        configuration error, not a degenerate-but-valid case.
+        """
+        from .adapters.function_call import from_openai_tool_calls
+
+        if not tools:
+            raise PlanningModelError(
+                "complete_with_tools requires at least one tool. "
+                "Did the capability-manifest produce zero capabilities?"
+            )
+        payload = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Plan bounded next steps by calling the provided tools. Avoid free-form prose unless needed for reasoning.",
+                },
+                {"role": "user", "content": planning_prompt},
+            ],
+            "tools": tools,
+            # Let the model decide whether to call tools — never force a call
+            # since the bounded-step planner may legitimately conclude no
+            # action is appropriate this tick.
+            "tool_choice": "auto",
+        }
+        body = json.dumps(payload).encode("utf8")
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        response = self._request(f"{self.base_url.rstrip('/')}/chat/completions", headers, body)
+        try:
+            message = response["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as error:
+            raise PlanningModelError(
+                "OpenAI tool-use response did not contain a message."
+            ) from error
+        return from_openai_tool_calls(message)
+
 
 @dataclass(slots=True)
 class AnthropicPlanningModel:
@@ -223,6 +272,51 @@ class AnthropicPlanningModel:
                 return json.loads(response.read().decode("utf8"))
 
         return _with_retry(_call, attempts=self.retry_attempts)
+
+    def complete_with_tools(self, planning_prompt: str, tools: list[dict[str, Any]]):
+        """Provider-native tool-use path (v0.22.0 / FP-1 deepening).
+
+        Adapts the OpenAI-shaped tools to Anthropic's ``input_schema`` shape
+        via :func:`adapters.function_call.to_anthropic_tool_schema`, sends
+        the Messages API ``tools`` field, and parses the response's content
+        blocks via :func:`adapters.function_call.from_anthropic_tool_use`.
+        Mixed ``text`` + ``tool_use`` blocks both carry information; the
+        translator preserves them as ``reasoning`` and ``tool_calls``
+        respectively.
+        """
+        from .adapters.function_call import (
+            from_anthropic_tool_use,
+            to_anthropic_tool_schema,
+        )
+
+        if not tools:
+            raise PlanningModelError(
+                "complete_with_tools requires at least one tool. "
+                "Did the capability-manifest produce zero capabilities?"
+            )
+        anthropic_tools = to_anthropic_tool_schema(tools)
+        payload = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "system": "Plan bounded next steps by calling the provided tools.",
+            "messages": [{"role": "user", "content": planning_prompt}],
+            "tools": anthropic_tools,
+        }
+        body = json.dumps(payload).encode("utf8")
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        response = self._request(f"{self.base_url.rstrip('/')}/v1/messages", headers, body)
+        try:
+            content = response["content"]
+        except (KeyError, TypeError) as error:
+            raise PlanningModelError(
+                "Anthropic tool-use response did not contain content blocks."
+            ) from error
+        return from_anthropic_tool_use(content)
 
 
 @dataclass(slots=True)
