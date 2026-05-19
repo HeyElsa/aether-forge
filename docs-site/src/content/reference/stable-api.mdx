@@ -1,0 +1,70 @@
+# Stable API Boundary
+
+Aether Forge exposes an explicitly labeled top-level Python API. Every symbol in `aether_forge.__all__` has a stability label in `aether_forge.API_STABILITY`.
+
+```python
+import aether_forge
+
+assert aether_forge.API_STABILITY["Planner"] == "stable"
+```
+
+## Stable
+
+Stable APIs are intended for application code and third-party extensions. They can still gain optional fields or methods before `1.0`, but incompatible changes require a migration note.
+
+| Surface | Symbols |
+|---|---|
+| Facade | `Forge`, `ForgeProject` |
+| Extension contracts | `Planner`, `ExecutionRouter`, `PlanningModel`, `MemoryStore`, `DataSource` |
+| Artifact validation | `validate_artifact_directory`, `LoadedArtifact` |
+| Fast generation | `FastGenerateRequest`, `generate_fast_artifact_set`, `GeneratedArtifactSet` |
+| Runtime | `RuntimeSession`, `AgentRunner`, `RunnerConfig`, `ArtifactBundle`, `StepProposal`, `ExecutionResult`, `RuntimeReplay` |
+| Policy | `NativePolicyGate`, `PolicyDecision` |
+| Memory | `MemoryRecord`, `MemoryQuery`, `MemoryPromotionRequest`, `MemoryPromotionResult`, `MemoryPromotionPolicy`, `InMemoryMemoryStore`, `SqliteMemoryStore` |
+| Planner/model adapters | `HeuristicPlanner`, `PromptDrivenPlanner`, `StaticPlanningModel`, `OpenAICompatiblePlanningModel`, `AnthropicPlanningModel`, `GeminiPlanningModel` |
+| Data layer | `DataRouter`, `DataResult`, `DataSourceCost`, `HTTPDataSource`, `WebSocketDataSource`, `McpDataSource`, `MockDataSource` |
+| Evaluation/versioning | `evaluate_scenario_pack`, `build_promotion_evidence`, `SemanticVersion`, `assess_artifact_set_compatibility` |
+| Exceptions | `ForgeError`, `ValidationError`, `PolicyError`, `PolicyDeniedError`, `CryptoError`, `SecurityError`, `ProviderError`, `ConfigError` |
+
+## Experimental
+
+Experimental APIs are usable, but the contract is still being refined. Pin versions and read changelogs before depending on them in production.
+
+| Surface | Examples |
+|---|---|
+| Slow generation and autoresearch | `SlowGenerateRequest`, `SlowGenerateResult`, `generate_slow_artifact_set` |
+| x402 live payment client/data source | `X402Client`, `X402Config`, `PaymentRequirement`, `X402DataSource` |
+| Skills and registries | `search_skills`, `install_skill_to_project`, `SkillInfo`, `InstalledSkill` |
+| Market data helpers | `MarketDataRouter`, `MarketDataVenue`, `BinanceVenue`, `CoinGeckoVenue` |
+| Usage accounting | `UsageTracker`, `TokenUsage`, `estimate_session_cost` |
+| Observability hooks | `ObservabilityEvent`, `EventSink`, `ListEventSink`, `LoggingEventSink`, `JsonlEventSink`, `CompositeEventSink` |
+
+## Internal
+
+Internal exports exist only for compatibility with early adopters or generated artifacts. Prefer their documented higher-level surfaces instead.
+
+| Surface | Examples |
+|---|---|
+| Low-level HTTP helpers | `http_get_json`, `http_post_json`, `RetryPolicy`, `HttpError` |
+| Generated scaffold loader internals | `StrategyConfig`, `load_scaffold_router` |
+
+## Extension Protocols
+
+The five extension contracts are exported from the top-level package and have docstrings that include the canonical signature, minimum implementation, and reference implementation pointer.
+
+```python
+from aether_forge import Planner, ExecutionRouter, PlanningModel, MemoryStore, DataSource
+
+print(Planner.__doc__)
+```
+
+Plugin discovery uses `importlib.metadata` entry points in these groups:
+
+| Group | Target |
+|---|---|
+| `aether_forge.planners` | Zero-argument factory returning a `Planner` |
+| `aether_forge.execution_routers` | Factory returning an `ExecutionRouter` |
+| `aether_forge.data_sources` | `DataSource` subclass or factory |
+| `aether_forge.skill_registries` | Registry URL string or callable returning one |
+
+Plugin imports that raise are logged at `WARNING` and skipped; third-party plugin failures must not crash framework startup.

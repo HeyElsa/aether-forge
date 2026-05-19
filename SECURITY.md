@@ -18,8 +18,8 @@ We will acknowledge receipt within 48 hours and provide a timeline for a fix.
 
 | Version | Supported |
 |---------|-----------|
-| 0.18.x  | Yes       |
-| < 0.18  | No        |
+| 0.1.x   | Yes       |
+| < 0.1   | No        |
 
 ## Security Practices
 

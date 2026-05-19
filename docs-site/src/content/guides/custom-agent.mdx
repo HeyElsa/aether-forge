@@ -45,13 +45,13 @@ forge generate-fast \
   --strategy-file strategy.md \
   --wallet --autonomous \
   --planner-mode openrouter \
-  --model deepseek/deepseek-r1 \
+  --planner-model deepseek/deepseek-r1 \
   --output ./sol-scalper
 ```
 
 Key flags:
-- `--planner-mode` — force a specific LLM provider (`ollama`, `anthropic`, `openai`, `google`, `openrouter`)
-- `--model` — specify the exact model name
+- `--planner-mode` — force a specific LLM provider (`ollama`, `anthropic`, `openai`, `gemini`, `openrouter`)
+- `--planner-model` — specify the exact model name
 - `--wallet` — provision a real OWS wallet (9 chains)
 - `--autonomous` — enable autonomous decision-making
 - `--no-registry` — skip local registry if you want zero tracking
@@ -84,13 +84,13 @@ Edit the `planner` block or pass flags at runtime:
 
 ```bash
 # Use Claude for complex decisions
-forge run . --planner-mode anthropic --model claude-sonnet-4.5
+forge run . --planner-mode anthropic --planner-model claude-sonnet-4.5
 
 # Switch to local Ollama (free, private)
-forge run . --planner-mode ollama --model gemma4:latest
+forge run . --planner-mode ollama --planner-model gemma4:latest
 
 # Use any OpenRouter model
-forge run . --planner-mode openrouter --model meta-llama/llama-4-maverick
+forge run . --planner-mode openrouter --planner-model meta-llama/llama-4-maverick
 ```
 
 Same agent. Same strategy. Different brain.

@@ -30,11 +30,11 @@ The agent is now an NFT on the ERC-8004 IdentityRegistry at `0x8004A169FB4a33251
 ## Discovery
 
 ```bash
-# Find agents by capability
-forge agent-discover --capability get-token-price
+# Inspect one on-chain agent by token ID
+forge agent-discover --agent-id 1
 
-# Filter by verification status
-forge agent-discover --capability get-token-price --verified-only
+# Count agents owned by an address
+forge agent-discover --address 0x...
 ```
 
 ## Trust Tiers

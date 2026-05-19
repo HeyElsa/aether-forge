@@ -139,7 +139,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--planner-mode",
         choices=["heuristic", "static", "openai-compatible", "function-call", "anthropic", "gemini", "openai", "openrouter", "ollama"],
-        help="LLM provider to bake into the generated agent's aether-forge.json. Default: auto-detect (Ollama if reachable, else first available cloud key, else heuristic).",
+        help=(
+            "LLM provider to bake into the generated agent's aether-forge.json. "
+            "Default: auto-detect cloud keys first "
+            "(Anthropic, OpenAI, Gemini, OpenRouter), then Ollama if no cloud key is set, else heuristic."
+        ),
     )
     generate_parser.add_argument("--planner-model", help="Model name to bake into the generated agent's planner config.")
     generate_parser.add_argument("--planner-base-url", help="Base URL to bake into the generated agent's planner config (e.g. http://localhost:11434 for Ollama).")
@@ -715,8 +719,12 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         )
         results = runner.run()
 
-        # Print portfolio summary if available
-        if hasattr(scaffold_router, "engine"):
+        # Print portfolio summary only for crypto-style agents. General
+        # agents may still carry the generic scaffold router, but showing
+        # balances/P&L for a document or support agent is misleading.
+        agent_spec = json.loads((directory_path / "agent-spec.json").read_text(encoding="utf8"))
+        domain = agent_spec.get("metadata", {}).get("domain", "")
+        if "crypto" in domain and hasattr(scaffold_router, "engine"):
             portfolio = scaffold_router.engine.portfolio_summary()
             print(f"\n  Portfolio: ${portfolio['total_value_usd']:,.2f} (P&L: ${portfolio['pnl_usd']:+,.2f})")
         return 0

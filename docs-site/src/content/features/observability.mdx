@@ -4,6 +4,67 @@
 
 Production agents need observability. Aether Forge exposes deep health checks, Prometheus metrics, structured JSON logs, and replay-based debugging.
 
+## Structured Runtime Events
+
+The runner and runtime can emit typed observability events through an `EventSink`.
+The built-in sinks are stdlib-only:
+
+| Sink | Use case |
+|---|---|
+| `ListEventSink` | Tests and local inspection |
+| `LoggingEventSink` | Route events through Python logging |
+| `JsonlEventSink` | Append events directly to a JSONL file |
+| `CompositeEventSink` | Fan out to multiple sinks |
+
+```python
+from aether_forge import Forge, ListEventSink
+
+sink = ListEventSink()
+project = Forge.open("./my-agent")
+project.run(
+    environment="sandbox",
+    max_ticks=1,
+    event_sink=sink,
+    persist_memory=False,
+    persist_replays=False,
+)
+
+for event in sink.events:
+    print(event.kind, event.severity, event.details)
+```
+
+Every event serializes to this shape:
+
+```json
+{
+  "eventId": "evt_...",
+  "kind": "runner.tick.completed",
+  "recordedAt": "2026-05-19T...",
+  "severity": "info",
+  "artifactSetId": "aset_...",
+  "environment": "sandbox",
+  "sessionId": "session_...",
+  "tick": 1,
+  "stepId": "step_3",
+  "capabilityId": "cap-market-btc-price",
+  "message": "Capability action executed.",
+  "details": {"success": true, "outputType": "dict", "outputKeys": ["price_usd"]}
+}
+```
+
+Core event kinds:
+
+| Kind | Emitted when |
+|---|---|
+| `runner.tick.started` / `runner.tick.completed` / `runner.tick.failed` | A runner tick starts or finishes |
+| `runtime.session.started` / `runtime.session.completed` / `runtime.session.failed` / `runtime.session.held` / `runtime.session.paused` | A runtime session changes terminal state |
+| `planner.fallback` | The prompt-driven planner records `last_planner_parse_failure` and falls back |
+| `policy.denied` | A capability proposal is denied or held by policy |
+| `action.executed` / `action.failed` | A capability execution succeeds or fails |
+| `memory.read` / `memory.write` / `memory.promote` | A native memory operation completes |
+| `memory.write_failed` | The runner fails to persist its tick summary |
+| `security.prompt_injection_detected` | Capability output is sanitized before entering prompt context |
+
 ## Health Server
 
 Run with `--health-port 8080` to expose:
@@ -105,6 +166,12 @@ Add `--full` to see complete payloads and outputs.
 
 ```bash
 tail -f agent.jsonl | jq -c 'select(.level=="ERROR") | {ts, msg}'
+```
+
+When JSON logging is enabled, observability events are attached under `aetherEvent`:
+
+```bash
+tail -f agent.jsonl | jq -c 'select(.aetherEvent.kind=="policy.denied") | .aetherEvent'
 ```
 
 ## Production Deploy

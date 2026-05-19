@@ -165,12 +165,14 @@ def handler(event, context):
     # Pull state
     s3.download_file("agent-state", "memory.db", "/tmp/memory.db")
 
-    runner = AgentRunner(Path("/var/task/agent"), RunnerConfig(
-        environment="live",
-        memory_db_path="/tmp/memory.db",
-        auto_approve=True,
-    ))
-    runner._initialize()
+    runner = AgentRunner(
+        Path("/var/task/agent"),
+        config=RunnerConfig(
+            environment="production",
+            memory_db_path="/tmp/memory.db",
+            persist_replays=False,
+        ),
+    )
     result = runner.tick()
 
     # Push state back
@@ -189,6 +191,8 @@ railway up
 ```
 
 ## Production Checklist
+
+For the full promotion, security, memory, budget, MCP, and incident checklist, see [Production Readiness](/guides/production-readiness).
 
 Before going live:
 

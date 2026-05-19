@@ -103,6 +103,11 @@ class DataSource(ABC):
     and error count on the base attributes — :meth:`status` returns those for
     observability.
 
+    Canonical signatures: ``supports(capability: str) -> bool``,
+    ``fetch(capability: str, **params: Any) -> DataResult``, and
+    ``subscribe(capability: str, callback: Callable[[Any], None], **params:
+    Any) -> Subscription | None``.
+
     Minimum viable implementation::
 
         class StaticPriceSource(DataSource):
@@ -114,11 +119,12 @@ class DataSource(ABC):
             def fetch(self, capability: str, **params) -> DataResult:
                 self.fetch_count += 1
                 symbol = params["symbol"]
-                return DataResult(success=True, data={"price": self._prices[symbol]},
-                                  source="static", capability=capability,
+                return DataResult(source="static", capability=capability,
+                                  data={"price": self._prices[symbol]},
                                   cost=DataSourceCost(amount_usd=0.0, paid=False))
 
-    Built-in implementations: :class:`HTTPDataSource` (free REST APIs),
+    Reference implementation: :class:`MockDataSource` (deterministic tests).
+    Built-in sources include :class:`HTTPDataSource` (free REST APIs),
     :class:`X402DataSource` (HTTP 402 micropayments),
     :class:`WebSocketDataSource`, :class:`McpDataSource` (Model Context
     Protocol), :class:`MockDataSource` (testing).

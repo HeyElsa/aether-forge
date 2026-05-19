@@ -6,6 +6,7 @@ from pathlib import Path
 
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
 from aether_forge.runner import AgentRunner, RunnerConfig, TickResult
+from aether_forge.runtime import StepKind, StepProposal
 
 
 def test_runner_executes_ticks(tmp_path: Path) -> None:
@@ -100,6 +101,37 @@ def test_runner_working_set_persists_across_ticks(tmp_path: Path) -> None:
 
     # Working set should accumulate across ticks
     assert isinstance(runner._working_set, dict)
+
+
+def test_runner_tick_accepts_request_scoped_scenario_inputs(tmp_path: Path) -> None:
+    output = tmp_path / "agent"
+    generate_fast_artifact_set(FastGenerateRequest(
+        name="Webhook Test", idea="react to external events", output_directory=output,
+    ))
+
+    class EchoPlanner:
+        def propose_plan(self, session):
+            session.working_set["seen_event"] = session.session_state["scenario_inputs"]["event"]
+            return [
+                StepProposal(
+                    kind=StepKind.REASON,
+                    description="Recorded webhook event.",
+                    payload={"mark_complete": True},
+                )
+            ]
+
+    config = RunnerConfig(
+        max_ticks=1,
+        interval_seconds=0,
+        persist_memory=False,
+        persist_replays=False,
+    )
+    runner = AgentRunner(output, config=config, planner_factory=EchoPlanner)
+
+    result = runner.tick(scenario_inputs={"event": "price_alert"})
+
+    assert result.session_status == "complete"
+    assert runner._working_set["seen_event"] == "price_alert"
 
 
 def test_generated_scaffold_has_main_and_pyproject(tmp_path: Path) -> None:

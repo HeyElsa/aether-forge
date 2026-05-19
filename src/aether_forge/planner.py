@@ -119,6 +119,8 @@ class PlanningModel(Protocol):
     typed ``StepProposal`` objects. Models that emit invalid or undeclared
     capabilities are tolerated: the planner falls back to a heuristic plan.
 
+    Canonical signature: ``complete(planning_prompt: str) -> str``.
+
     Minimum viable implementation::
 
         class StaticModel:
@@ -127,7 +129,9 @@ class PlanningModel(Protocol):
             def complete(self, planning_prompt: str) -> str:
                 return self.response
 
-    Built-in implementations: :class:`aether_forge.AnthropicPlanningModel`,
+    Reference implementation: :class:`aether_forge.StaticPlanningModel`
+    (deterministic tests). Provider implementations are
+    :class:`aether_forge.AnthropicPlanningModel`,
     :class:`aether_forge.OpenAICompatiblePlanningModel` (covers OpenAI,
     Ollama, OpenRouter, and any compatible endpoint), and
     :class:`aether_forge.GeminiPlanningModel`.

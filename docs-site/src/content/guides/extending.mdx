@@ -112,10 +112,9 @@ class PrivatePricesSource(DataSource):
         body = http_get_json(f"https://prices.internal/v1/{capability}",
                              params={"symbol": symbol})
         return DataResult(
-            success=True,
-            data=body,
             source=self.name,
             capability=capability,
+            data=body,
             cost=DataSourceCost(amount_usd=0.0, paid=False),
         )
 ```

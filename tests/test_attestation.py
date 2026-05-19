@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from aether_forge import __version__
 from aether_forge.attestation import (
     Attestation,
     build_attestation_typed_data,
@@ -52,6 +53,7 @@ def test_attestation_roundtrip() -> None:
     assert loaded.timestamp == att.timestamp
     assert loaded.signature == att.signature
     assert loaded.tier == att.tier
+    assert loaded.framework_version == __version__
 
 
 def test_attestation_save_and_load(tmp_path: Path) -> None:

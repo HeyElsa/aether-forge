@@ -30,6 +30,7 @@ $ forge generate-fast --name "BTC Basis Trader" \
 - [Security](#security)
 - [Agent Registry & Discovery](#agent-registry--discovery)
 - [Open Agent Economy](#open-agent-economy)
+- [Public API Boundary](#public-api-boundary)
 - [Documentation](#documentation)
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
@@ -672,10 +673,10 @@ src/aether_forge/
     x402.py              HTTP 402 micropayments
 
 demo.sh                  Canonical 10-section team walk-through (LLM-driven swing trader)
-schemas/                 23 JSON schemas
-tests/                   442 tests across 47 files
+schemas/                 19 JSON schemas
+tests/                   pytest suite across 59 test modules
 examples/                Delta-neutral BTC trading agent
-docs/prd/                versioned PRDs (v0.1.0 — v0.15.0)
+docs/prd/                versioned PRDs (v0.1.0 — v0.23.0)
 ```
 
 ---
@@ -863,6 +864,18 @@ See `demo.sh` for the full env-var matrix.
 
 ---
 
+## Public API Boundary
+
+Top-level Python exports are labeled by `aether_forge.API_STABILITY`:
+
+- `stable` — application and extension code can depend on these surfaces.
+- `experimental` — usable, but still being refined before `1.0`.
+- `internal` — compatibility exports for early adopters or generated artifacts.
+
+The `Forge` facade covers the common generate/validate/evaluate/run path. The stable extension contracts are `Planner`, `ExecutionRouter`, `PlanningModel`, `MemoryStore`, and `DataSource`. See the docs site [Stable API boundary](./docs-site/src/content/reference/stable-api.mdx) for the full table.
+
+---
+
 ## Documentation
 
 Full documentation site lives at `docs-site/` (Nextra v4, deployable to Vercel):
@@ -877,6 +890,8 @@ Or browse the markdown directly:
 - [End-to-End Tutorial](docs-site/src/content/guides/end-to-end.mdx)
 - [Build a Custom Agent](docs-site/src/content/guides/custom-agent.mdx)
 - [Writing Strategies](docs-site/src/content/guides/strategy-writing.mdx)
+- [Production Readiness](docs-site/src/content/guides/production-readiness.mdx)
+- [Multi-Tenant Integration](docs-site/src/content/guides/multi-tenant-integration.mdx)
 - [Extending the Framework](docs-site/src/content/guides/extending.mdx) — custom planners, routers, data sources, memory stores; PyPI plugin distribution
 - [CLI Reference](docs-site/src/content/reference/cli.mdx)
 - [Configuration Reference](docs-site/src/content/reference/configuration.mdx)

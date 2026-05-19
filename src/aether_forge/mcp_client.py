@@ -58,6 +58,8 @@ from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
+from ._version import __version__
+
 logger = logging.getLogger(__name__)
 
 
@@ -188,7 +190,7 @@ class _McpClientBase:
             {
                 "protocolVersion": self.PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
-                "clientInfo": {"name": "aether-forge", "version": "0.15.0"},
+                    "clientInfo": {"name": "aether-forge", "version": __version__},
             },
         )
         self._server_info = response.get("serverInfo", {})

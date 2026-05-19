@@ -160,6 +160,10 @@ class MemoryStore(Protocol):
     :func:`memory._find_secret_like_paths`) are rejected before reaching the
     store; implementations do not need to repeat that check.
 
+    Canonical signatures: ``read(query: MemoryQuery) -> list[MemoryRecord]``,
+    ``write(record: MemoryRecord) -> MemoryRecord``, and ``promote(request:
+    MemoryPromotionRequest) -> MemoryPromotionResult``.
+
     Minimum viable implementation::
 
         class DictStore:
@@ -169,9 +173,9 @@ class MemoryStore(Protocol):
             def write(self, r): self._rows[r.memory_id] = r; return r
             def promote(self, req): ...  # see InMemoryMemoryStore
 
-    Built-in implementations: :class:`aether_forge.InMemoryMemoryStore`
-    (testing) and :class:`aether_forge.SqliteMemoryStore` (production,
-    optional Fernet encryption).
+    Reference implementation: :class:`aether_forge.SqliteMemoryStore`
+    (production, optional Fernet encryption). :class:`aether_forge.InMemoryMemoryStore`
+    is the deterministic test implementation.
     """
 
     def read(self, query: MemoryQuery) -> list[MemoryRecord]: ...

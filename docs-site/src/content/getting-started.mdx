@@ -59,24 +59,24 @@ Every check is a **functional round-trip**, not just an import test.
 
 Aether Forge auto-detects the best available LLM in this priority:
 
-1. **Ollama** (local, free, private) — `gemma4:latest`, `llama3.3`, etc.
-2. **Anthropic** — `claude-sonnet-4.5`, `claude-opus-4-6`
-3. **OpenAI** — `gpt-4o`, `gpt-4.1`
-4. **Google** — `gemini-2.5-flash`
-5. **OpenRouter** — any of 200+ models
+1. **Anthropic** — `claude-sonnet-4.5`, `claude-opus-4-6`
+2. **OpenAI** — `gpt-4o`, `gpt-4.1`
+3. **Google** — `gemini-2.5-flash`
+4. **OpenRouter** — any of 200+ models
+5. **Ollama** (local, free, private) — only when no cloud key is set, unless `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`
 6. **Heuristic** — rule-based fallback (no LLM needed)
 
 Set your API key for whichever provider you want:
 
 ```bash
-# Option A — Local Ollama (free)
-ollama pull gemma4:latest
+# Option A — Anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
 
 # Option B — OpenRouter (200+ models)
 export OPENROUTER_API_KEY=sk-or-v1-...
 
-# Option C — Anthropic
-export ANTHROPIC_API_KEY=sk-ant-...
+# Option C — Local Ollama (free, used only when no cloud key is set)
+ollama pull gemma4:latest
 ```
 
 ## Generate Your First Agent
@@ -90,7 +90,7 @@ forge generate-fast \
 ```
 
 ```
-[planner] auto-detected: mode=ollama model=gemma4:latest
+[planner] auto-detected: mode=anthropic model=claude-sonnet-4.5
   Wallet: 0xE8D0...081d5 (Base)
   Attestation: self-attested
 Generated at ./my-agent

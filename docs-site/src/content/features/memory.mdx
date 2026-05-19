@@ -149,13 +149,12 @@ CREATE TABLE memory_records (
 ### Query memory programmatically
 
 ```python
-from aether_forge.storage import SqliteMemoryStore, MemoryQuery
+from aether_forge import MemoryQuery, SqliteMemoryStore
 
 store = SqliteMemoryStore("./my-agent/memory.db")
 records = store.read(MemoryQuery(
     memory_type="decision-history",
     limit=10,
-    order_by="created_at DESC",
 ))
 for r in records:
     print(f"[{r.created_at}] {r.summary}")

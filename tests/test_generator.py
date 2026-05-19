@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import py_compile
 from pathlib import Path
 from shutil import rmtree
@@ -48,6 +49,55 @@ def test_generate_fast_general_artifact_set_is_valid() -> None:
         assert generated.domain == "general-agent"
         assert result.ok is True
         assert result.issues == []
+    finally:
+        rmtree(output_dir)
+
+
+def test_generate_fast_general_scaffold_uses_general_defaults() -> None:
+    output_dir = Path(mkdtemp(prefix="aether-forge-generate-"))
+
+    try:
+        generate_fast_artifact_set(
+            FastGenerateRequest(
+                name="Research Brief Agent",
+                idea="Summarize a webpage and save a short note.",
+                output_directory=output_dir,
+            )
+        )
+
+        strategy = json.loads((output_dir / "strategy.json").read_text(encoding="utf8"))
+        agent_doc = (output_dir / "AGENT.md").read_text(encoding="utf8")
+        protocol_source = (output_dir / "src" / "protocols" / "__init__.py").read_text(encoding="utf8")
+
+        assert "spread_pct" not in strategy["parameters"]
+        assert "review_interval_ticks" in strategy["parameters"]
+        assert "paper trading" not in agent_doc.lower()
+        assert "limit orders" not in agent_doc.lower()
+        assert '"x402Support": False' in protocol_source
+        assert '"budgetLimitUsd": 0.0' in protocol_source
+    finally:
+        rmtree(output_dir)
+
+
+def test_generate_fast_crypto_scaffold_keeps_trading_defaults() -> None:
+    output_dir = Path(mkdtemp(prefix="aether-forge-generate-"))
+
+    try:
+        generate_fast_artifact_set(
+            FastGenerateRequest(
+                name="BTC Basis Agent",
+                idea="Build a delta neutral BTC basis agent using spot and perp markets with unwind logic.",
+                output_directory=output_dir,
+            )
+        )
+
+        strategy = json.loads((output_dir / "strategy.json").read_text(encoding="utf8"))
+        protocol_source = (output_dir / "src" / "protocols" / "__init__.py").read_text(encoding="utf8")
+
+        assert "spread_pct" in strategy["parameters"]
+        assert strategy["parameters"]["tokens"] == ["ETH"]
+        assert '"x402Support": True' in protocol_source
+        assert '"budgetLimitUsd": 50.0' in protocol_source
     finally:
         rmtree(output_dir)
 
