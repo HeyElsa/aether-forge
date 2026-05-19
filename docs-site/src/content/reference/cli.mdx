@@ -198,6 +198,26 @@ forge artifact-migration-plan ./my-agent-v1 ./my-agent-v2 \
     --artifact-type capability-manifest
 ```
 
+### `forge migrate`
+
+Dry-run or apply a migration contract. `--apply` is required for any mutation.
+
+```bash
+# Memory database migration; default is dry-run
+forge migrate memory ./my-agent \
+    --contract ./my-agent/migration-contract.json
+
+# Apply after reviewing the dry-run report
+forge migrate memory ./my-agent \
+    --contract ./my-agent/migration-contract.json \
+    --apply
+
+# Single artifact migration
+forge migrate artifact ./my-agent/agent-spec.json \
+    --target agent-spec \
+    --contract ./migration-contract.json
+```
+
 ## Scaffold
 
 The `scaffold-*` commands operate on the generated agent project (the

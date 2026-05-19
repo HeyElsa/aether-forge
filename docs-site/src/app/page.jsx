@@ -80,9 +80,17 @@ export default function HomePage() {
           style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
         />
       </div>
-      <div style={{ display: "flex", gap: "1rem", marginTop: "2rem" }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: "1rem",
+          marginTop: "2rem",
+        }}
+      >
         <Link
-          href="/docs"
+          href="/docs/getting-started"
           style={{
             padding: "0.75rem 2rem",
             background: "#0a84ff",

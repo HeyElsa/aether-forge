@@ -64,6 +64,9 @@ jobs:
 
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:3010/docs/getting-started >/tmp/aether-forge-docs.html; then
+              curl -fsS http://localhost:3010/ >/tmp/aether-forge-docs-home.html
+              curl -fsS http://localhost:3010/docs/guides/upgrading >/tmp/aether-forge-docs-upgrading.html
+              curl -fsS http://localhost:3010/docs/features/x402-payments >/tmp/aether-forge-docs-x402.html
               exit 0
             fi
             if ! kill -0 "$pid" 2>/dev/null; then

@@ -23,6 +23,18 @@ def _doc_files() -> list[Path]:
     return files
 
 
+def _docs_routes() -> set[str]:
+    content_root = ROOT / "docs-site" / "src" / "content"
+    routes = {"/docs"}
+    for path in content_root.rglob("*.mdx"):
+        rel = path.relative_to(content_root).with_suffix("")
+        route = "/docs/" + rel.as_posix()
+        if route.endswith("/index"):
+            route = route[: -len("/index")]
+        routes.add(route)
+    return routes
+
+
 def _markdown_code_blocks(text: str) -> list[str]:
     blocks: list[str] = []
     in_block = False
@@ -93,6 +105,32 @@ def test_forge_migrate_examples_use_subcommands() -> None:
                     ("forge migrate memory ", "forge migrate artifact ")
                 ):
                     offenders.append(f"{path.relative_to(ROOT)}: {command}")
+
+    assert offenders == []
+
+
+def test_internal_docs_links_include_docs_base_path() -> None:
+    pattern = re.compile(r"\]\(/(guides|reference|cookbook|features|examples|help|getting-started)(?:[)#/?]|$)")
+    offenders: list[str] = []
+    for path in _doc_files():
+        text = path.read_text(encoding="utf8")
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if pattern.search(line):
+                offenders.append(f"{path.relative_to(ROOT)}:{line_number}: {line.strip()}")
+
+    assert offenders == []
+
+
+def test_internal_docs_links_resolve_to_existing_pages() -> None:
+    routes = _docs_routes()
+    pattern = re.compile(r"\]\((/docs/[^)#?]+)")
+    offenders: list[str] = []
+    for path in _doc_files():
+        text = path.read_text(encoding="utf8")
+        for match in pattern.finditer(text):
+            route = match.group(1).rstrip("/")
+            if route not in routes:
+                offenders.append(f"{path.relative_to(ROOT)}: {route}")
 
     assert offenders == []
 

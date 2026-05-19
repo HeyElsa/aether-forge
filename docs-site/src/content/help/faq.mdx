@@ -164,15 +164,15 @@ Each agent is a single process. Scale by running more agents (potentially specia
 
 ### Can I add a custom LLM planner?
 
-Yes — implement the `Planner` Protocol exported from `aether_forge`, or wrap any OpenAI-compatible endpoint with the existing `OpenAICompatiblePlanningModel`. See [Extending the Framework](/guides/extending) for a worked xAI example.
+Yes — implement the `Planner` Protocol exported from `aether_forge`, or wrap any OpenAI-compatible endpoint with the existing `OpenAICompatiblePlanningModel`. See [Extending the Framework](/docs/guides/extending) for a worked xAI example.
 
 ### Can I add a custom data source (private API, oracle)?
 
-Yes — subclass `DataSource` from `aether_forge` and add it to your agent's `src/strategy/router.py::_build_data_router`. Full pattern in the [custom data source cookbook](/cookbook/custom-data-source).
+Yes — subclass `DataSource` from `aether_forge` and add it to your agent's `src/strategy/router.py::_build_data_router`. Full pattern in the [custom data source cookbook](/docs/cookbook/custom-data-source).
 
 ### Can I publish my extension to PyPI without forking?
 
-Yes. Aether Forge auto-discovers plugins via `importlib.metadata` entry points. Declare one of `aether_forge.{planners,execution_routers,data_sources,skill_registries}` in your `pyproject.toml` and the framework picks it up after `pip install`. See [Extending the Framework — Distributing as a PyPI plugin](/guides/extending).
+Yes. Aether Forge auto-discovers plugins via `importlib.metadata` entry points. Declare one of `aether_forge.{planners,execution_routers,data_sources,skill_registries}` in your `pyproject.toml` and the framework picks it up after `pip install`. See [Extending the Framework — Distributing as a PyPI plugin](/docs/guides/extending).
 
 ### Can I swap the memory backend (e.g., Postgres)?
 
