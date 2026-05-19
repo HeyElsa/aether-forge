@@ -9,7 +9,8 @@
     "render:extending": "remotion render src/index.tsx ExtendingFramework out/30-extending.mp4 --concurrency=4",
     "render:getting-started": "remotion render src/index.tsx GettingStarted out/31-getting-started.mp4 --concurrency=4",
     "render:python-sdk": "remotion render src/index.tsx PythonSDK out/32-python-sdk.mp4 --concurrency=4",
-    "render:all": "npm run render:extending && npm run render:getting-started && npm run render:python-sdk",
+    "render:typescript-sdk": "remotion render src/index.tsx TypeScriptSDK out/33-typescript-sdk.mp4 --concurrency=4",
+    "render:all": "npm run render:extending && npm run render:getting-started && npm run render:python-sdk && npm run render:typescript-sdk",
     "build": "npm run render:all"
   },
   "dependencies": {
