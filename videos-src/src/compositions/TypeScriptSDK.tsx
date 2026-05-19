@@ -93,7 +93,11 @@ export const TypeScriptSDK: React.FC = () => (
         <TitleScene
           titleLines={["TYPESCRIPT", "SDK"]}
           tagline="Validators, types, and the cross-language planner-output parser — Aether Forge in your browser, Node, or edge runtime"
-          titleFontSize={110}
+          // Use the canonical fontSize/letter-spacing pair (130 / 8) — the
+          // same defaults the CLI and Python SDK titles use, so the weight-200
+          // stroke renders crisply. TYPESCRIPT fits within the frame at this
+          // size; the smaller titleFontSize=110 override used previously made
+          // browser sub-pixel rounding thicken the weight-200 strokes.
         />
       </Series.Sequence>
       <Series.Sequence durationInFrames={330} name="InstallTypes">
