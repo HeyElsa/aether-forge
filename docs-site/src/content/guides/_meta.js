@@ -1,4 +1,6 @@
 export default {
+  "choose-your-path": "Choose Your Path",
+  "first-10-minutes": "First 10 Minutes",
   "end-to-end": "End-to-End Tutorial",
   "custom-agent": "Build a Custom Agent",
   "strategy-writing": "Writing Strategies",

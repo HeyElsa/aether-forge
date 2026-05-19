@@ -1,4 +1,6 @@
 export default {
+  "install-matrix": "Install Matrix",
+  "generated-agent-anatomy": "Generated Agent Anatomy",
   cli: "CLI Reference",
   configuration: "Configuration",
   "python-sdk": "Python SDK",

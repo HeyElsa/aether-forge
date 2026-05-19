@@ -1,0 +1,107 @@
+# Generated Agent Anatomy
+
+`forge generate-fast` creates a complete agent project, not just a prompt. This page explains what each generated file does and what is safe to edit.
+
+## Top-Level Files
+
+| Path | Purpose | Edit guidance |
+|---|---|---|
+| `aether-forge.json` | Runtime config: planner, deployment profile, MCP servers, budgets, runtime knobs | Edit intentionally; run `forge config-validate` |
+| `aether-forge.example.json` | Example config shape for operators | Safe to edit as documentation |
+| `agent-spec.json` | Typed agent objective, domain, constraints, and metadata | Edit only when changing the agent contract; run `forge validate` |
+| `capability-manifest.json` | Declared capability surface the planner may request | Edit with policy updates; run `forge validate` and `forge eval-pack` |
+| `policy-bundle.json` | Runtime allow/deny rules and side-effect constraints | Treat as safety-critical; test in sandbox first |
+| `scenario-pack.json` | Evaluation scenarios and expected outcomes | Add scenarios when behavior changes |
+| `scaffold.manifest.json` | Generated artifact ownership and regeneration rules | Do not bypass; use it to understand ownership |
+| `strategy.json` | Generated strategy parameters | Safe to tune through `forge strategy` or manual review |
+| `memory.db` | Durable Layer 3 SQLite memory | Runtime state; back up before migrations |
+| `replays/` | Tick replay evidence | Runtime audit trail; do not edit |
+
+## Developer Files
+
+| Path | Purpose |
+|---|---|
+| `README.md` | Agent-specific quickstart |
+| `AGENT.md` | Operational notes for the generated agent |
+| `pyproject.toml` | Local project metadata |
+| `main.py` | Direct Python entry point |
+| `Makefile` | Day-one commands: test, validate, eval, run, doctor |
+| `Dockerfile` / `docker-compose.yml` | Container runtime |
+| `.env.example` | Environment variable template |
+| `.dockerignore` | Container build hygiene |
+| `tests/test_agent.py` | Generated smoke tests |
+
+Generated agents ship these files so a developer can run:
+
+```bash
+make test
+make validate
+make eval-pack
+make doctor
+```
+
+## Source Layout
+
+| Path | Role |
+|---|---|
+| `src/generated/agent_context.py` | Generated typed context helper |
+| `src/strategy/router.py` | Strategy router and data-source wiring |
+| `src/strategy/*.py` | Strategy helpers, generated defaults, paper trading support |
+| `src/policies/policy_bundle.py` | Python policy mirror for scaffold checks |
+| `src/runtime/run_agent.py` | Generated runtime wrapper |
+| `src/runtime/live_exchange.py` | Live exchange adapter boundary |
+| `src/runtime/wallet.py` | Wallet adapter boundary |
+| `src/protocols/__init__.py` | Protocol-specific constants and helpers |
+
+## What Is Framework-Owned?
+
+The safest rule is:
+
+- JSON artifacts define the contract.
+- `src/` files implement the generated scaffold.
+- `memory.db` and `replays/` are runtime state.
+- `scaffold.manifest.json` explains what was generated and how it may be regenerated.
+
+When you change JSON artifacts, run:
+
+```bash
+forge validate .
+forge eval-pack .
+```
+
+When you change scaffold code, run:
+
+```bash
+make test
+make eval-pack
+```
+
+When you change policy code, also run:
+
+```bash
+forge scaffold-policy-sync .
+forge security-check . --harden
+```
+
+## Common Safe Changes
+
+| Change | Files usually touched | Checks |
+|---|---|---|
+| Tune a strategy parameter | `strategy.json`, `scenario-pack.json` | `forge eval-pack .` |
+| Add a read-only data source | `aether-forge.json`, `src/strategy/router.py` | `make test`, `forge run . --environment sandbox --max-ticks 1` |
+| Add a side-effecting capability | `capability-manifest.json`, `policy-bundle.json`, router code | `forge validate`, `forge eval-pack`, `forge security-check . --harden` |
+| Add MCP tools | `aether-forge.json` | `forge config-validate aether-forge.json`, `forge doctor` |
+| Move toward production | `aether-forge.json`, deployment files, policy files | [Production Readiness](/docs/guides/production-readiness) |
+
+## Files Not to Commit
+
+Do not commit secret-bearing or runtime-local state:
+
+- `.env`
+- `.ows/`
+- wallet backups
+- live exchange credentials
+- local `x402_state.json` from real runs
+- private replay files that contain sensitive inputs
+
+Generated agents should keep credential handles in config and secrets in environment variables or vaults.

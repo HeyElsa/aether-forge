@@ -1,0 +1,148 @@
+# First 10 Minutes
+
+This is the shortest complete path from a clean shell to a running Aether Forge agent. It does not require an API key, wallet, MCP server, or live funds.
+
+## 0:00 - Create an Environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install 'aether-forge @ git+https://github.com/HeyElsa/aether-forge.git'
+```
+
+Expected:
+
+```text
+Successfully installed aether-forge ...
+```
+
+If you are working inside this repository instead of installing from GitHub:
+
+```bash
+pip install -e '.[dev]'
+```
+
+## 2:00 - Check the Runtime
+
+```bash
+forge doctor
+```
+
+Expected shape:
+
+```text
+[  ok] Python version: Python 3.12+
+[  ok] jsonschema: jsonschema ...
+[  ok] Memory store (SQLite): Layer 3 round-trip ok (write + read)
+
+Healthy (with optional skips) - ...
+```
+
+Skipped optional checks are fine for this tutorial.
+
+## 3:00 - Generate a Safe Agent
+
+```bash
+forge generate-fast \
+  --name "hello-agent" \
+  --idea "read an input, reason about it, and report a short summary" \
+  --output ./hello-agent \
+  --planner-mode heuristic
+```
+
+Expected shape:
+
+```text
+AGENT CREATED
+
+Name:          hello-agent
+Domain:        general-agent
+Wallet:        (none - sandbox only)
+Environment:   sandbox
+Capabilities:  1 (1 read, 0 write)
+
+Next steps:
+  1. forge validate ./hello-agent
+  2. forge eval-pack ./hello-agent
+  3. forge run ./hello-agent --auto-approve --environment sandbox
+```
+
+The generated agent is self-contained. The planner choice is stored in `hello-agent/aether-forge.json`.
+
+## 5:00 - Validate the Artifacts
+
+```bash
+forge validate ./hello-agent
+```
+
+Expected:
+
+```text
+Validated 5 artifacts in ./hello-agent.
+```
+
+Validation checks the machine-readable contract files, not just whether the directory exists.
+
+## 6:00 - Run Scenario Evidence
+
+```bash
+forge eval-pack ./hello-agent
+```
+
+Expected shape:
+
+```text
+Scenario pack: total=1 matched=1 pass=1 hold=0 fail=0
+```
+
+This is the first proof that the generated spec, capabilities, policy, and scenario pack agree.
+
+## 7:00 - Run One Governed Tick
+
+```bash
+forge run ./hello-agent \
+  --max-ticks 1 \
+  --interval 0 \
+  --environment sandbox \
+  --auto-approve
+```
+
+Expected:
+
+```text
+hello-agent
+Environment: sandbox | Interval: 0.0s | Ctrl+C to stop
+
+[  ok] Tick 1: complete (2 steps)
+
+1 ticks completed: complete=1
+```
+
+That tick exercised the core loop:
+
+```text
+Planner -> Policy Gate -> Execute -> Step Ledger -> Memory
+```
+
+## 9:00 - Inspect What Changed
+
+```bash
+find ./hello-agent -maxdepth 2 -type f | sort
+forge replay-show ./hello-agent/replays/tick_0001.json
+```
+
+Read these first:
+
+- `aether-forge.json` - runtime config and planner provenance
+- `agent-spec.json` - typed agent objective and domain contract
+- `capability-manifest.json` - what the planner may ask to do
+- `policy-bundle.json` - what the runtime is allowed to execute
+- `scenario-pack.json` - evidence used by `forge eval-pack`
+- `replays/tick_0001.json` - execution evidence from the tick
+
+## Where to Go Next
+
+- [Generated Agent Anatomy](/docs/reference/generated-agent-anatomy)
+- [Choose Your Path](/docs/guides/choose-your-path)
+- [Install Matrix](/docs/reference/install-matrix)
+- [Troubleshooting](/docs/help/troubleshooting)

@@ -2,7 +2,7 @@
 
 Spec-first agent builder framework. **Idea to governed, testable, production-capable agent in one CLI.**
 
-<video src="/videos/17-intro-overview.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/17-intro-overview.mp4" poster="/video-posters/17-intro-overview.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 ```bash
 # Install from GitHub (not yet on PyPI)
@@ -14,7 +14,7 @@ cd aether-forge
 pip install -e '.[dev]'
 ```
 
-Start with the [zero-risk getting started path](/docs/getting-started) before adding wallets, x402 payments, or live trading.
+Start with the [First 10 Minutes](/docs/guides/first-10-minutes) path before adding wallets, x402 payments, or live trading. If you are not sure which guide fits your use case, use [Choose Your Path](/docs/guides/choose-your-path).
 
 ## What is Aether Forge?
 
@@ -63,6 +63,16 @@ forge generate-fast --name "ETH Watcher" --idea "monitor ETH markets" \
 
 forge run ./eth-watcher --environment sandbox --mode paper --auto-approve
 ```
+
+## First-Run Map
+
+| Need | Page |
+|---|---|
+| A safe first run | [First 10 Minutes](/docs/guides/first-10-minutes) |
+| The right install command | [Install Matrix](/docs/reference/install-matrix) |
+| What generated files mean | [Generated Agent Anatomy](/docs/reference/generated-agent-anatomy) |
+| A route by goal | [Choose Your Path](/docs/guides/choose-your-path) |
+| Common failures | [Troubleshooting](/docs/help/troubleshooting) |
 
 ## Architecture
 

@@ -72,6 +72,8 @@ export default function HomePage() {
       >
         <video
           src="/videos/00-hero.mp4"
+          poster="/video-posters/00-hero.jpg"
+          aria-label="Aether Forge overview video"
           preload="metadata"
           autoPlay
           muted
@@ -90,7 +92,7 @@ export default function HomePage() {
         }}
       >
         <Link
-          href="/docs/getting-started"
+          href="/docs/guides/first-10-minutes"
           style={{
             padding: "0.75rem 2rem",
             background: "#0a84ff",
