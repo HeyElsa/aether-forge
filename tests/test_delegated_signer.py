@@ -261,6 +261,15 @@ def test_constrained_signer_refuses_disallowed_chain() -> None:
         wrapper.sign_typed_data({}, intent=SigningIntent(chain_id=8453))
 
 
+def test_constrained_signer_refuses_missing_chain_when_policy_restricts_chain() -> None:
+    wrapper = SessionKeyConstrainedSigner(
+        inner=_RecordingSigner(),
+        policy=_policy(allowed_chains=["8453"]),
+    )
+    with pytest.raises(SigningRefusedError, match="did not declare chain_id"):
+        wrapper.sign_typed_data({}, intent=SigningIntent(chain_id=None))
+
+
 def test_constrained_signer_refuses_disallowed_contract() -> None:
     wrapper = SessionKeyConstrainedSigner(
         inner=_RecordingSigner(),

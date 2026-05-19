@@ -393,7 +393,9 @@ class MigrationRunner:
 
     def _iter_candidate_rows(self, store: Any, from_version: str) -> Iterator[Any]:
         if hasattr(store, "iter_records_below"):
-            yield from store.iter_records_below(from_version, inclusive=True)
+            for record in store.iter_records_below(from_version, inclusive=True):
+                if record.schema_version == from_version:
+                    yield record
             return
         # Fallback: read everything and filter in Python. Slow but correct for
         # stores that don't implement the optimized iterator.

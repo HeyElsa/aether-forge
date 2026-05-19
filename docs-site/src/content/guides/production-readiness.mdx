@@ -1,5 +1,7 @@
 # How to Prepare an Agent for Production
 
+<video src="/videos/26-observability.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
 This guide takes a generated Aether Forge agent from local validation to a production-ready rollout gate.
 
 ## Prerequisites
@@ -24,6 +26,22 @@ forge generate-fast \
   --planner-model claude-sonnet-4-5 \
   --planner-api-key-env ANTHROPIC_API_KEY
 ```
+
+Environment variables can also declare the planner explicitly when a deployment platform owns command arguments:
+
+```bash
+export AETHER_FORGE_DEPLOYMENT_PROFILE=staging
+export AETHER_FORGE_PLANNER_MODE=anthropic
+export AETHER_FORGE_PLANNER_MODEL=claude-sonnet-4-5
+export AETHER_FORGE_PLANNER_API_KEY_ENV=ANTHROPIC_API_KEY
+
+forge generate-fast \
+  --name "Research Agent" \
+  --idea "summarize trusted sources and produce a daily brief" \
+  --output ./research-agent
+```
+
+Generated configs from this path stamp `planner.source: "explicit"` because the operator supplied the planner contract through env.
 
 For an existing agent, edit `aether-forge.json` so the top-level profile and planner provenance are explicit:
 
@@ -113,6 +131,7 @@ For x402 or agent-to-agent payments:
 - Set per-call, per-session, and daily caps conservatively.
 - Mount `x402_state.json` and `x402_state.lock` on durable storage.
 - Treat one budget as covering Elsa x402 calls and agent-to-agent payment channels.
+- Treat missing chain ids as unsafe when a constrained session-key policy declares allowed chains.
 - Verify paid capability servers reject wrong payer addresses and insufficient amounts before executing work.
 
 ## 7. Run a Live-Like Rehearsal

@@ -316,9 +316,17 @@ class SessionKeyConstrainedSigner:
 
     def _permits(self, intent: SigningIntent) -> tuple[bool, str]:
         policy = self.policy
+        if hasattr(policy, "permits"):
+            return policy.permits(
+                chain_id=intent.chain_id,
+                contract_address=intent.contract_address,
+                spend_usd=intent.spend_usd,
+            )
         if hasattr(policy, "is_expired") and policy.is_expired():
             return False, f"session key {getattr(policy, 'key_id', '?')!r} has expired"
         allowed_chains = list(getattr(policy, "allowed_chains", []) or [])
+        if allowed_chains and intent.chain_id is None:
+            return False, "policy restricts chains but intent did not declare chain_id"
         if allowed_chains and intent.chain_id is not None:
             chain_str = str(intent.chain_id)
             if chain_str not in allowed_chains and intent.chain_id not in (_safe_int(c) for c in allowed_chains):

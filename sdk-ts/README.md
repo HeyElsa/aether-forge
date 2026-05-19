@@ -2,6 +2,8 @@
 
 TypeScript SDK for [Aether Forge](https://github.com/HeyElsa/aether-forge) — validators, types, and the language-agnostic planner-output parser. Conforms to the JSON schemas published at `https://schemas.aether-forge.dev/`.
 
+Docs site reference: [`docs-site/src/content/reference/typescript-sdk.mdx`](../docs-site/src/content/reference/typescript-sdk.mdx).
+
 **Status**: v0.1.0 (Sprint 3 of the dev-feedback retrospective). Tracks the Python framework at `^0.23.0` per `package.json:schemaCompat`.
 
 ---
@@ -99,7 +101,7 @@ import type {
 } from "@aether-forge/sdk";
 ```
 
-These mirror the Python Protocols at `src/aether_forge/runtime.py`, `memory.py`, `data_layer.py`, `planner.py`. v0.1.0 is interface-only — there is no TypeScript implementation of the runtime tick loop, by design (the tick loop is the highest lockstep risk; it stays Python-side until cross-language usage data justifies a port). See the plan at `~/.claude/plans/friction-points-python-only-concurrent-lecun.md`.
+These mirror the Python Protocols at `src/aether_forge/runtime.py`, `memory.py`, `data_layer.py`, `planner.py`. v0.1.0 is interface-only — there is no TypeScript implementation of the runtime tick loop, by design. The tick loop, policy gate, memory store implementations, autoresearch loop, and signer reference implementations stay Python-side until cross-language usage data justifies a port.
 
 ---
 

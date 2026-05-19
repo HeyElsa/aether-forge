@@ -64,3 +64,33 @@ pytest test_marketplace.py -v
 
 This runs the full A→B flow without real money — uses mock wallets and a stub
 RPC, but exercises every code path in the framework.
+
+## Safety boundaries
+
+- Keep buyer and oracle wallets separate.
+- Treat the x402 budget file and lock as runtime state, not source artifacts.
+- Fund live wallets only after the mocked E2E path passes.
+- Session keys must never grant master wallet access.
+- If a constrained signer policy declares allowed chains, a signing intent without a chain id is refused.
+- Paid capability servers must reject structurally invalid payment headers, wrong payer addresses, and insufficient amounts before executing work.
+
+## Validate artifacts from TypeScript
+
+The TypeScript SDK can validate the generated buyer and oracle artifacts in a browser, edge worker, or Node host:
+
+```ts
+import { validateArtifactBundle } from "@aether-forge/sdk";
+
+const buyer = validateArtifactBundle({
+  agentSpec: buyerSpec,
+  capabilityManifest: buyerCapabilities,
+  policyBundle: buyerPolicy,
+  scenarioPack: buyerScenarios,
+});
+
+if (!buyer.ok) {
+  console.error(buyer.results);
+}
+```
+
+The SDK does not run the two-agent payment loop. Runtime execution, wallet operations, policy gates, memory stores, and x402 settlement remain Python-side in the current release.

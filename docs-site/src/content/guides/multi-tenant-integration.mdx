@@ -1,5 +1,7 @@
 # Multi-Tenant Integration
 
+<video src="/videos/29-two-agent-marketplace.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
 This guide covers embedding Aether Forge agents in a SaaS product where many tenants trigger the same agent capability.
 
 The safest default is:
@@ -202,6 +204,7 @@ Wallet operations need the same isolation:
 - Use separate wallets for tenant-owned funds.
 - Use constrained session keys for delegated activity.
 - Never let a session key grant master wallet access.
+- Treat missing chain ids as unsafe when a session-key policy declares `allowed_chains`; constrained signers fail closed in that case.
 - Run live-capital capabilities only after sandbox or paper evidence exists for that tenant or policy cohort.
 
 ## Operational Checklist

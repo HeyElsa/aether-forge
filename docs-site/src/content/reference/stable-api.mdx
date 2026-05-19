@@ -1,5 +1,7 @@
 # Stable API Boundary
 
+<video src="/videos/28-python-sdk.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+
 Aether Forge exposes an explicitly labeled top-level Python API. Every symbol in `aether_forge.__all__` has a stability label in `aether_forge.API_STABILITY`.
 
 ```python
@@ -68,3 +70,11 @@ Plugin discovery uses `importlib.metadata` entry points in these groups:
 | `aether_forge.skill_registries` | Registry URL string or callable returning one |
 
 Plugin imports that raise are logged at `WARNING` and skipped; third-party plugin failures must not crash framework startup.
+
+## TypeScript Boundary
+
+`@aether-forge/sdk` mirrors the schema and protocol boundary for JavaScript and TypeScript consumers. It includes generated JSON-schema types, Ajv validators, `parsePlannerOutput`, and interface-only Protocol shapes.
+
+The Python runtime remains authoritative for agent execution in v0.1.x of the SDK. `AgentRunner`, `NativePolicyGate`, memory store implementations, autoresearch, and signer reference implementations are intentionally Python-only until cross-language usage justifies a port.
+
+See [TypeScript SDK](/reference/typescript-sdk) for install, validation, and planner-output examples.

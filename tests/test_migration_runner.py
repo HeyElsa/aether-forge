@@ -314,9 +314,9 @@ def test_runner_skips_row_when_transform_raises(tmp_path: Path) -> None:
 
 
 def test_runner_only_touches_matching_from_version(tmp_path: Path) -> None:
-    """A row already at 1.1.0 is below 1.0.0=False, so iter_records_below(1.0.0, inclusive=True)
-    only returns rows AT or BELOW 1.0.0 — no double-migration."""
+    """Only rows exactly at fromVersion are transformed."""
     store = SqliteMemoryStore(tmp_path / "memory.db")
+    store.write(_make_record("mem_older", schema_version="0.9.0"))
     store.write(_make_record("mem_old", schema_version="1.0.0"))
     store.write(_make_record("mem_new", schema_version="1.1.0"))
 
@@ -330,6 +330,7 @@ def test_runner_only_touches_matching_from_version(tmp_path: Path) -> None:
     assert report.records_scanned == 1  # only mem_old
     assert report.records_migrated == 1
     rows = {r.memory_id: r for r in store.read(MemoryQuery(scope="trading"))}
+    assert rows["mem_older"].schema_version == "0.9.0"
     assert rows["mem_old"].schema_version == "1.1.0"
     assert rows["mem_new"].schema_version == "1.1.0"  # already at 1.1.0
     store.close()

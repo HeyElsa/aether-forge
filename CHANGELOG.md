@@ -2,6 +2,20 @@
 
 User-facing changes to Aether Forge. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased] — 2026-05-19 — Documentation and contract clarifications (v0.23.1 PRD)
+
+Patch follow-up to v0.23.0. Documents the TypeScript SDK in the docs site, adds video embeds to the relevant reference/production/example pages, and clarifies three generated-agent contracts.
+
+### Added
+- **PRD v0.23.1** — records the documentation update plus the env planner, migration targeting, and constrained signer clarifications.
+- **Docs-site TypeScript SDK reference** — install, validators, generated types, planner-output parser, Protocol interfaces, and v0.1.x runtime boundary.
+- **Example documentation** — example index and two-agent marketplace guidance now show how TypeScript consumers validate Aether Forge artifacts.
+
+### Changed
+- `AETHER_FORGE_PLANNER_MODE` and companion planner env vars are documented as explicit operator choices; generated configs stamp `planner.source: "explicit"` for that path.
+- `forge doctor` documentation now reflects the current profile behavior: autodetected planners are advisory under `local` and hard fail under `staging` or `production`.
+- Session-key documentation now calls out fail-closed behavior when `allowed_chains` is configured but the signing intent has no chain id.
+
 ## [Unreleased] — 2026-05-16 — TypeScript SDK + cross-language conformance (v0.23.0 PRD)
 
 Sprint 3 of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.23.0.md`). Closes the last of the five reported friction points — FP-5 (Python-only adoption barrier) — and codifies FP-1 (planner resilience) as a language-agnostic spec that both reference implementations conform to. The cross-language conformance fixtures land as a shared contract under `tests/fixtures/planner-outputs/`.

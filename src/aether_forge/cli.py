@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -522,10 +523,11 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         # Aether Forge is an LLM-driven agent framework — heuristic is only a
         # last-resort fallback for environments with neither a local model
         # nor any cloud key.
-        planner_mode = getattr(args, "planner_mode", None)
-        planner_model = getattr(args, "planner_model", None)
-        planner_base_url = getattr(args, "planner_base_url", None)
-        planner_api_key_env = getattr(args, "planner_api_key_env", None)
+        planner_mode_arg = getattr(args, "planner_mode", None)
+        planner_mode = planner_mode_arg or os.getenv("AETHER_FORGE_PLANNER_MODE")
+        planner_model = getattr(args, "planner_model", None) or os.getenv("AETHER_FORGE_PLANNER_MODEL")
+        planner_base_url = getattr(args, "planner_base_url", None) or os.getenv("AETHER_FORGE_PLANNER_BASE_URL")
+        planner_api_key_env = getattr(args, "planner_api_key_env", None) or os.getenv("AETHER_FORGE_PLANNER_API_KEY_ENV")
         planner_source = "explicit" if planner_mode else None
         planner_detected_at: str | None = None
 

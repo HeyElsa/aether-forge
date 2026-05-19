@@ -100,7 +100,7 @@ pip install aether-forge                # Core only — heuristic planner, no ex
 
 ### TypeScript SDK (v0.23.0+)
 
-For JS / TS / browser / edge consumers, the companion `@aether-forge/sdk` package ships validators + types + the cross-language planner-output parser. Lives under [`sdk-ts/`](./sdk-ts/) in this repo. Conforms to the same JSON schemas as the Python core.
+For JS / TS / browser / edge consumers, the companion `@aether-forge/sdk` package ships validators + types + the cross-language planner-output parser. Lives under [`sdk-ts/`](./sdk-ts/) in this repo, with docs in [`docs-site/src/content/reference/typescript-sdk.mdx`](./docs-site/src/content/reference/typescript-sdk.mdx). Conforms to the same JSON schemas as the Python core.
 
 ```bash
 npm install @aether-forge/sdk
@@ -676,7 +676,7 @@ demo.sh                  Canonical 10-section team walk-through (LLM-driven swin
 schemas/                 19 JSON schemas
 tests/                   pytest suite across 59 test modules
 examples/                Delta-neutral BTC trading agent
-docs/prd/                versioned PRDs (v0.1.0 — v0.23.0)
+docs/prd/                versioned PRDs (v0.1.0 — v0.23.1)
 ```
 
 ---
@@ -737,13 +737,13 @@ The auto-detected choice is logged at generation time and stamped into `aether-f
     "mode": "anthropic",
     "model": "claude-sonnet-4-5",
     "apiKeyEnv": "ANTHROPIC_API_KEY",
-    "source": "autodetected",                 // or "explicit" when --planner-mode is passed
+    "source": "autodetected",                 // or "explicit" when --planner-mode / AETHER_FORGE_PLANNER_MODE is used
     "detectedAt": "2026-05-16T18:00:00+00:00"
   }
 }
 ```
 
-Run `forge doctor` against the generated config to surface an advisory when the planner was autodetected — Sprint 2 will upgrade this to a hard fail when `deploymentProfile: production`.
+Run `forge doctor` against the generated config to surface planner provenance. Autodetected planners are advisory under `deploymentProfile: local`, but hard fail under `staging` and `production`; `AETHER_FORGE_PLANNER_MODE` is treated as an explicit operator choice.
 
 The full provider table:
 
@@ -794,6 +794,7 @@ forge generate-slow --name "My Agent" --idea "your idea" --output ./agent \
 | `AETHER_FORGE_PLANNER_API_KEY` | API key (direct) |
 | `AETHER_FORGE_PLANNER_API_KEY_ENV` | Name of env var holding the API key (indirect) |
 | `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT` | When `1`/`true`/`yes`/`on`, force Ollama probe ahead of any cloud key (escape hatch — v0.21.0+) |
+| `AETHER_FORGE_DEPLOYMENT_PROFILE` | Default generated-agent profile (`local`, `staging`, or `production`) |
 | `AETHER_FORGE_CRYPTO_ROUTER` | Default crypto router backend |
 
 ### Memory Store

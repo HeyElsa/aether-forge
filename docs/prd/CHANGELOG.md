@@ -1,5 +1,26 @@
 # PRD Changelog
 
+## v0.23.1 - 2026-05-19
+
+Patch release for docs and contract hardening after the v0.23.0 TypeScript SDK release.
+
+### Contract clarifications
+- `AETHER_FORGE_PLANNER_MODE` is an explicit generation-time planner choice, equivalent to `--planner-mode` for provenance. `forge generate-fast --deployment-profile production` accepts it and stamps `planner.source: "explicit"` into generated `aether-forge.json`.
+- `AETHER_FORGE_PLANNER_MODEL`, `AETHER_FORGE_PLANNER_BASE_URL`, and `AETHER_FORGE_PLANNER_API_KEY_ENV` are carried into generated config when their CLI counterparts are absent.
+- `MigrationRunner.apply_to_memory_store()` only transforms rows whose `schema_version` exactly matches `contract.fromVersion`. Older rows require their own earlier migration step.
+- `SessionKeyConstrainedSigner` delegates to `SessionKeyPolicy.permits()` when available and refuses signing when `allowed_chains` is set but `SigningIntent.chain_id` is missing.
+
+### Docs and examples
+- New docs-site TypeScript SDK reference page.
+- Added relevant existing video embeds to reference and guide pages that lacked them.
+- README, configuration, production-readiness, stable API, examples, and marketplace docs now describe the TypeScript SDK and the hardened contracts.
+
+### Verification
+- Python suite: `655 passed, 15 skipped, 1 warning`.
+- TypeScript SDK suite: `37 passed`.
+- Docs-site build: Next.js build and Pagefind indexing passed.
+- `git diff --check` clean.
+
 ## v0.23.0 - 2026-05-16
 
 TypeScript SDK + cross-language conformance. Sprint 3 / closing sprint of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.23.0.md` for full context). Closes FP-5 (Python-only barrier) end-to-end and codifies FP-1 (planner resilience) as a language-neutral spec both reference implementations conform to. After this release, all five reported friction points are closed.

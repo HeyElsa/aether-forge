@@ -219,6 +219,34 @@ def test_generate_fast_accepts_production_with_explicit_anthropic(tmp_path, monk
     assert config["planner"]["source"] == "explicit"
 
 
+def test_generate_fast_accepts_production_with_env_planner_mode(tmp_path, monkeypatch) -> None:
+    """AETHER_FORGE_PLANNER_MODE is an explicit operator choice, not autodetect."""
+    from aether_forge.cli import main
+
+    monkeypatch.setenv("AETHER_FORGE_PLANNER_MODE", "anthropic")
+    monkeypatch.setenv("AETHER_FORGE_PLANNER_MODEL", "claude-sonnet-4-5")
+    monkeypatch.setenv("AETHER_FORGE_PLANNER_API_KEY_ENV", "ANTHROPIC_API_KEY")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-fixture")
+    out = tmp_path / "agent"
+    rc = main(
+        [
+            "generate-fast",
+            "--name", "ProdAgent",
+            "--idea", "prod test",
+            "--output", str(out),
+            "--deployment-profile", "production",
+            "--no-registry",
+        ]
+    )
+    assert rc == 0
+    config = json.loads((out / "aether-forge.json").read_text())
+    assert config["deploymentProfile"] == "production"
+    assert config["planner"]["mode"] == "anthropic"
+    assert config["planner"]["model"] == "claude-sonnet-4-5"
+    assert config["planner"]["apiKeyEnv"] == "ANTHROPIC_API_KEY"
+    assert config["planner"]["source"] == "explicit"
+
+
 def test_generate_fast_refuses_staging_with_heuristic_fallback(tmp_path, capsys) -> None:
     """Staging + autodetect-falls-to-heuristic (no cloud key, no Ollama) is rejected."""
     from aether_forge.cli import main
