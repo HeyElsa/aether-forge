@@ -204,11 +204,17 @@ export const Wordmark: React.FC<{
   fontSize?: number;
   letterSpacing?: number;
   color?: string;
-}> = ({ lines, fontSize = 130, letterSpacing = 8, color = FG }) => (
+  fontWeight?: number | string;
+}> = ({ lines, fontSize = 140, letterSpacing = 2, color = FG, fontWeight = 700 }) => (
+  // Canonical "older video" look: Inter 700, tight letter-spacing, ~140px.
+  // Matches 00-hero / 03-agent-generation / 06-memory / 09-x402-payments
+  // / OutroScene "AETHER FORGE" wordmark. The previous defaults (weight 200,
+  // letterSpacing 8) drifted toward a thin "spec doc" look that did not
+  // match any of the canonical reference titles.
   <div
     style={{
       fontFamily: interFamily,
-      fontWeight: 200,
+      fontWeight,
       fontSize,
       letterSpacing,
       color,
@@ -236,7 +242,7 @@ export const TitleScene: React.FC<{
   titleFontSize?: number;
   /** Letter-spacing for the wordmark. */
   letterSpacing?: number;
-}> = ({ titleLines, tagline, titleFontSize = 130, letterSpacing = 8 }) => {
+}> = ({ titleLines, tagline, titleFontSize = 140, letterSpacing = 2 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const logoOp = fadeIn(frame, fps, 0, 0.6);
@@ -390,7 +396,8 @@ export const OutroScene: React.FC = () => {
         />
       </div>
       <div style={{ opacity: wordmarkOp, marginTop: 8 }}>
-        <Wordmark lines={["AETHER", "FORGE"]} fontSize={108} letterSpacing={6} />
+        {/* Canonical bold AETHER FORGE wordmark — matches the 00-hero title. */}
+        <Wordmark lines={["AETHER", "FORGE"]} fontSize={120} letterSpacing={2} />
       </div>
       <div
         style={{
