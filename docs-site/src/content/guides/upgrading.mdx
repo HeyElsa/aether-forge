@@ -1,0 +1,155 @@
+# Upgrading Aether Forge
+
+Use this guide when moving an existing generated agent or integration to a newer Aether Forge version.
+
+## Upgrade Checklist
+
+```bash
+# 1. Upgrade the framework in your app or agent environment
+pip install --upgrade 'aether-forge @ git+https://github.com/HeyElsa/aether-forge.git'
+
+# 2. Validate the generated agent artifacts
+forge validate ./my-agent
+
+# 3. Validate runtime configuration
+forge config-validate ./my-agent/aether-forge.json
+
+# 4. Run doctor from inside the agent directory
+cd ./my-agent
+forge doctor
+
+# 5. Re-run scenario evidence
+forge eval-pack .
+```
+
+For framework contributors, run the repository test suite after upgrading:
+
+```bash
+python3 -m ruff check .
+pytest -q
+cd docs-site && npm run build
+```
+
+## Command Changes to Watch
+
+### `forge doctor`
+
+`forge doctor` does not take a positional config path. Run it from inside the agent directory so it can discover `aether-forge.json`.
+
+```bash
+cd ./my-agent
+forge doctor
+```
+
+Use `forge config-validate ./my-agent/aether-forge.json` when you only want schema validation for the config file.
+
+### `forge run --environment` and `--mode`
+
+These flags are different:
+
+| Flag | Meaning |
+|---|---|
+| `--environment` | Policy/runtime context, such as `sandbox`, `paper`, `canary-live`, or `production` |
+| `--mode` | Crypto scaffold backend: `simulated`, `paper`, or `live` |
+
+General agents usually need only `--environment`:
+
+```bash
+forge run ./my-agent --environment sandbox --auto-approve
+```
+
+Crypto scaffolds should set both:
+
+```bash
+forge run ./eth-agent --environment sandbox --mode paper --auto-approve
+forge run ./eth-agent --environment production --mode live
+```
+
+## Planner Provenance
+
+Newer generated configs stamp how the planner was chosen:
+
+```json
+{
+  "deploymentProfile": "local",
+  "planner": {
+    "mode": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "source": "explicit",
+    "detectedAt": "2026-05-19T00:00:00+00:00"
+  }
+}
+```
+
+Production and staging profiles reject heuristic or autodetected planners in `forge doctor`. Regenerate the agent or edit `aether-forge.json` to use an explicit planner before promotion.
+
+## Memory Schema Stamps
+
+Layer-3 SQLite memory records now carry `MemoryRecord.schema_version`, and `SqliteMemoryStore` stamps the current memory record schema into `schema_meta`.
+
+Before mutating old memory databases:
+
+```bash
+cp ./my-agent/memory.db ./my-agent/memory.db.backup
+forge migrate memory ./my-agent --contract ./my-agent/migration-contract.json
+forge migrate memory ./my-agent --contract ./my-agent/migration-contract.json --apply
+```
+
+Migration contracts without `transformRef` are documentation-only and will not execute. Contracts with `lossyFields` require policy approval or `--lossy-ok`.
+
+## Planner Output Contract
+
+The planner-output parser is now a cross-language contract shared by Python and the TypeScript SDK. If you change planner-output behavior:
+
+1. Add or update a fixture under `tests/fixtures/planner-outputs/`.
+2. Update Python `_extract_json`.
+3. Update TypeScript `parsePlannerOutput`.
+4. Run Python and TypeScript conformance tests.
+
+```bash
+pytest tests/test_planner_output_spec.py -q
+cd sdk-ts && bun run test
+```
+
+## TypeScript SDK Schema Drift
+
+Changing JSON schemas requires regenerating the committed TypeScript bundle:
+
+```bash
+cd sdk-ts
+bun run generate:schemas
+bun run test
+```
+
+CI fails if `sdk-ts/src/schemas/generated/index.ts` does not match the Python-side schemas.
+
+## Generated Agent Refresh
+
+Generated agents intentionally ship batteries: `Dockerfile`, `.dockerignore`, `Makefile`, `.env.example`, and smoke tests. Existing agents do not receive new generated files automatically.
+
+For an existing agent:
+
+1. Generate a temporary agent with the same idea and current framework.
+2. Compare `Dockerfile`, `.dockerignore`, `Makefile`, `.env.example`, and `tests/test_agent.py`.
+3. Copy only the changes that fit your artifact set and policy.
+4. Run `forge validate`, `forge eval-pack`, and `forge doctor`.
+
+## Safe Rollout
+
+Before moving an upgraded agent to production:
+
+- Run `forge eval-pack` and keep the replay evidence.
+- Run `forge security-check . --harden`.
+- Check `aether-forge.json` has explicit planner settings.
+- Confirm `deploymentProfile` matches the rollout stage.
+- Confirm memory, replay, wallet, and x402 state paths are persistent.
+- Test `forge halt .` and `forge resume .`.
+
+## Related
+
+- [Production Readiness](/docs/guides/production-readiness)
+- [Configuration](/docs/reference/configuration)
+- [Stable API](/docs/reference/stable-api)
+- [TypeScript SDK](/docs/reference/typescript-sdk)
+- [Troubleshooting](/docs/help/troubleshooting)

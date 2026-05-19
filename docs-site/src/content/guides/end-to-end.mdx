@@ -295,6 +295,7 @@ Now run the agent with **real market data** but **simulated orders**:
 
 ```bash
 forge run ./eth-swing \
+  --environment sandbox \
   --mode paper \
   --interval 30 \
   --auto-approve \
@@ -396,7 +397,9 @@ EOF
 Verify:
 
 ```bash
-forge doctor ./eth-swing/aether-forge.json
+cd ./eth-swing
+forge doctor
+cd ..
 ```
 
 ```
@@ -555,6 +558,7 @@ forge security-check ./eth-swing --harden
 
 ```bash
 forge run ./eth-swing \
+  --environment production \
   --mode live \
   --chain base \
   --interval 60 \

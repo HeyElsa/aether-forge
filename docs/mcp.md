@@ -42,10 +42,15 @@ In your Aether Forge agent's `aether-forge.json`:
 Then run the agent and the filesystem MCP tools will be discovered at runtime:
 
 ```bash
-forge run ./my-agent --mode paper --auto-approve
+forge run ./my-agent --environment sandbox --mode paper --auto-approve
 ```
 
-`forge doctor ./my-agent/aether-forge.json` will probe the server and report how many tools it exposes.
+Run `forge doctor` from inside the agent directory to probe the server and report how many tools it exposes:
+
+```bash
+cd ./my-agent
+forge doctor
+```
 
 ---
 

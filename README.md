@@ -48,7 +48,7 @@ risk:
 - **You are solely responsible** for any funds loaded into agent wallets,
   any transactions those agents sign, and any losses incurred from bugs,
   LLM hallucinations, market events, exploits, or your own configuration.
-- **Always test in `--mode paper` first** with simulated orders. Set
+- **Always test crypto agents with `--environment sandbox --mode paper` first** with simulated orders. Set
   conservative `x402_budget` caps. Use the kill switch (`forge halt .`).
 - **This is NOT financial advice**, NOT a regulated service, NOT an audited
   smart contract framework. We make no guarantees about correctness,
@@ -138,17 +138,45 @@ Every check is a functional round-trip, not just an import test. The doctor veri
 
 ## Quick Start
 
-### 1. Generate an agent
+### 1. Generate a zero-risk agent
 
 ```bash
-# Fast mode — instant scaffold. Auto-detects the best LLM planner on your
-# machine (cloud keys → Ollama-fallback → heuristic; v0.21.0+ — was Ollama-first)
-# and bakes it into the generated agent's aether-forge.json. No flags needed.
-forge generate-fast --name "My Agent" --idea "your idea" --output ./my-agent
-# [planner] auto-detected (cloud): mode=anthropic model=claude-sonnet-4-5 apiKeyEnv=ANTHROPIC_API_KEY
+forge generate-fast \
+    --name "Hello Agent" \
+    --idea "read an input, reason about it, and report a short summary" \
+    --output ./hello-agent \
+    --planner-mode heuristic
+```
 
-# Slow mode — autoresearch refinement
-forge generate-slow --name "My Agent" --idea "your idea" --output ./my-agent --max-iterations 5
+This first path uses the offline heuristic planner. It does not call an LLM, create a wallet, move money, or require provider credentials.
+
+### 2. Validate
+
+```bash
+forge validate ./hello-agent
+# Validated 5 artifacts in ./hello-agent
+```
+
+### 3. Evaluate
+
+```bash
+forge eval-pack ./hello-agent
+# Scenario pack: total=2 matched=2 pass=1 hold=1 fail=0
+```
+
+### 4. Run one tick
+
+```bash
+forge run ./hello-agent --max-ticks 1 --interval 0 --environment sandbox --auto-approve
+```
+
+### 5. Add LLM, skills, or crypto when ready
+
+```bash
+# Force a specific LLM instead of heuristic or auto-detect
+forge generate-fast --name "Research Agent" --idea "daily research brief" --output ./research-agent \
+    --planner-mode anthropic --planner-model claude-opus-4-6 \
+    --planner-api-key-env ANTHROPIC_API_KEY
 
 # With skills from registries
 forge generate-fast --name "DeFi Bot" --idea "yield monitor" --output ./bot \
@@ -157,34 +185,13 @@ forge generate-fast --name "DeFi Bot" --idea "yield monitor" --output ./bot \
 # With real OWS wallet and autonomous mode
 forge generate-fast --name "DeFi Bot" --idea "yield monitor" --output ./bot \
     --wallet --autonomous
-
-# With a strategy file (English, markdown, or JSON)
-forge generate-fast --name "Spread Trader" --idea "basis capture" --output ./bot \
-    --strategy-file ./my-strategy.md
-
-# Force a specific LLM instead of auto-detect
-forge generate-fast --name "My Agent" --idea "your idea" --output ./my-agent \
-    --planner-mode anthropic --planner-model claude-opus-4-6 \
-    --planner-api-key-env ANTHROPIC_API_KEY
 ```
 
-The auto-detected planner block lands in `./my-agent/aether-forge.json`, so anyone running the agent later — Docker, CI, a teammate — gets the same model with no flags and no JSON edits.
+The explicit or auto-detected planner block lands in `aether-forge.json`, so anyone running the agent later gets the same model with the same environment variables.
 
-### 2. Validate
+### 6. Run continuously
 
-```bash
-forge validate ./my-agent
-# Validated 5 artifacts in ./my-agent
-```
-
-### 3. Evaluate
-
-```bash
-forge eval-pack ./my-agent
-# Scenario pack: total=2 matched=2 pass=1 hold=1 fail=0
-```
-
-### 4. Run continuously
+For general agents:
 
 ```bash
 forge run ./my-agent --interval 30 --auto-approve --environment sandbox
@@ -200,7 +207,14 @@ forge run ./my-agent --autoresearch --eval-interval 6 --auto-approve
 forge run ./my-agent --health-port 8080 --json-log ./logs/agent.jsonl --pid-file ./agent.pid
 ```
 
-### 4b. Manage strategy
+For crypto scaffolds, `--environment` controls policy and promotion context while `--mode` controls the trading backend:
+
+```bash
+forge run ./bot --environment sandbox --mode paper --auto-approve
+forge run ./bot --environment production --mode live
+```
+
+### 6b. Manage strategy
 
 ```bash
 forge strategy view ./my-agent         # Show current parameters + pending proposals
@@ -208,7 +222,7 @@ forge strategy accept ./my-agent       # Apply pending improvement proposal
 forge strategy reject ./my-agent       # Discard pending improvement proposal
 ```
 
-### 5. Promote
+### 7. Promote
 
 ```bash
 forge promote-draft ./my-agent --target paper --approver "ops-team"
@@ -893,6 +907,7 @@ Or browse the markdown directly:
 - [Writing Strategies](docs-site/src/content/guides/strategy-writing.mdx)
 - [Production Readiness](docs-site/src/content/guides/production-readiness.mdx)
 - [Multi-Tenant Integration](docs-site/src/content/guides/multi-tenant-integration.mdx)
+- [Upgrading](docs-site/src/content/guides/upgrading.mdx)
 - [Extending the Framework](docs-site/src/content/guides/extending.mdx) — custom planners, routers, data sources, memory stores; PyPI plugin distribution
 - [CLI Reference](docs-site/src/content/reference/cli.mdx)
 - [Configuration Reference](docs-site/src/content/reference/configuration.mdx)

@@ -205,7 +205,7 @@ Edit `policy-bundle.json` to set guardrails:
 ## 7. Paper Trade
 
 ```bash
-forge run ./sol-scalper --mode paper \
+forge run ./sol-scalper --environment sandbox --mode paper \
   --auto-approve --autoresearch \
   --knowledge --a2a-port 9001
 ```
@@ -243,7 +243,7 @@ Safety bounds are enforced — the agent can't propose position sizes above 25% 
 ## 9. Go Live
 
 ```bash
-forge run ./sol-scalper --mode live --chain base --a2a-port 9001
+forge run ./sol-scalper --environment production --mode live --chain base --a2a-port 9001
 ```
 
 Same strategy, same LLM, same risk limits. Now with real USDC on Base.

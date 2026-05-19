@@ -23,7 +23,7 @@ forge x402-call ./my-agent \
   --confirm-live
 ```
 
-```
+```text
 Signed EIP-3009 transferWithAuthorization
 Amount: $0.002 USDC on Base
 Status: payment_settled
@@ -34,7 +34,7 @@ Result: {"price_usd": 2249.63}
 
 Agents can gate their capabilities behind prices using `X402PaymentGate`:
 
-```
+```http
 POST /premium-analysis (no payment)
 → 402: $0.005 USDC required
 
@@ -131,7 +131,7 @@ Here's exactly what happens when your agent makes a paid API call:
 
 ### 1. Preflight checks
 
-```
+```text
 _preflight():
   ✓ Halt file not present
   ✓ On-chain USDC balance: 1.991 (sufficient)
@@ -142,7 +142,7 @@ _preflight():
 
 ### 2. Initial request (gets 402)
 
-```
+```http
 GET https://x402-api.heyelsa.ai/api/get_token_price?token=ETH
 
 HTTP/1.1 402 Payment Required
@@ -155,7 +155,7 @@ X-Payment-Asset: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  (USDC on Base)
 
 ### 3. Budget check
 
-```
+```text
 Per-call: $0.002 ≤ $0.01 max_per_call ✓
 Session:  $0.006 ≤ $1.00 max_session  ✓
 Daily:    $0.006 ≤ $5.00 max_daily    ✓
@@ -165,7 +165,7 @@ Daily:    $0.006 ≤ $5.00 max_daily    ✓
 
 The agent's OWS wallet signs a `transferWithAuthorization`:
 
-```
+```text
 EIP-3009 transferWithAuthorization:
   from:       0xE8D0...081d5    (agent's wallet)
   to:         0x1234...         (Elsa's wallet)
@@ -178,7 +178,7 @@ EIP-3009 transferWithAuthorization:
 
 ### 5. Retry with payment
 
-```
+```http
 GET https://x402-api.heyelsa.ai/api/get_token_price?token=ETH
 X-PAYMENT: base64(signed_authorization)
 

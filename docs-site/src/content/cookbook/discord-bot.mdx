@@ -82,7 +82,7 @@ about ETH/BTC/SOL prices, respond with current market data.
 ## 5. Run
 
 ```bash
-forge run ./discord-helper --mode paper --auto-approve --interval 30 \
+forge run ./discord-helper --environment sandbox --mode paper --auto-approve --interval 30 \
   --planner-mode openrouter --planner-model anthropic/claude-sonnet-4
 ```
 
@@ -91,7 +91,9 @@ The agent now polls Discord every 30 seconds and responds to mentions.
 ## 6. Verify with `forge doctor`
 
 ```bash
-forge doctor ./discord-helper/aether-forge.json
+cd ./discord-helper
+forge doctor
+cd ..
 ```
 
 ```

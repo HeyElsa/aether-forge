@@ -18,13 +18,13 @@ Each agent has its own wallet, memory, LLM planner, and A2A server.
 
 ```bash
 # Terminal 1 — Price Oracle
-forge run ./price-oracle --mode paper --a2a-port 9001
+forge run ./price-oracle --environment sandbox --mode paper --a2a-port 9001
 
 # Terminal 2 — Risk Engine
-forge run ./risk-engine --mode paper --a2a-port 9002
+forge run ./risk-engine --environment sandbox --mode paper --a2a-port 9002
 
 # Terminal 3 — Alpha Trader (orchestrator)
-forge run ./alpha-trader --mode paper --a2a-port 9003
+forge run ./alpha-trader --environment sandbox --mode paper --a2a-port 9003
 ```
 
 Or use a launch script:

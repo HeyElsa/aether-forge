@@ -4,6 +4,7 @@ export default {
   "strategy-writing": "Writing Strategies",
   "production-readiness": "Production Readiness",
   "multi-tenant-integration": "Multi-Tenant Integration",
+  upgrading: "Upgrading",
   "multi-agent": "Multi-Agent Teams",
   "accept-payments": "Accept Payments",
   "go-onchain": "Go On-Chain",

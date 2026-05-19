@@ -68,6 +68,7 @@ Run an agent continuously.
 
 ```bash
 forge run ./my-agent \
+  --environment sandbox \
   --mode paper \
   --interval 30 \
   --auto-approve \
@@ -81,7 +82,8 @@ forge run ./my-agent \
 
 | Flag | Description |
 |---|---|
-| `--mode` | `paper` or `live` |
+| `--environment` | Policy/runtime environment, such as `sandbox`, `paper`, `canary-live`, or `production` |
+| `--mode` | Crypto scaffold backend: `simulated`, `paper`, or `live` |
 | `--interval` | Seconds between ticks |
 | `--auto-approve` | Skip human approval prompts |
 | `--autoresearch` | Enable self-improvement loop |

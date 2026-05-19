@@ -68,10 +68,10 @@ SELECT * FROM triples WHERE subject = 'eth';
 
 ```bash
 # With memory only (Layers 1-3)
-forge run ./my-agent --mode paper
+forge run ./my-agent --environment sandbox --mode paper
 
 # With knowledge layer (all 4 layers)
-forge run ./my-agent --mode paper --knowledge
+forge run ./my-agent --environment sandbox --mode paper --knowledge
 ```
 
 ## How Memory Appears in the LLM Prompt

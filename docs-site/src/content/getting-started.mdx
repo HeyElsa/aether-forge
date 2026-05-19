@@ -1,6 +1,6 @@
 # Getting Started
 
-Get from zero to a running agent in under 5 minutes.
+Get from a clean machine to a validated, running agent without an API key, wallet, or live funds.
 
 <video src="/videos/31-getting-started.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
 
@@ -8,175 +8,162 @@ Get from zero to a running agent in under 5 minutes.
 
 > **Note:** Aether Forge is not yet published to PyPI. Until then, install directly from GitHub.
 
-### Install from GitHub (recommended for now)
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install 'aether-forge @ git+https://github.com/HeyElsa/aether-forge.git'
+```
+
+For local framework development:
 
 ```bash
-# Full install with all extras
-pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
-
-# Or clone and install locally
 git clone https://github.com/HeyElsa/aether-forge.git
 cd aether-forge
-pip install -e '.[all]'
+pip install -e '.[dev]'
 ```
 
-### Install from PyPI (coming soon)
+Requires **Python 3.12+**. The core install has one runtime dependency: `jsonschema`.
 
-```bash
-# Full install — wallet + memory + encryption + A2A + MCP
-pip install 'aether-forge[all]'
-
-# Or pick extras individually
-pip install 'aether-forge[wallet]'      # Real OWS wallets across 9 chains
-pip install 'aether-forge[knowledge]'   # MemPalace long-term memory layer
-pip install 'aether-forge[security]'    # cryptography for encrypted backups
-pip install aether-forge                # Core only — heuristic planner
-```
-
-Requires **Python 3.12+**. Single core dependency (`jsonschema`).
-
-> **Using TypeScript / JS instead?** The companion [`@aether-forge/sdk`](/docs/reference/typescript-sdk) package validates the same artifacts and parses planner output from Node, browsers, and edge runtimes. Jump to [Use from TypeScript](#use-from-typescript) below.
-
-## Verify
+## Verify the Runtime
 
 ```bash
 forge doctor
 ```
 
-```
-[  ok] Python version: Python 3.12.13
-[  ok] jsonschema: jsonschema 4.26.0
-[  ok] OWS SDK: open-wallet-standard installed
-[  ok] cryptography: cryptography 46.0.7
-[  ok] Ollama: Connected (3 models)
-[  ok] Memory store (SQLite): round-trip ok
-[  ok] Knowledge layer (MemPalace): round-trip ok
+Expected shape:
 
-  Healthy — 8/8 ok
+```text
+[  ok] Python version: Python 3.12+
+[  ok] jsonschema: jsonschema ...
+[  ok] Memory store (SQLite): Layer 3 round-trip ok (write + read)
+
+Healthy (with optional skips) — ...
 ```
 
-Every check is a **functional round-trip**, not just an import test.
+Skipped wallet, knowledge, or security checks are fine for the first run. They are optional extras.
 
-## Choose Your LLM
+## Generate a Zero-Risk Agent
 
-Aether Forge auto-detects the best available LLM in this priority:
-
-1. **Anthropic** — `claude-sonnet-4.5`, `claude-opus-4-6`
-2. **OpenAI** — `gpt-4o`, `gpt-4.1`
-3. **Google** — `gemini-2.5-flash`
-4. **OpenRouter** — any of 200+ models
-5. **Ollama** (local, free, private) — only when no cloud key is set, unless `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`
-6. **Heuristic** — rule-based fallback (no LLM needed)
-
-Set your API key for whichever provider you want:
-
-```bash
-# Option A — Anthropic
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Option B — OpenRouter (200+ models)
-export OPENROUTER_API_KEY=sk-or-v1-...
-
-# Option C — Local Ollama (free, used only when no cloud key is set)
-ollama pull gemma4:latest
-```
-
-## Generate Your First Agent
+This first agent uses the offline heuristic planner. It does not call an LLM, create a wallet, move money, or require provider credentials.
 
 ```bash
 forge generate-fast \
-  --name "My First Agent" \
-  --idea "ETH swing trader" \
-  --wallet --autonomous \
-  --output ./my-agent
+  --name "hello-agent" \
+  --idea "read an input, reason about it, and report a short summary" \
+  --output ./hello-agent \
+  --planner-mode heuristic
 ```
 
-```
-[planner] auto-detected: mode=anthropic model=claude-sonnet-4.5
-  Wallet: 0xE8D0...081d5 (Base)
-  Attestation: self-attested
-Generated at ./my-agent
+This creates a complete agent directory:
+
+```text
+hello-agent/
+  aether-forge.json
+  agent-spec.json
+  capability-manifest.json
+  policy-bundle.json
+  scenario-pack.json
+  scaffold.manifest.json
+  Dockerfile
+  Makefile
+  tests/test_agent.py
 ```
 
-This creates a complete agent directory with:
-- `agent-spec.json` — agent contract
-- `capability-manifest.json` — declared capabilities
-- `policy-bundle.json` — safety rules
-- `scenario-pack.json` — test scenarios
-- `aether-forge.json` — runtime config (LLM, data sources, MCP)
-- `wallet.json` — wallet addresses
-- `attestation.json` — EIP-712 self-attestation
-
-## Validate
+## Validate and Evaluate
 
 ```bash
-forge validate ./my-agent
-# Validated 5 artifacts in ./my-agent
+forge validate ./hello-agent
+forge eval-pack ./hello-agent
 ```
 
-Every generated agent ships with a `Makefile`, `tests/test_agent.py` smoke test, `Dockerfile`, and `.env.example` — so the next steps are one command each:
+The generated agent also ships day-one developer targets:
 
 ```bash
-cd ./my-agent
-make test         # green out-of-box: artifacts validate + scenarios meet expectations
-make eval-pack    # run the scenario pack against the runtime
-make doctor       # 8-point diagnostic round-trip
-make help         # see all available targets
+cd ./hello-agent
+make test
+make eval-pack
+make doctor
 ```
 
-## Run
+## Run One Tick
 
 ```bash
-# Paper trading — real prices, simulated orders
-forge run ./my-agent --mode paper --auto-approve
+forge run ./hello-agent \
+  --max-ticks 1 \
+  --interval 0 \
+  --environment sandbox \
+  --auto-approve
+```
 
-# With self-improvement and knowledge layer
-forge run ./my-agent --mode paper --auto-approve --autoresearch --knowledge
+You should see one completed tick and a short summary. That is the minimal Aether Forge loop:
 
-# With A2A server for inter-agent communication
-forge run ./my-agent --mode paper --auto-approve --a2a-port 9001
+```text
+Planner -> Policy Gate -> Execute -> Step Ledger -> Memory
+```
+
+## Add an LLM Planner
+
+When you want real LLM planning, set a provider key and regenerate or override at run time.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+
+forge generate-fast \
+  --name "research-agent" \
+  --idea "summarize trusted sources into a daily brief" \
+  --output ./research-agent \
+  --planner-mode anthropic \
+  --planner-model claude-sonnet-4-5 \
+  --planner-api-key-env ANTHROPIC_API_KEY
+```
+
+If you omit `--planner-mode`, Aether Forge auto-detects cloud keys first, then local Ollama when no cloud key is set, then heuristic fallback. The resolved planner is saved in `aether-forge.json` so another machine can run the same agent with the same environment variables.
+
+## Add Crypto Features
+
+Crypto is an optional module layer, not required by the core framework.
+
+```bash
+pip install 'aether-forge[wallet] @ git+https://github.com/HeyElsa/aether-forge.git'
+
+forge generate-fast \
+  --name "eth-watcher" \
+  --idea "monitor ETH market conditions and write observations" \
+  --output ./eth-watcher \
+  --wallet \
+  --planner-mode heuristic
+```
+
+For crypto scaffolds, `--environment` controls policy and promotion context while `--mode` controls the trading backend:
+
+```bash
+# Real market-style path with simulated orders
+forge run ./eth-watcher --environment sandbox --mode paper --auto-approve
+
+# Live capital path, only after promotion evidence and funding
+forge run ./eth-watcher --environment production --mode live
 ```
 
 ## Use from TypeScript
 
-For JS / TS / browser / edge consumers, the companion `@aether-forge/sdk` package ships validators, generated types, and the cross-language planner-output parser. It conforms to the same JSON schemas as the Python core — every artifact valid under `forge validate` is also valid under the TS validators, enforced by CI conformance fixtures.
+The companion [`@aether-forge/sdk`](/docs/reference/typescript-sdk) package validates artifacts and parses planner output from Node, browsers, and edge runtimes. It is intentionally interface-only in v0.1.x; the runtime tick loop remains Python-side.
 
 ```bash
 npm install @aether-forge/sdk
-# or: bun add @aether-forge/sdk
-# or: pnpm add @aether-forge/sdk
 ```
 
 ```ts
-import {
-  validateAgentSpec,
-  parsePlannerOutput,
-  assertValid,
-  PlannerParseError,
-} from "@aether-forge/sdk";
+import { assertValid, parsePlannerOutput, validateAgentSpec } from "@aether-forge/sdk";
 
-// Validate an artifact loaded from disk, S3, or anywhere else.
 const spec = assertValid(validateAgentSpec(jsonFromDisk));
-
-// Run a raw LLM response through the same recovery logic the Python
-// reference uses (code-fence stripping, reasoning preambles,
-// balanced-brace scan with string-literal awareness).
-try {
-  const plan = parsePlannerOutput(rawLlmResponse);
-} catch (err) {
-  if (err instanceof PlannerParseError) {
-    // fall back to a heuristic planner
-  }
-}
+const plan = parsePlannerOutput(rawLlmResponse);
 ```
-
-v0.1.0 ships validators, generated types for all 19 JSON schemas, the planner-output parser, and TypeScript interfaces mirroring every Python Protocol. It is interface-only by design — the runtime tick loop, policy gate, memory stores, and signer reference implementations stay Python-side until cross-language usage data justifies a port. See the full [TypeScript SDK reference](/docs/reference/typescript-sdk).
 
 ## Next Steps
 
-- [TypeScript SDK](/docs/reference/typescript-sdk) — validate artifacts and parse planner output from JS / TS / browser / edge runtimes
-- [Build a Custom Agent](/docs/guides/custom-agent) — choose your LLM, add data sources, wire MCP servers
-- [Extending the Framework](/docs/guides/extending) — custom planners, data sources, memory stores, PyPI plugin distribution
-- [LLM Planner](/docs/features/llm-planner) — how the LLM drives every tick
-- [Memory Architecture](/docs/features/memory) — four layers of typed memory
+- [End-to-End Tutorial](/docs/guides/end-to-end) — build and inspect a full generated agent
+- [Production Readiness](/docs/guides/production-readiness) — staging, policy, evidence, secrets, and incident controls
+- [Multi-Tenant Integration](/docs/guides/multi-tenant-integration) — embed agents in a SaaS app
+- [Extending the Framework](/docs/guides/extending) — custom planners, data sources, memory stores, and plugins
 - [CLI Reference](/docs/reference/cli) — every `forge` command
+- [Troubleshooting](/docs/help/troubleshooting) — common failures and fixes

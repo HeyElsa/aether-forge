@@ -93,11 +93,18 @@ def test_generate_fast_crypto_scaffold_keeps_trading_defaults() -> None:
 
         strategy = json.loads((output_dir / "strategy.json").read_text(encoding="utf8"))
         protocol_source = (output_dir / "src" / "protocols" / "__init__.py").read_text(encoding="utf8")
+        readme = (output_dir / "README.md").read_text(encoding="utf8")
+        makefile = (output_dir / "Makefile").read_text(encoding="utf8")
+        dockerfile = (output_dir / "Dockerfile").read_text(encoding="utf8")
 
         assert "spread_pct" in strategy["parameters"]
         assert strategy["parameters"]["tokens"] == ["ETH"]
         assert '"x402Support": True' in protocol_source
         assert '"budgetLimitUsd": 50.0' in protocol_source
+        assert "--environment sandbox --mode paper" in readme
+        assert "--environment sandbox --mode paper" in makefile
+        assert '"--environment", "sandbox", "--mode", "paper"' in dockerfile
+        assert "--environment production --mode live" in makefile
     finally:
         rmtree(output_dir)
 

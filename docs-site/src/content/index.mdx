@@ -39,21 +39,27 @@ Every tick, an LLM re-reads your plain-English strategy, picks from declared cap
 ## Quick Example
 
 ```bash
-# Generate an agent with a strategy file
+# Zero-risk first run: no API key, no wallet, no live funds
 forge generate-fast \
-  --name "ETH Swing Trader" \
-  --strategy-file strategy.md \
-  --wallet --autonomous \
-  --output ./my-agent
+  --name "hello-agent" \
+  --idea "read an input, reason about it, and report a short summary" \
+  --output ./hello-agent \
+  --planner-mode heuristic
 
 # Validate all artifacts
-forge validate ./my-agent
+forge validate ./hello-agent
 
-# Paper trade with real prices
-forge run ./my-agent --mode paper --auto-approve --autoresearch
+# Run one sandbox tick
+forge run ./hello-agent --max-ticks 1 --interval 0 --environment sandbox --auto-approve
+```
 
-# Go live on Base mainnet
-forge run ./my-agent --mode live --chain base
+Crypto-native agents are available when you opt in:
+
+```bash
+forge generate-fast --name "ETH Watcher" --idea "monitor ETH markets" \
+  --output ./eth-watcher --wallet --planner-mode heuristic
+
+forge run ./eth-watcher --environment sandbox --mode paper --auto-approve
 ```
 
 ## Architecture

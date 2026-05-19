@@ -26,7 +26,7 @@ The framework itself is MIT-licensed and free. Costs come from:
 pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'
 ollama pull gemma4:latest
 forge generate-fast --name test --idea "ETH watcher" --output ./test
-forge run ./test --mode paper --auto-approve --max-ticks 3
+forge run ./test --environment sandbox --mode paper --auto-approve --max-ticks 3
 ```
 
 Total cost: $0.
@@ -123,7 +123,7 @@ If you have an encrypted backup (`forge wallet-backup`), restore from it. Otherw
 ### Is this safe to run with real money?
 
 Built for it, but:
-1. Always start with `--mode paper`
+1. Always start with `--environment sandbox --mode paper`
 2. Set conservative budget caps in `x402_budget`
 3. Test with small amounts first ($10-$50)
 4. Monitor `/ready` and `/metrics`
