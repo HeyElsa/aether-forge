@@ -35,6 +35,8 @@ pip install aether-forge                # Core only — heuristic planner
 
 Requires **Python 3.12+**. Single core dependency (`jsonschema`).
 
+> **Using TypeScript / JS instead?** The companion [`@aether-forge/sdk`](/docs/reference/typescript-sdk) package validates the same artifacts and parses planner output from Node, browsers, and edge runtimes. Jump to [Use from TypeScript](#use-from-typescript) below.
+
 ## Verify
 
 ```bash
@@ -135,8 +137,44 @@ forge run ./my-agent --mode paper --auto-approve --autoresearch --knowledge
 forge run ./my-agent --mode paper --auto-approve --a2a-port 9001
 ```
 
+## Use from TypeScript
+
+For JS / TS / browser / edge consumers, the companion `@aether-forge/sdk` package ships validators, generated types, and the cross-language planner-output parser. It conforms to the same JSON schemas as the Python core — every artifact valid under `forge validate` is also valid under the TS validators, enforced by CI conformance fixtures.
+
+```bash
+npm install @aether-forge/sdk
+# or: bun add @aether-forge/sdk
+# or: pnpm add @aether-forge/sdk
+```
+
+```ts
+import {
+  validateAgentSpec,
+  parsePlannerOutput,
+  assertValid,
+  PlannerParseError,
+} from "@aether-forge/sdk";
+
+// Validate an artifact loaded from disk, S3, or anywhere else.
+const spec = assertValid(validateAgentSpec(jsonFromDisk));
+
+// Run a raw LLM response through the same recovery logic the Python
+// reference uses (code-fence stripping, reasoning preambles,
+// balanced-brace scan with string-literal awareness).
+try {
+  const plan = parsePlannerOutput(rawLlmResponse);
+} catch (err) {
+  if (err instanceof PlannerParseError) {
+    // fall back to a heuristic planner
+  }
+}
+```
+
+v0.1.0 ships validators, generated types for all 19 JSON schemas, the planner-output parser, and TypeScript interfaces mirroring every Python Protocol. It is interface-only by design — the runtime tick loop, policy gate, memory stores, and signer reference implementations stay Python-side until cross-language usage data justifies a port. See the full [TypeScript SDK reference](/docs/reference/typescript-sdk).
+
 ## Next Steps
 
+- [TypeScript SDK](/docs/reference/typescript-sdk) — validate artifacts and parse planner output from JS / TS / browser / edge runtimes
 - [Build a Custom Agent](/docs/guides/custom-agent) — choose your LLM, add data sources, wire MCP servers
 - [Extending the Framework](/docs/guides/extending) — custom planners, data sources, memory stores, PyPI plugin distribution
 - [LLM Planner](/docs/features/llm-planner) — how the LLM drives every tick
