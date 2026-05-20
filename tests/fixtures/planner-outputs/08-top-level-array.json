@@ -1,0 +1,10 @@
+{
+  "description": "Bare top-level array (no `steps` wrapper). The Python parser accepts this as an alternative shape — see oneOf in the schema.",
+  "input": "[{\"kind\": \"reason\", \"description\": \"go\"}]",
+  "expected": {
+    "outcome": "parsed",
+    "value": [
+      {"kind": "reason", "description": "go"}
+    ]
+  }
+}

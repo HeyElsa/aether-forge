@@ -1,0 +1,229 @@
+# Multi-Tenant Integration
+
+<video src="/videos/29-two-agent-marketplace.mp4" poster="/video-posters/29-two-agent-marketplace.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
+
+This guide covers embedding Aether Forge agents in a SaaS product where many tenants trigger the same agent capability.
+
+The safest default is:
+
+- one immutable agent artifact set per product capability,
+- one `AgentRunner` or `RuntimeSession` per tenant execution stream,
+- one `memory.db` per tenant, agent, and environment,
+- one replay/log namespace per tenant,
+- one credential-handle namespace per tenant,
+- one policy boundary that tenant input cannot modify.
+
+Do not put tenant state inside the shared generated agent directory unless the whole directory is tenant-private.
+
+## Directory Layout
+
+Keep generated artifacts read-only and mutable runtime state outside them:
+
+```text
+/opt/aether/agents/support-agent/
+  aether-forge.json
+  agent-spec.json
+  capability-manifest.json
+  policy-bundle.json
+  scenario-pack.json
+
+/var/lib/aether/tenants/acme/support-agent/sandbox/
+  memory.db
+  replays/
+  events.jsonl
+  x402_state.json
+  x402_state.lock
+```
+
+`AgentRunner` defaults to writing `memory.db` and `replays/` under the agent directory. In a multi-tenant host, always override those paths.
+
+## Tenant-Safe Runner Pool
+
+Use a strict tenant slug, route every tick through a per-tenant lock, and pass request data through `scenario_inputs`.
+
+```python
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from threading import Lock
+from typing import Any
+
+from aether_forge import AgentRunner, JsonlEventSink, RunnerConfig
+
+TENANT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
+AGENT_DIR = Path("/opt/aether/agents/support-agent")
+STATE_ROOT = Path("/var/lib/aether/tenants")
+
+
+def checked_tenant_id(raw: str) -> str:
+    if not TENANT_ID.fullmatch(raw):
+        raise ValueError("invalid tenant id")
+    return raw
+
+
+def tenant_state_dir(tenant_id: str, environment: str) -> Path:
+    return STATE_ROOT / checked_tenant_id(tenant_id) / "support-agent" / environment
+
+
+@dataclass
+class TenantRunner:
+    runner: AgentRunner
+    lock: Lock
+
+
+class TenantRunnerPool:
+    def __init__(self, environment: str = "sandbox") -> None:
+        self.environment = environment
+        self._runners: dict[str, TenantRunner] = {}
+
+    def _build_runner(self, tenant_id: str) -> TenantRunner:
+        state_dir = tenant_state_dir(tenant_id, self.environment)
+        state_dir.mkdir(parents=True, exist_ok=True)
+
+        runner = AgentRunner(
+            AGENT_DIR,
+            config=RunnerConfig(
+                environment=self.environment,
+                memory_db_path=str(state_dir / "memory.db"),
+                replay_directory=str(state_dir / "replays"),
+                persist_memory=True,
+                persist_replays=True,
+                tick_timeout_seconds=60,
+            ),
+            event_sink=JsonlEventSink(state_dir / "events.jsonl"),
+        )
+        return TenantRunner(runner=runner, lock=Lock())
+
+    def tick(self, tenant_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        tenant_id = checked_tenant_id(tenant_id)
+        tenant = self._runners.setdefault(tenant_id, self._build_runner(tenant_id))
+
+        with tenant.lock:
+            result = tenant.runner.tick(
+                scenario_inputs={
+                    "tenantId": tenant_id,
+                    "request": payload,
+                }
+            )
+
+        return {
+            "tick": result.tick_number,
+            "status": result.session_status,
+            "steps": result.steps_executed,
+            "pendingApprovals": result.pending_approvals,
+        }
+```
+
+This pattern is appropriate when each tenant has a low to moderate event rate. For high-volume tenants, put events on a queue and run one consumer per tenant, tenant cohort, or policy domain.
+
+## HTTP Entry Point
+
+```python
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+pool = TenantRunnerPool(environment="sandbox")
+
+
+@app.post("/tenants/<tenant_id>/agents/support-agent/tick")
+def trigger_agent(tenant_id: str):
+    payload = request.get_json(force=True)
+    result = pool.tick(tenant_id, payload)
+    return jsonify(result)
+```
+
+Validate webhook signatures before calling the pool. Treat the HTTP payload as untrusted data: it can become planner context, but it must not change policy, capability declarations, credentials, memory paths, or deployment profile.
+
+## State Isolation
+
+Use separate state per tenant:
+
+| State | Isolation rule |
+|---|---|
+| `memory.db` | Separate file per tenant, agent, and environment |
+| `replays/` | Separate directory per tenant for audit and incident review |
+| JSON logs/events | Separate file or structured `tenantId` field |
+| wallet state | Separate wallet or constrained session key per tenant |
+| `x402_state.json` | Separate budget state and lock per tenant |
+| long-term knowledge | Separate wing/index per tenant unless your store enforces tenant scope |
+
+`MemoryRecord` does not include a tenant field. A custom `MemoryStore` can add tenant scoping, but it must enforce that scope inside `read`, `write`, and `promote`. The simpler v1 production posture is one SQLite database per tenant.
+
+## Policy and Capabilities
+
+Tenant input must never be able to grant a capability. Policy should come from artifacts or operator-controlled configuration:
+
+- If all tenants share the same allowed surface, share one artifact set and isolate runtime state.
+- If tenants have different permissions, use separate generated artifact sets or policy bundles per cohort.
+- If enterprise tenants require bespoke controls, implement a custom policy gate with `RuntimeSession` and keep tenant policy outside prompt-visible state.
+
+Side-effecting capabilities still default to deny until the policy bundle allows them. This applies to MCP tools, x402 calls, wallet operations, exchange actions, and A2A calls.
+
+## Secrets
+
+Specs and prompts should contain credential handles, not secret values. Resolve tenant-specific secrets in the host application or deployment platform.
+
+Recommended handle shape:
+
+```json
+{
+  "credentialHandle": "tenant/acme/openai-api-key"
+}
+```
+
+For MCP stdio servers, pass only the explicitly declared `env:` entries for that tenant. Aether Forge intentionally avoids leaking the full parent process environment to MCP subprocesses.
+
+## Observability
+
+The per-tenant `JsonlEventSink` above writes structured events beside tenant state. If your logs are centralized, add tenant context before forwarding:
+
+```python
+from aether_forge import EventSink, ObservabilityEvent
+
+
+class TenantEventSink:
+    def __init__(self, tenant_id: str, inner: EventSink) -> None:
+        self.tenant_id = tenant_id
+        self.inner = inner
+
+    def emit(self, event: ObservabilityEvent) -> None:
+        event.details = {**event.details, "tenantId": self.tenant_id}
+        self.inner.emit(event)
+```
+
+Alert on policy denials, planner fallback, prompt-injection sanitizer events, memory write failures, x402 budget denials, and repeated `runner.tick.failed` events by tenant.
+
+## Payments and Wallets
+
+For x402 and agent-to-agent payments, budget state must be tenant-scoped. The budget check and payment execution use a file lock, so the lock file must live beside the tenant's budget file.
+
+Wallet operations need the same isolation:
+
+- Use separate wallets for tenant-owned funds.
+- Use constrained session keys for delegated activity.
+- Never let a session key grant master wallet access.
+- Treat missing chain ids as unsafe when a session-key policy declares `allowed_chains`; constrained signers fail closed in that case.
+- Run live-capital capabilities only after sandbox or paper evidence exists for that tenant or policy cohort.
+
+## Operational Checklist
+
+- [ ] Tenant ids are validated before they touch filesystem paths.
+- [ ] Generated artifact directories are read-only or tenant-private.
+- [ ] `memory_db_path` and `replay_directory` are explicitly set per tenant.
+- [ ] Only one tick writes to a tenant's SQLite memory at a time.
+- [ ] Tenant request payloads enter only through `scenario_inputs`.
+- [ ] Tenant input cannot change policy, capabilities, planner config, or credential handles.
+- [ ] Secrets are resolved by handle and never persisted in specs, traces, replays, or memory.
+- [ ] x402 budget files and locks are per tenant.
+- [ ] Observability carries tenant context.
+- [ ] Production tenants use explicit planners and a non-`local` deployment profile only after promotion evidence.
+
+## Related
+
+- [Production Readiness](/docs/guides/production-readiness)
+- [Trigger from a Webhook](/docs/cookbook/webhook-trigger)
+- [Memory Architecture](/docs/features/memory)
+- [Observability](/docs/features/observability)
+- [Security](/docs/features/security)

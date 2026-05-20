@@ -1,0 +1,118 @@
+# TypeScript SDK
+
+<video src="/videos/33-typescript-sdk.mp4" poster="/video-posters/33-typescript-sdk.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
+
+`@aether-forge/sdk` is the JavaScript and TypeScript companion package for Aether Forge. It ships schema validators, generated types, protocol interfaces, and the language-agnostic planner-output parser.
+
+It does not ship the runtime tick loop, policy gate, memory stores, signer implementations, or autoresearch loop. Those remain Python-only in v0.1.x.
+
+## Install
+
+```bash
+npm install @aether-forge/sdk
+# or
+bun add @aether-forge/sdk
+```
+
+## Validate Artifacts
+
+```ts
+import { assertValid, validateAgentSpec, validateArtifactBundle } from "@aether-forge/sdk";
+
+const spec = assertValid(validateAgentSpec(agentSpecJson));
+
+const bundle = validateArtifactBundle({
+  agentSpec: agentSpecJson,
+  capabilityManifest: capabilityManifestJson,
+  policyBundle: policyBundleJson,
+  scenarioPack: scenarioPackJson,
+});
+
+if (!bundle.ok) {
+  console.error(bundle.results);
+}
+```
+
+Every JSON schema under `src/aether_forge/schemas/` is pre-registered with Ajv, so `$ref` resolution is in-memory. The SDK must work in air-gapped, browser, and edge runtimes without network schema fetches.
+
+## Parse Planner Output
+
+```ts
+import { parsePlannerOutput, PlannerParseError } from "@aether-forge/sdk";
+
+try {
+  const parsed = parsePlannerOutput(rawPlannerResponse);
+  console.log(parsed);
+} catch (error) {
+  if (error instanceof PlannerParseError) {
+    console.error("Planner output could not be recovered");
+  }
+}
+```
+
+`parsePlannerOutput` implements the shared spec at `docs/specs/planner-output.md`: trim, strip one Markdown fence pair, parse JSON, then recover the largest balanced JSON object or array while respecting string literals.
+
+The Python reference (`aether_forge.planner._extract_json`) and the TypeScript reference (`parsePlannerOutput`) run against the same fixture files in `tests/fixtures/planner-outputs/`.
+
+## Use Protocol Interfaces
+
+```ts
+import type {
+  DataSource,
+  DelegatedSigner,
+  ExecutionRouter,
+  MemoryStore,
+  Planner,
+  PlanningModel,
+  SigningIntent,
+  StepProposal,
+} from "@aether-forge/sdk";
+```
+
+The interfaces mirror the Python extension Protocols. They are for embedding, validation, and third-party integration boundaries, not for running a full Aether Forge agent in TypeScript.
+
+## Generated Types
+
+```ts
+import type {
+  AgentConfig,
+  AgentSpec,
+  CapabilityManifest,
+  DelegatedSigner as DelegatedSignerDeclaration,
+  MigrationContract,
+  PlannerOutput,
+  PolicyBundle,
+  ScenarioPack,
+} from "@aether-forge/sdk";
+```
+
+The committed generated type bundle must match a fresh:
+
+```bash
+cd sdk-ts
+bun run generate:schemas
+```
+
+CI fails if `sdk-ts/src/schemas/generated/index.ts` drifts from the source JSON schemas.
+
+## Version Boundary
+
+`package.json:schemaCompat` declares which Aether Forge schema family the SDK supports. npm semver is independent from the Python package version, but v0.1.x intentionally stays thin:
+
+| Surface | v0.1.x |
+|---|---|
+| JSON-schema types | Included |
+| Ajv validators | Included |
+| Planner-output parser | Included |
+| Protocol interfaces | Included |
+| Runtime tick loop | Python-only |
+| Policy gate | Python-only |
+| Memory store implementations | Python-only |
+| x402 browser signer helpers | Planned for v0.1.1 |
+
+## Related
+
+- [Python SDK](/docs/reference/python-sdk)
+- [Stable API](/docs/reference/stable-api)
+- [Artifact System](/docs/reference/artifacts)
+- [Configuration](/docs/reference/configuration)

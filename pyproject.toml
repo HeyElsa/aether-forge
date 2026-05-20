@@ -90,6 +90,12 @@ forge = "aether_forge.cli:main_cli"
 [project.entry-points."aether_forge.skill_registries"]
 # Example: my-registry = "my_pkg.registries:MY_REGISTRY"
 
+[project.entry-points."aether_forge.migrations"]
+# Example: my-transforms = "my_pkg.migrations:register_all"
+# A plugin in this group MUST resolve to a callable that takes a single
+# ``aether_forge.migrations.TransformRegistry`` argument and calls
+# ``.register(...)`` on it for each transform it ships.
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

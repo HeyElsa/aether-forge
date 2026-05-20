@@ -43,7 +43,7 @@ Your provider's API key env var isn't set. Set the right one for your `--planner
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-v1-...
-forge run . --mode paper
+forge run . --environment sandbox --mode paper
 ```
 
 ### Planner times out
@@ -65,6 +65,33 @@ ollama serve     # in one terminal
 ollama pull gemma4:latest
 ```
 
+### `forge doctor` fails because planner is autodetected
+
+Production and staging profiles require an explicit planner choice. Regenerate with explicit flags or edit `aether-forge.json` intentionally:
+
+```bash
+forge generate-fast \
+  --name "research-agent" \
+  --idea "summarize trusted sources" \
+  --output ./research-agent \
+  --deployment-profile staging \
+  --planner-mode anthropic \
+  --planner-model claude-sonnet-4-5 \
+  --planner-api-key-env ANTHROPIC_API_KEY
+```
+
+`local` keeps autodetected planners advisory-only. `staging` and `production` fail because planner provenance must be auditable before promotion.
+
+### A cloud key is set but Aether Forge tries Ollama
+
+Autodetect probes cloud providers before Ollama. Check for misspelled env vars:
+
+```bash
+env | grep -E 'ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_API_KEY|GEMINI_API_KEY|OPENROUTER_API_KEY'
+```
+
+If a cloud key is set, Aether Forge should not open `localhost:11434` unless `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT` is truthy. Unset that variable if you want cloud-first behavior.
+
 ## Memory & Storage
 
 ### `sqlite3.OperationalError: database is locked`
@@ -77,7 +104,7 @@ Memory database is missing or corrupted:
 
 ```bash
 rm memory.db memory.db-wal memory.db-shm
-forge run . --mode paper
+forge run . --environment sandbox --mode paper
 ```
 
 ### Memory keeps growing
@@ -96,6 +123,15 @@ Or set `expires_at` when writing memory records.
 ### `OWS_API_KEY not found`
 
 Either install OWS (`pip install 'aether-forge[wallet]'`) or run with the simulated wallet provider (default if OWS isn't installed).
+
+Install support and credentials are separate:
+
+```bash
+pip install 'aether-forge[wallet] @ git+https://github.com/HeyElsa/aether-forge.git'
+export OWS_API_KEY=...
+```
+
+For the first run, do not install wallet extras and do not pass `--wallet`. Use [First 10 Minutes](/docs/guides/first-10-minutes).
 
 ### `BalanceCheckFailed: insufficient ETH for gas`
 
@@ -144,12 +180,27 @@ Caller didn't include the X-PAYMENT header. Either:
 - Use `forge x402-call ...` which handles this automatically
 - Manually sign EIP-3009 and add the X-PAYMENT header
 
+### Payment header rejected before execution
+
+`X402PaymentGate` verifies payment headers before running paid capabilities. Common causes:
+
+| Error shape | Fix |
+|---|---|
+| Wrong receiving address | Match the gate's configured pay-to address |
+| Insufficient amount | Pay at least the requested amount |
+| Payer not allowed | Add the caller to `allowed_payers` or use an allowed wallet |
+| Malformed header | Use `forge x402-call ...` instead of hand-building the header |
+
+Rejections happen before the paid capability executes.
+
 ### `Budget exceeded: session_spent_usd 1.05 > max_session_usd 1.00`
 
 You hit your configured cap. Either:
 - Wait for next session
 - Increase `max_session_usd` in `aether-forge.json` `x402_budget`
 - Run with `--confirm-live --max-session-usd 5.00`
+
+Budget checks and payment execution share one lock. If concurrent callers wait or fail around `x402_state.json`, serialize calls or give each agent its own state path.
 
 ### Tx reverts on Base
 
@@ -198,6 +249,36 @@ docker logs <container-id>
 
 Common causes: missing env vars (`OPENROUTER_API_KEY`), missing wallet vault (`.ows/` not mounted), wrong working dir.
 
+## MCP
+
+### MCP server starts but no tools are available
+
+Check the server entry in `aether-forge.json`:
+
+```json
+{
+  "mcp_servers": [
+    {
+      "name": "filesystem",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "tools": { "include": ["read_file"], "exclude": [] }
+    }
+  ]
+}
+```
+
+`tools.include` and `tools.exclude` are enforced per server. A tool excluded by config will not appear to the planner.
+
+### MCP server cannot see an env var
+
+Stdio MCP subprocesses receive a safe baseline environment plus only the env vars explicitly declared on the server config. Add required variables under that server's `env` field instead of relying on the parent shell.
+
+### MCP result looks like prompt injection
+
+External tool results are scanned before entering planner context. If a tool returns instructions such as "ignore previous instructions" or asks for secrets, Aether Forge blocks or flags the result. Treat that as a data-source issue, not a planner bug.
+
 ## Docs Site
 
 ### `npm run dev` fails with peer dep warnings
@@ -211,12 +292,27 @@ npm install --legacy-peer-deps
 
 ### Videos don't load
 
-Videos live in `docs-site/public/videos/`. If cloning fresh, ensure they downloaded (89MB total). Check:
+Videos live in `docs-site/public/videos/`. Posters live in `docs-site/public/video-posters/` so pages have a useful visual state before playback. If cloning fresh, ensure both sets downloaded:
 
 ```bash
 ls -lh docs-site/public/videos/*.mp4 | wc -l
-# Should be 25
+ls -lh docs-site/public/video-posters/*.jpg | wc -l
+# Both should be 34
 ```
+
+Every video page also has the written guide text as the canonical path, so a missing video should not block setup.
+
+### `next start` returns 404 for docs routes
+
+Build the docs site before starting production mode:
+
+```bash
+cd docs-site
+npm run build
+npm run start
+```
+
+The `postbuild` step patches the Next routes manifest for MDX docs routes. If you bypass `npm run build`, production route serving will not be prepared.
 
 ## Still stuck?
 

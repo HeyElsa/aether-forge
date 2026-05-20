@@ -2,7 +2,7 @@
 
 Two-layer anti-impersonation system using EIP-712 typed data signing.
 
-<video src="/videos/13-attestation.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/13-attestation.mp4" poster="/video-posters/13-attestation.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 ## The Problem
 
@@ -58,10 +58,7 @@ After registration, an agent can request verification:
 
 ```bash
 # Show all agents with trust tier labels
-forge agent-discover --capability get-token-price
-
-# Only show verified agents
-forge agent-discover --capability get-token-price --verified-only
+forge agent-discover --agent-id 1
 ```
 
 ## Automatic at Generation

@@ -1,5 +1,173 @@
 # PRD Changelog
 
+## v0.23.1 - 2026-05-19
+
+Patch release for docs and contract hardening after the v0.23.0 TypeScript SDK release.
+
+### Contract clarifications
+- `AETHER_FORGE_PLANNER_MODE` is an explicit generation-time planner choice, equivalent to `--planner-mode` for provenance. `forge generate-fast --deployment-profile production` accepts it and stamps `planner.source: "explicit"` into generated `aether-forge.json`.
+- `AETHER_FORGE_PLANNER_MODEL`, `AETHER_FORGE_PLANNER_BASE_URL`, and `AETHER_FORGE_PLANNER_API_KEY_ENV` are carried into generated config when their CLI counterparts are absent.
+- `MigrationRunner.apply_to_memory_store()` only transforms rows whose `schema_version` exactly matches `contract.fromVersion`. Older rows require their own earlier migration step.
+- `SessionKeyConstrainedSigner` delegates to `SessionKeyPolicy.permits()` when available and refuses signing when `allowed_chains` is set but `SigningIntent.chain_id` is missing.
+
+### Docs and examples
+- New docs-site TypeScript SDK reference page.
+- Added relevant existing video embeds to reference and guide pages that lacked them.
+- README, configuration, production-readiness, stable API, examples, and marketplace docs now describe the TypeScript SDK and the hardened contracts.
+
+### Verification
+- Python suite: `655 passed, 15 skipped, 1 warning`.
+- TypeScript SDK suite: `37 passed`.
+- Docs-site build: Next.js build and Pagefind indexing passed.
+- `git diff --check` clean.
+
+## v0.23.0 - 2026-05-16
+
+TypeScript SDK + cross-language conformance. Sprint 3 / closing sprint of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.23.0.md` for full context). Closes FP-5 (Python-only barrier) end-to-end and codifies FP-1 (planner resilience) as a language-neutral spec both reference implementations conform to. After this release, all five reported friction points are closed.
+
+### Language-agnostic planner-output spec (FP-1, cross-language)
+- New `docs/specs/planner-output.md` — normative behavioral spec at version 1.0.0. Covers recovery algorithm, observability contract, retry envelope, fixture protocol, versioning policy.
+- New `src/aether_forge/schemas/runtime/planner-output.schema.json` — structural contract pinning the JSON shape.
+- New `tests/fixtures/planner-outputs/` — 13 baseline conformance fixtures covering every recovery case in the spec.
+- New `tests/test_planner_output_spec.py` — Python parametrized conformance + two meta-tests (tripwire, shape).
+
+### @aether-forge/sdk TypeScript SDK v0.1.0 (FP-5)
+- New `sdk-ts/` sibling directory. Standalone package; no monorepo refactor.
+- Generated types for all 19 schemas (8 artifacts, 4 common, 7 runtime) bundled into a single committed `src/schemas/generated/index.ts`. Generator script uses `json-schema-to-typescript` with in-bundle JSON-Pointer rewrites for cross-schema `$ref`s.
+- Ajv-backed validators per artifact + composite `validateArtifactBundle` + `assertValid<T>`. Returns Result objects or throws `ValidationError`. All schemas pre-registered on the ajv instance for in-memory `$ref` resolution.
+- `parsePlannerOutput` — TS reference implementation of the spec. Pure stdlib function, no dependencies. Identical recovery behavior to Python `_extract_json`.
+- Protocol interfaces mirror the Python Protocols: `Planner`, `ExecutionRouter`, `MemoryStore`, `DataSource`, `PlanningModel`, `DelegatedSigner`, etc. Interface-only — no runtime tick loop in v0.1.0 (deliberately deferred).
+- Error hierarchy: `AetherForgeError` base + `PlannerParseError`, `ValidationError`, `SchemaCompatError`. Prototype-chain-preserving so `instanceof` works across bundler boundaries.
+- Build stack: tsup (esm + cjs + .d.ts), vitest, TypeScript 5.6, ajv 8, ajv-formats 3.
+
+### CI: schema conformance gate
+- New `.github/workflows/sdk-ts.yml` runs on `sdk-ts/**`, `src/aether_forge/schemas/**`, `tests/fixtures/planner-outputs/**`, or `docs/specs/planner-output.md` changes.
+- Pipeline: Bun setup → install (frozen lockfile) → regenerate schemas → `git diff --exit-code` (fails on drift) → typecheck → build → vitest (including cross-language conformance fixtures).
+
+### Non-Negotiables added (AGENTS.md §3)
+- The planner-output spec is the cross-language contract. Both reference implementations MUST conform to every shared fixture. Adding a fixture is the canonical way to extend the contract.
+- The committed `sdk-ts/src/schemas/generated/index.ts` MUST match a fresh regeneration; CI fails on drift.
+- The TS SDK MUST pre-register every schema on its ajv instance — no network fetches at runtime. New schemas under `src/aether_forge/schemas/` MUST also be wired into `sdk-ts/src/validate/index.ts`.
+- `parsePlannerOutput` MUST remain a pure function with zero dependencies beyond the stdlib.
+- v0.1.0 of `@aether-forge/sdk` ships ZERO runtime behavior beyond validation and the planner-output parser. Tick loop / policy gate / memory store implementations are explicitly out of scope.
+
+### Verification
+- Python suite: 620 → 635 tests (+15 from the parametrized fixture suite). All pass.
+- TypeScript suite: 0 → 37 tests (14 parser unit + 9 validator + 14 conformance). All pass.
+- Build: `bun run build` clean — dist/index.js (51.65 KB ESM), dist/index.cjs (54.34 KB CJS), dist/index.d.ts (29.21 KB).
+- Same 13 fixtures pass under both Python `_extract_json` and TS `parsePlannerOutput`.
+
+### Files
+- 20 new files, ~+2370 lines. No existing source files modified (the Python parser already conforms to the spec it now formalizes).
+
+## v0.22.0 - 2026-05-16
+
+Spec-first the missing seams release. Sprint 2 of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.22.0.md` for full context). Ships four schema-first features the Sprint 1 hardening was preparation for: deployment-profile escalation in `forge doctor`, an executable `MigrationRunner` over the existing migration-contract schema, provider-native tool-use for Anthropic + OpenAI-compatible models, and the `DelegatedSigner` Protocol that codifies the hosted-marketplace trust model. Sprint 3 (TypeScript SDK) follows.
+
+### Deployment profiles (FP-2 deepening)
+- New `deploymentProfile` top-level field on `aether-forge.json` — enum `local` / `staging` / `production`, default `local`. Resolved via `config.resolve_deployment_profile()` (CLI > env > config > default).
+- `forge generate-fast --deployment-profile production` refuses autodetected planners AND `--planner-mode heuristic` (exit 2). Staging refuses heuristic fallback when no LLM is reachable.
+- `forge doctor` upgrades the v0.21.0 advisory: production + autodetected = HARD FAIL, production + heuristic = HARD FAIL, staging + autodetected = HARD FAIL. Local profile keeps autodetected advisory-only so dev machines aren't punished.
+- New `agent-config.schema.json` declares the full `aether-forge.json` contract. Permissive on unknown top-level keys for forward compatibility.
+- Tests: `tests/test_deployment_profile.py` (20 cases).
+
+### MigrationRunner (FP-4)
+- New `src/aether_forge/migrations.py`: `TransformRegistry`, `MigrationContract`, `MigrationRunner`, `MigrationReport`. Apply migrations to `SqliteMemoryStore` or single artifact files. Dry-run default; `--apply` required; auto-writes `.pre-migration-<ts>.bak`; per-row exception tolerance.
+- Lossy fields deny-by-default — refuses to apply unless `policy.lossyOk` or caller `lossy_ok=True`. Mirrors `_weakens_criteria` philosophy.
+- Contracts without `transformRef` refuse to execute (documentation-only vs runnable discriminant).
+- New `forge migrate memory|artifact` CLI subcommand. Loads transforms from new `aether_forge.migrations` entry-point group.
+- `SqliteMemoryStore.iter_records_below(version, *, inclusive)` + `count_records_below(...)` for streamed cohort iteration.
+- Schema extensions on `migration-contract.schema.json`: optional `transformRef` + `policy.lossyOk`.
+- Tests: `tests/test_migration_runner.py` (25 cases).
+
+### Provider-native tool-use (FP-1 deepening)
+- `adapters/function_call.py` adds `build_tool_schema_from_manifest`, `to_anthropic_tool_schema`, `from_anthropic_tool_use`, `from_openai_tool_calls`.
+- New `complete_with_tools(prompt, tools) -> FunctionCallResponse` on `OpenAICompatiblePlanningModel` and `AnthropicPlanningModel`. Raises if `tools` empty. Gemini deferred.
+- `PromptDrivenPlanner.tool_mode: bool = False` — when True, dispatches via provider-native tool-use, bypassing JSON string-parsing. Records `model-error` / `empty-plan` failures on `session.session_state` with the same shape as the legacy path.
+- Settings: `AETHER_FORGE_PLANNER_TOOL_MODE` env > `planner.toolMode` config > False. Threaded into the OpenAI-compatible + Anthropic factory branches.
+- New `planner-tool-use.schema.json`.
+- Tests: `tests/test_planner_tool_mode.py` (22 cases).
+
+### DelegatedSigner Protocol (FP-3 — hosted-marketplace trust model)
+- New `src/aether_forge/crypto/signers.py`: `DelegatedSigner` Protocol, `SigningIntent` frozen value object, `SignerKind` literal, `SigningError` + `SigningRefusedError`.
+- Three reference signers: `OwsSigner` (extracts v0.21.0 default), `BrowserRelaySigner` (POST to user-configured relay URL; surfaces user-rejection 4xx as `SigningRefusedError`), `DelegatedSecretsSigner` (resolves signing callable from `CredentialResolver` lease).
+- `SessionKeyConstrainedSigner` wrapper enforces `SessionKeyPolicy` constraints before delegating; refuses `intent=None` (fail-closed).
+- `LegacyCallableSigner` shim wraps the deprecated `sign_typed_data_fn` so it flows through the new protocol.
+- `X402Client(signer=...)` is the preferred hook; `sign_typed_data_fn` logged as deprecated (removal: v0.24.0); precedence is `signer` > legacy fn > `OwsSigner` fallback.
+- `SessionKeyPolicy.permits(*, chain_id, contract_address, spend_usd)` — explicit decision method used by the constrained wrapper.
+- `X402PaymentGate.verify_and_settle_onchain(allowed_payers=...)` — case-insensitive payer allowlist; closes the "anyone can pay anything" gap.
+- New `delegated-signer.schema.json` pins the four signer-kind variants + optional constrained-wrapper config.
+- Tests: `tests/test_delegated_signer.py` (25 cases).
+
+### Non-Negotiables added (AGENTS.md §3)
+- `forge doctor` MUST escalate production + autodetected / production + heuristic / staging + autodetected to hard fail.
+- Generated `aether-forge.json` MUST stamp `deploymentProfile` at the top level.
+- `MigrationRunner` MUST default to dry-run and refuse lossy contracts unless explicitly allowed.
+- `forge migrate` MUST require `--apply` for any mutation.
+- Migration contracts without `transformRef` MUST be treated as documentation-only.
+- `complete_with_tools` MUST raise on empty tools.
+- Tool-mode planner failures MUST record the same `last_planner_parse_failure` shape as the string path.
+- `DelegatedSigner` is the canonical signing surface; legacy `sign_typed_data_fn` removal target is v0.24.0.
+- `SessionKeyConstrainedSigner` MUST refuse `intent=None`.
+- `X402PaymentGate.verify_and_settle_onchain` MUST honor `allowed_payers` case-insensitively.
+
+### Verification
+- 620 tests pass (was 528; +92 net from Sprint 2). 15 skipped. 1 pre-existing deprecation warning.
+- Independent code audit: no blocking issues. OwsSigner extraction preserves legacy try-API-key-then-passphrase fallback exactly. Pre-v0.22.0 configs validate cleanly against the new agent-config schema.
+- Back-compat: v0.21.0 memory.db gets the new fields backfilled on open; legacy `sign_typed_data_fn` works with a deprecation warning; configs without `deploymentProfile` default to `local`.
+
+### Files
+- 14 source files modified, 7 new files (4 test, 3 schema, 1 module). Net ~+3160 lines.
+
+## v0.21.0 - 2026-05-16
+
+Resilience & schema hardening release. Sprint 1 of the dev-feedback retrospective (`docs/prd/aether-forge-prd-v0.21.0.md` for full context; full multi-sprint plan at `~/.claude/plans/friction-points-python-only-concurrent-lecun.md`). Closes the silent-failure subset of the five reported friction points: thin planner parsing, Ollama-first auto-detect, missing schema-version stamp on persisted memory rows. Sprints 2 (delegated signers + migration execution) and 3 (TypeScript SDK) follow.
+
+### Planner JSON parsing resilience (FP-1)
+- New `_extract_json(response)` helper in `src/aether_forge/planner.py` recovers JSON from fenced code blocks, reasoning preambles, trailing prose, double-fenced responses, and braces-inside-strings via a balanced-brace scan. Raises `PlannerParseError` on miss.
+- `PromptDrivenPlanner.propose_plan` now records a structured `last_planner_parse_failure` event on `session.session_state` with discriminator `kind`: `parse-failure`, `parse-exception`, `model-error`, or `empty-plan`. Heuristic fallback is now observable in replays.
+- Tests: `tests/test_planner_parse_resilience.py` (18 cases — fenced, preamble, trailing prose, truncation, bare scalars, top-level array, observability events).
+
+### Provider retry envelope (FP-1)
+- New `_with_retry(call, attempts, sleep)` helper in `src/aether_forge/models.py`. Jittered exponential backoff (base 0.5s, cap 8s, ±20% jitter) on `URLError`, `TimeoutError`, and HTTP `{408,425,429,500,502,503,504}`. Honors `Retry-After` (integer-seconds and HTTP-date forms).
+- `OpenAICompatiblePlanningModel`, `AnthropicPlanningModel`, `GeminiPlanningModel` gained `retry_attempts: int = 3`. Set to 1 to opt out.
+- Stdlib-only. `time.sleep` is injectable so tests run instantly.
+- Tests: `tests/test_models_retry.py` (11 cases — helper unit + provider integration + 429 Retry-After + opt-out).
+
+### Auto-detect order reversed (FP-2 — behavior change)
+- `cli._autodetect_planner` now probes the cloud chain (Anthropic → OpenAI → Gemini → OpenRouter) before Ollama. Production deploys with both a cloud key and a host Ollama daemon no longer silently pick Ollama. Local-dev convenience preserved: Ollama still wins when no cloud key is set.
+- Escape hatch: `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1` forces Ollama even with cloud keys present.
+- Return dict gains `source` discriminant (`"cloud"|"ollama"|"heuristic"`).
+- New no-probe contract: when a cloud key is set and the override flag is not, autodetect does NOT open a socket to localhost:11434.
+- Tests: `tests/test_planner_autodetect.py` (11 cases including the exact regression that prompted this work).
+
+### Planner provenance audit fields (FP-2)
+- `FastGenerateRequest` gained `planner_source` (`"explicit"` / `"autodetected"`) and `planner_detected_at` (ISO timestamp). `_project_config_json` stamps both into generated `aether-forge.json` as `planner.source` and `planner.detectedAt`.
+- New `doctor._check_planner_source(config_path)` surfaces explicit / autodetected / unstamped advisory. Sprint 2's `deploymentProfile` work will upgrade autodetected + production from advisory to failure.
+- `forge generate-fast` now prints a `[planner] WARNING:` line when heuristic fallback is selected.
+
+### MemoryRecord schema version pin (FP-4 preparation)
+- New `MEMORY_RECORD_SCHEMA_VERSION = "1.0.0"` constant in `src/aether_forge/memory.py`. `MemoryRecord.schema_version` field default and `from_dict` fallback both reference it. A future bump propagates atomically.
+- `SqliteMemoryStore._init_schema` idempotently stamps `('memory_record_schema_version', '1.0.0')` into `schema_meta`. Pre-existing v0.20.0 databases backfill on next open — no migration required.
+- New `SqliteMemoryStore.memory_record_schema_version()` reader.
+- Tests: `tests/test_memory_schema_version_stamp.py` (3 cases — new DB stamps, legacy DB backfill, constant reference).
+
+### Non-Negotiables added (AGENTS.md §3)
+- The `HeuristicPlanner` fallback MUST emit a structured event on `session.session_state` when triggered. Silent fallback is a contract violation.
+- `_autodetect_planner` MUST NOT probe Ollama when any cloud-provider env var is set, unless `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT` is explicitly truthy.
+- Generated `aether-forge.json` MUST include `planner.source` and `planner.detectedAt` so the planner-choice provenance is auditable post-hoc.
+- `MemoryRecord.schema_version` MUST be sourced from `aether_forge.memory.MEMORY_RECORD_SCHEMA_VERSION`; hardcoded `"1.0.0"` strings in new code are a regression.
+- Provider planning models MUST route their HTTP calls through `_with_retry` and accept a `retry_attempts` opt-out.
+
+### Verification
+- 526 tests pass (was 485; +41 net from Sprint 1 work). 15 skipped (env-gated optional checks). 1 pre-existing deprecation warning (`jsonschema.__version__`).
+- Independent code audit (Explore agent) found no regressions, no missed callers, no contract violations.
+- Manual smoke: `forge generate-fast` with `ANTHROPIC_API_KEY` set and Ollama running picks Anthropic; `planner.source: autodetected` stamped; `forge doctor` surfaces the advisory.
+- Back-compat: a v0.20.0 `memory.db` opened with the new `SqliteMemoryStore` gets the meta row added; reads and writes unchanged.
+
+### Files
+- 7 source files modified, 4 new test files. Net +1020 lines.
+
 ## v0.20.0 - 2026-05-03
 
 DX & extensibility release. Public extension Protocols, plugin discovery via `importlib.metadata` entry points, generator emits production batteries (Makefile, .env.example, tests/test_agent.py, .dockerignore), shared `tests/conftest.py` fixtures, ARCHITECTURE.md, extending.mdx guide, mypy + pre-commit. For users with no third-party plugins: zero behavior change.

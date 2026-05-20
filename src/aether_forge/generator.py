@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from ._version import __version__
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,6 +43,18 @@ class FastGenerateRequest:
     planner_model: str | None = None
     planner_base_url: str | None = None
     planner_api_key_env: str | None = None
+    # Provenance fields stamped into aether-forge.json so `forge doctor` and
+    # log greppers can tell autodetected planners apart from explicit ones.
+    # ``planner_source`` ∈ {"autodetected", "explicit", None}; "autodetected"
+    # values originate from cli._autodetect_planner and trigger a hard fail
+    # in ``forge doctor`` when ``deployment_profile == "production"``.
+    planner_source: str | None = None
+    planner_detected_at: str | None = None
+    # Deployment profile stamped into aether-forge.json (v0.22.0+, FP-2 deepening).
+    # ``local`` (default) tolerates autodetect / heuristic; ``staging`` requires
+    # explicit planner; ``production`` is strict (no autodetect, no heuristic,
+    # doctor fails loudly). Resolved by config.resolve_deployment_profile().
+    deployment_profile: str = "local"
 
 
 @dataclass(slots=True)
@@ -108,7 +122,8 @@ class AgentSummary:
             if self.bitcoin_address:
                 print(r("Bitcoin:", self.bitcoin_address))
         else:
-            print(r("Wallet:", "(none — paper mode only)"))
+            wallet_label = "(none — paper mode only)" if "crypto" in self.domain else "(none — sandbox only)"
+            print(r("Wallet:", wallet_label))
 
         # ── Strategy ──
         print(sp)
@@ -120,13 +135,20 @@ class AgentSummary:
         # Show key strategy parameters if available
         p = self.strategy_params
         if p:
-            spread = p.get("spread_pct", "?")
-            pos = p.get("position_size", p.get("position_size_pct", "?"))
-            tokens = ", ".join(p.get("tokens", [])) or "?"
-            print(sub(f"Tokens: {tokens}"))
-            print(sub(f"Spread: {spread}%  |  Position: {pos}  |  Max orders: {p.get('max_open_orders', '?')}"))
-            if p.get("stop_loss_pct"):
-                print(sub(f"Stop loss: {p['stop_loss_pct']}%  |  Max daily loss: ${p.get('max_daily_loss_usd', '?')}"))
+            if "crypto" in self.domain:
+                spread = p.get("spread_pct", "?")
+                pos = p.get("position_size", p.get("position_size_pct", "?"))
+                tokens = ", ".join(p.get("tokens", [])) or "?"
+                print(sub(f"Tokens: {tokens}"))
+                print(sub(f"Spread: {spread}%  |  Position: {pos}  |  Max orders: {p.get('max_open_orders', '?')}"))
+                if p.get("stop_loss_pct"):
+                    print(sub(f"Stop loss: {p['stop_loss_pct']}%  |  Max daily loss: ${p.get('max_daily_loss_usd', '?')}"))
+            else:
+                interval = p.get("review_interval_ticks", "?")
+                max_items = p.get("max_items_per_tick", "?")
+                confidence = p.get("confidence_threshold", "?")
+                print(sub(f"Review interval: {interval} tick(s)  |  Max items: {max_items}"))
+                print(sub(f"Confidence threshold: {confidence}"))
 
         # Show entry rules
         if self.entry_rules:
@@ -147,6 +169,10 @@ class AgentSummary:
                 parts.append(f"Win rate > {self.success_metrics['min_win_rate']*100:.0f}%")
             if "max_drawdown_pct" in self.success_metrics:
                 parts.append(f"Drawdown < {self.success_metrics['max_drawdown_pct']}%")
+            if "policyViolationRate" in self.success_metrics:
+                parts.append(f"Policy violations = {self.success_metrics['policyViolationRate']}")
+            if "minimumUsefulOutputs" in self.success_metrics:
+                parts.append(f"Useful outputs >= {self.success_metrics['minimumUsefulOutputs']}")
             if parts:
                 print(sub(f"Success: {' | '.join(parts)}"))
 
@@ -154,7 +180,10 @@ class AgentSummary:
         print(sp)
         cap_count = len(self.capabilities)
         skill_count = len(self.skills)
-        data_caps = [c for c in self.capabilities if c.startswith(("cap-market", "elsa-get", "elsa-search"))]
+        data_caps = [
+            c for c in self.capabilities
+            if c.startswith(("cap-market", "elsa-get", "elsa-search")) or c.endswith("-read") or "-read-" in c
+        ]
         action_caps = [c for c in self.capabilities if c not in data_caps]
         print(r("Capabilities:", f"{cap_count} ({len(data_caps)} read, {len(action_caps)} write)"))
         if skill_count > 0:
@@ -181,13 +210,17 @@ class AgentSummary:
         print("  Next steps:")
         print(f"    1. forge validate {self.output_directory}")
         print(f"    2. forge eval-pack {self.output_directory}")
-        if self.autonomous:
-            print(f"    3. forge run {self.output_directory} --autoresearch --auto-approve --mode paper")
+        if "crypto" in self.domain and self.autonomous:
+            print(f"    3. forge run {self.output_directory} --autoresearch --auto-approve --environment sandbox --mode paper")
+        elif "crypto" in self.domain:
+            print(f"    3. forge run {self.output_directory} --auto-approve --environment sandbox --mode paper")
+        elif self.autonomous:
+            print(f"    3. forge run {self.output_directory} --autoresearch --auto-approve --environment sandbox")
         else:
-            print(f"    3. forge run {self.output_directory} --auto-approve --mode paper")
+            print(f"    3. forge run {self.output_directory} --auto-approve --environment sandbox")
         if self.evm_address:
-            print(f"    4. Fund wallet → send USDC to {self.evm_address}")
-            print(f"    5. forge run {self.output_directory} --mode live  (after funding)")
+            print(f"    4. Fund wallet only after promotion evidence → send USDC to {self.evm_address}")
+            print(f"    5. forge run {self.output_directory} --environment production --mode live  (after funding)")
         print()
 
 
@@ -772,7 +805,7 @@ def _common_envelope(artifact_set_id: str, title: str) -> dict[str, Any]:
         "title": title,
         "generator": {
             "name": "aether-forge",
-            "version": "0.1.0",
+            "version": __version__,
             "inputDigest": f"sha256:{artifact_set_id}",
         },
         "compatibility": {
@@ -790,7 +823,13 @@ def _common_envelope(artifact_set_id: str, title: str) -> dict[str, Any]:
 def _project_config_json(request: FastGenerateRequest | None = None) -> str:
     """Build the per-agent aether-forge.json. Honors the planner choice from
     the operator so the generated agent's `forge run .` (no flags) resolves to
-    the same model that was selected at generation time."""
+    the same model that was selected at generation time.
+
+    Also stamps ``planner.source`` and ``planner.detectedAt`` when the choice
+    came from cli._autodetect_planner — gives ``forge doctor`` and future
+    deployment-profile checks (FP-2 Sprint 2) the audit trail to flag silent
+    autodetect picks in production.
+    """
     planner_block: dict[str, Any] = {
         "mode": (request.planner_mode if request else None) or "heuristic",
     }
@@ -800,8 +839,15 @@ def _project_config_json(request: FastGenerateRequest | None = None) -> str:
         planner_block["baseUrl"] = request.planner_base_url
     if request and request.planner_api_key_env:
         planner_block["apiKeyEnv"] = request.planner_api_key_env
+    if request and request.planner_source:
+        planner_block["source"] = request.planner_source
+    if request and request.planner_detected_at:
+        planner_block["detectedAt"] = request.planner_detected_at
+
+    profile = (request.deployment_profile if request else None) or "local"
 
     payload = {
+        "deploymentProfile": profile,
         "planner": planner_block,
         "runtime": {
             "cryptoRouter": "mock",
@@ -863,7 +909,7 @@ def _write_scaffold_files(
         Path("src/__init__.py"): '"""Generated scaffold package root."""\n',
         Path("src/generated/__init__.py"): '"""Generated project artifacts for this Aether Forge scaffold."""\n',
         Path("src/generated/agent_context.py"): _agent_context_module(title, artifact_set_id, artifacts),
-        Path("src/protocols/__init__.py"): _protocols_init_module(title, summary),
+        Path("src/protocols/__init__.py"): _protocols_init_module(title, summary, domain),
         Path("src/policies/__init__.py"): '"""User-owned policy overrides live here."""\n',
         Path("src/policies/policy_bundle.py"): _policy_bundle_module(title),
         Path("src/runtime/__init__.py"): '"""Runtime helpers for the generated scaffold."""\n',
@@ -952,6 +998,16 @@ def _project_main_py(title: str) -> str:
 
 
 def _root_readme(title: str, domain: str, summary: str) -> str:
+    run_command = (
+        "forge run . --environment sandbox --mode paper --auto-approve"
+        if "crypto" in domain
+        else "forge run . --environment sandbox --auto-approve"
+    )
+    run_note = (
+        "\nFor crypto scaffolds, `--environment` controls policy and `--mode` controls the trading backend."
+        if "crypto" in domain
+        else ""
+    )
     return (
         f"# {title}\n\n"
         f"Generated by `Aether Forge` in `fast` mode.\n\n"
@@ -977,9 +1033,10 @@ def _root_readme(title: str, domain: str, summary: str) -> str:
         "pip install -e .          # Install with aether-forge dependency\n"
         "forge validate .          # Validate artifacts\n"
         "forge eval-pack .         # Run scenario evaluations\n"
-        "forge run .               # Start the governed agent loop\n"
+        f"{run_command}  # Start the governed agent loop\n"
         "python main.py            # Or run directly\n"
-        "```\n\n"
+        "```\n"
+        f"{run_note}\n\n"
         "## Adding external tools via MCP\n\n"
         "This agent is an MCP client. Declare any [Model Context Protocol](https://modelcontextprotocol.io)\n"
         "server in `aether-forge.json` and its tools become available to the planner at runtime:\n\n"
@@ -1211,7 +1268,9 @@ def _runtime_live_exchange_module(title: str) -> str:
     )
 
 
-def _protocols_init_module(title: str, summary: str) -> str:
+def _protocols_init_module(title: str, summary: str, domain: str) -> str:
+    x402_enabled = "True" if "crypto" in domain else "False"
+    budget_limit = "50.0" if "crypto" in domain else "0.0"
     return (
         '"""Protocol stack for this agent \u2014 ERC-8004, ERC-8126, ERC-8183, x402."""\n'
         '\n'
@@ -1219,7 +1278,7 @@ def _protocols_init_module(title: str, summary: str) -> str:
         'AGENT_CARD = {\n'
         f'    "name": {title!r},\n'
         f'    "description": {summary!r},\n'
-        '    "x402Support": True,\n'
+        f'    "x402Support": {x402_enabled},\n'
         '    "active": True,\n'
         '    "supportedTrustTypes": ["erc8126"],\n'
         '    "services": [],\n'
@@ -1236,7 +1295,7 @@ def _protocols_init_module(title: str, summary: str) -> str:
         '# x402 payment config\n'
         'X402_CONFIG = {\n'
         '    "network": "eip155:8453",  # Base mainnet\n'
-        '    "budgetLimitUsd": 50.0,\n'
+        f'    "budgetLimitUsd": {budget_limit},\n'
         '    "enabled": False,  # Enable when wallet is configured\n'
         '}\n'
     )
@@ -1330,6 +1389,152 @@ forge run . --autoresearch --eval-interval 6
 ```
 """
 
+    if "crypto" not in domain:
+        return f"""# {title}
+
+> {summary}
+
+## Overview
+
+| Field | Value |
+|-------|-------|
+| Agent ID | `{artifact_set_id}` |
+| Domain | `{domain}` |
+| Created by | Aether Forge (fast mode) |
+| Default environment | `sandbox` |
+| Autonomous | {'Yes' if is_autonomous else 'No'} |
+
+## Objective
+
+{idea}
+
+## Quick Start
+
+```bash
+# 1. Validate artifacts
+forge validate .
+
+# 2. Run scenario evaluations
+forge eval-pack .
+
+# 3. Start the agent with local mock execution
+forge run . --auto-approve --environment sandbox --planner-mode heuristic
+
+# 4. Start with autoresearch after adding meaningful eval scenarios
+forge run . --autoresearch --auto-approve --environment sandbox --planner-mode heuristic
+
+# 5. Deploy with Docker
+docker-compose up -d
+```
+
+## Skills
+
+{skills_list}
+
+## Capabilities
+
+Declared in `capability-manifest.json`. The agent can only use capabilities
+listed there — the policy gate enforces this at runtime.
+
+| Kind | Description |
+|------|-------------|
+| `tool` | Project-local or external tools declared in the manifest |
+| `data-source` | Read-only data from configured providers |
+| `memory-action` | Typed memory reads and writes through the runtime |
+
+{wallet_section}
+
+{autonomy_section}
+
+## Architecture
+
+```
+{slug}/
+├── AGENT.md                 ← you are here
+├── agent-spec.json          ← agent contract (objective, capabilities, eval)
+├── capability-manifest.json ← declared capabilities + credential handles
+├── policy-bundle.json       ← safety rules and approval defaults
+├── scenario-pack.json       ← evaluation scenarios
+├── strategy.json            ← tunable runtime parameters
+├── scaffold.manifest.json   ← ownership zones (generated vs user-owned)
+├── aether-forge.json        ← local config (planner, runtime, MCP)
+├── main.py                  ← standalone entry point
+├── pyproject.toml           ← pip installable
+├── Dockerfile               ← container deployment
+├── docker-compose.yml       ← orchestration
+├── src/
+│   ├── strategy/router.py   ← YOUR execution router
+│   ├── generated/           ← auto-generated context (don't edit)
+│   ├── policies/            ← user-owned policy overrides
+│   ├── runtime/             ← runtime helpers
+│   └── protocols/           ← ERC-8004/8126/8183/x402 metadata
+├── docs/                    ← additional documentation
+├── replays/                 ← tick replay files (created at runtime)
+└── memory.db                ← persistent memory (created at runtime)
+```
+
+## Editing the Strategy
+
+The strategy is in `strategy.json`:
+
+```json
+{{
+  "parameters": {{
+    "review_interval_ticks": 1,
+    "max_items_per_tick": 5,
+    "confidence_threshold": 0.7
+  }},
+  "entry_rules": [
+    {{"condition": "new context or requested task is available", "action": "read declared context"}}
+  ],
+  "success_metrics": {{
+    "policyViolationRate": 0,
+    "minimumUsefulOutputs": 1
+  }}
+}}
+```
+
+## Editing the Router
+
+The execution router is in `src/strategy/router.py`. Add handlers for the tools
+and data sources declared in `capability-manifest.json`.
+
+## Governance
+
+Every agent action goes through:
+
+```
+Planner → Policy Gate → Execute → Step Ledger
+```
+
+- **Policy gate** enforces environment restrictions, capability declarations, and approval requirements
+- **Step ledger** records every action for audit and replay
+- **Approval** is required whenever policy says a side effect needs review
+- **Auto-approve** is available in sandbox for testing
+
+## Deployment
+
+```bash
+docker build -t {slug} .
+docker-compose up -d
+```
+
+## Promotion Pipeline
+
+```
+Sandbox → Paper → Canary Live → Production
+```
+
+Each promotion requires:
+1. Passing scenario evaluations
+2. Evidence-backed promotion record
+3. Approver sign-off
+
+```bash
+forge promote-draft . --target paper --approver "your-name"
+```
+"""
+
     return f"""# {title}
 
 > {summary}
@@ -1357,11 +1562,11 @@ forge validate .
 # 2. Run scenario evaluations
 forge eval-pack .
 
-# 3. Start the agent (paper mode — real prices, simulated orders)
-forge run . --auto-approve --mode paper --planner-mode ollama --planner-model gemma4
+# 3. Start the agent in sandbox policy mode with simulated trading
+forge run . --auto-approve --environment sandbox --mode paper --planner-mode ollama --planner-model gemma4
 
 # 4. Start with autoresearch (self-improving)
-forge run . --autoresearch --auto-approve --mode paper --planner-mode ollama --planner-model gemma4
+forge run . --autoresearch --auto-approve --environment sandbox --mode paper --planner-mode ollama --planner-model gemma4
 
 # 5. Deploy with Docker
 docker-compose up -d
@@ -1509,28 +1714,47 @@ forge promote-draft . --target paper --approver "your-name"
 
 def _project_strategy_json(title: str, domain: str) -> str:
     is_crypto = "crypto" in domain
-    strategy = {
-        "version": 1,
-        "parameters": {
-            "spread_pct": 1.0,
-            "position_size_pct": 1.0,
-            "max_open_orders": 4,
-            "momentum_threshold": 0.5,
-            "volatility_multiplier": 1.0,
-            "rebalance_interval_ticks": 6,
-            "tokens": ["ETH"] if is_crypto else [],
-        },
-        "entry_rules": [
-            {"condition": "momentum.trend == 'bearish' AND change_last_candle_pct < -0.3", "action": "buy"},
-            {"condition": "momentum.trend == 'bullish' AND change_last_candle_pct > 0.3", "action": "sell"},
-        ] if is_crypto else [],
-        "success_metrics": {
-            "min_win_rate": 0.40,
-            "max_drawdown_pct": 10.0,
-            "min_profit_per_tick": 0.0,
-        },
-        "history": [],
-    }
+    if is_crypto:
+        strategy = {
+            "version": 1,
+            "parameters": {
+                "spread_pct": 1.0,
+                "position_size_pct": 1.0,
+                "max_open_orders": 4,
+                "momentum_threshold": 0.5,
+                "volatility_multiplier": 1.0,
+                "rebalance_interval_ticks": 6,
+                "tokens": ["ETH"],
+            },
+            "entry_rules": [
+                {"condition": "momentum.trend == 'bearish' AND change_last_candle_pct < -0.3", "action": "buy"},
+                {"condition": "momentum.trend == 'bullish' AND change_last_candle_pct > 0.3", "action": "sell"},
+            ],
+            "success_metrics": {
+                "min_win_rate": 0.40,
+                "max_drawdown_pct": 10.0,
+                "min_profit_per_tick": 0.0,
+            },
+            "history": [],
+        }
+    else:
+        strategy = {
+            "version": 1,
+            "parameters": {
+                "review_interval_ticks": 1,
+                "max_items_per_tick": 5,
+                "confidence_threshold": 0.7,
+            },
+            "entry_rules": [
+                {"condition": "new context or requested task is available", "action": "read declared context"},
+                {"condition": "policy gate denies an action", "action": "report the blocker and wait"},
+            ],
+            "success_metrics": {
+                "policyViolationRate": 0,
+                "minimumUsefulOutputs": 1,
+            },
+            "history": [],
+        }
     return json.dumps(strategy, indent=2) + "\n"
 
 
@@ -1569,7 +1793,7 @@ def _project_dockerfile() -> str:
         "EXPOSE 8080\n"
         '# Default: paper mode with health + Prometheus metrics + JSON logs\n'
         'ENTRYPOINT ["forge", "run", ".", "--health-port", "8080", "--json-log", "/app/logs/agent.jsonl"]\n'
-        'CMD ["--interval", "30", "--auto-approve", "--mode", "paper"]\n'
+        'CMD ["--interval", "30", "--auto-approve", "--environment", "sandbox", "--mode", "paper"]\n'
     )
 
 
@@ -1588,13 +1812,15 @@ def _project_docker_compose(title: str, slug: str) -> str:
         "      - ./replays:/app/replays\n"
         "      - ./logs:/app/logs\n"
         "    environment:\n"
-        "      - AETHER_FORGE_PLANNER_MODE=ollama\n"
-        "      - AETHER_FORGE_PLANNER_MODEL=gemma4\n"
-        "      - AETHER_FORGE_PLANNER_BASE_URL=http://host.docker.internal:11434/v1\n"
-        "      # For cloud LLMs, set these instead:\n"
-        "      # - AETHER_FORGE_PLANNER_MODE=openrouter\n"
-        "      # - AETHER_FORGE_PLANNER_MODEL=meta-llama/llama-4-maverick\n"
+        "      - AETHER_FORGE_PLANNER_MODE=heuristic\n"
+        "      # For LLM-backed planning, set these instead:\n"
+        "      # - AETHER_FORGE_PLANNER_MODE=anthropic\n"
+        "      # - AETHER_FORGE_PLANNER_MODEL=claude-sonnet-4.5\n"
         "      # - AETHER_FORGE_PLANNER_API_KEY=your-key-here\n"
+        "      # Local Ollama also works when explicitly selected:\n"
+        "      # - AETHER_FORGE_PLANNER_MODE=ollama\n"
+        "      # - AETHER_FORGE_PLANNER_MODEL=gemma4:latest\n"
+        "      # - AETHER_FORGE_PLANNER_BASE_URL=http://host.docker.internal:11434/v1\n"
     )
 
 
@@ -1704,14 +1930,14 @@ def _project_makefile(slug: str) -> str:
         "test:\n"
         "\tpytest tests/ -v\n\n"
         "run-paper:\n"
-        "\tforge run . --auto-approve --environment paper --interval 30 "
+        "\tforge run . --auto-approve --environment sandbox --mode paper --interval 30 "
         "--health-port 8080 --json-log ./logs/agent.jsonl\n\n"
         "run-sandbox:\n"
-        "\tforge run . --auto-approve --environment sandbox --interval 30\n\n"
+        "\tforge run . --auto-approve --environment sandbox --mode simulated --interval 30\n\n"
         "run-live:\n"
         "\t@echo '⚠  Live mode signs real transactions. Confirm by setting CONFIRM_LIVE=yes.'\n"
         "\t@[ \"$$CONFIRM_LIVE\" = \"yes\" ] || (echo 'aborted' && exit 1)\n"
-        "\tforge run . --environment production --interval 30 "
+        "\tforge run . --environment production --mode live --interval 30 "
         "--health-port 8080 --json-log ./logs/agent.jsonl\n\n"
         "doctor:\n"
         "\tforge doctor\n\n"
@@ -1734,10 +1960,7 @@ def _project_env_example() -> str:
         "# Copy to .env and fill in. NEVER commit .env to git.\n"
         "# The framework reads these env vars at runtime; precedence is\n"
         "# CLI flag > env var > aether-forge.json > built-in default.\n\n"
-        "# ---- LLM providers (pick one — auto-detect probes in this order) ----\n"
-        "# Local Ollama (no key needed; auto-detected if running)\n"
-        "# AETHER_FORGE_PLANNER_MODE=ollama\n"
-        "# AETHER_FORGE_PLANNER_MODEL=gemma4:latest\n\n"
+        "# ---- LLM providers (pick one — auto-detect probes cloud keys first) ----\n"
         "# Anthropic\n"
         "# ANTHROPIC_API_KEY=sk-ant-...\n\n"
         "# OpenAI\n"
@@ -1747,6 +1970,9 @@ def _project_env_example() -> str:
         "# GOOGLE_API_KEY=...\n\n"
         "# OpenRouter (gateway to many providers)\n"
         "# OPENROUTER_API_KEY=sk-or-...\n\n"
+        "# Local Ollama (no key needed; auto-detected only when no cloud key is set)\n"
+        "# AETHER_FORGE_PLANNER_MODE=ollama\n"
+        "# AETHER_FORGE_PLANNER_MODEL=gemma4:latest\n\n"
         "# ---- Wallet (only if you ran generate-fast --wallet) ----\n"
         "# OWS_API_KEY=ows_key_...\n\n"
         "# ---- Local registry override (defaults to ~/.aether-forge/agents.db) ----\n"
@@ -1758,9 +1984,9 @@ def _project_env_example() -> str:
 
 def _strategy_init_module() -> str:
     return (
-        '"""Agent strategy module — price feeds, momentum, paper trading, routing.\n\n'
+        '"""Agent strategy module — project-specific routing and helpers.\n\n'
         "This code is part of YOUR agent, not the framework.\n"
-        'Edit freely to implement your trading strategy.\n"""\n'
+        'Edit freely to implement your agent behavior.\n"""\n'
     )
 
 

@@ -1,0 +1,12 @@
+{
+  "description": "JSON followed by an assistant's closing remark.",
+  "input": "{\"steps\": [{\"kind\": \"reason\", \"description\": \"go\"}]}\n\nLet me know if you'd like any adjustments.",
+  "expected": {
+    "outcome": "parsed",
+    "value": {
+      "steps": [
+        {"kind": "reason", "description": "go"}
+      ]
+    }
+  }
+}

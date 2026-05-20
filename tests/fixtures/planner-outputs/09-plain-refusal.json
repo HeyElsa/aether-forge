@@ -1,0 +1,7 @@
+{
+  "description": "Plain-text refusal with no recoverable JSON. Both implementations MUST raise PlannerParseError.",
+  "input": "I cannot help with that request.",
+  "expected": {
+    "outcome": "parse-failure"
+  }
+}

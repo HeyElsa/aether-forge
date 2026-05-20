@@ -26,9 +26,15 @@ import {
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import { loadFont as loadJetBrainsMono } from "@remotion/google-fonts/JetBrainsMono";
 
+// Inter is still loaded as a fallback when the host platform does not have
+// SF Pro Display available (e.g. Linux CI rendering). On macOS — which is the
+// canonical render target matching the older videos in docs-site/public/videos
+// — `system-ui` resolves to SF Pro Display, the Apple system font the
+// canonical videos (00-hero, 03-agent-generation, 06-memory, etc.) were
+// rendered with. Keeping Inter in the stack means the video still looks
+// "right" if someone renders on a non-Apple host.
 const { fontFamily: interFamilyLoaded } = loadInter("normal", {
-  // 200 / 300 = thin/light for the wordmark; 600/700 for bold headlines.
-  weights: ["200", "300", "400", "600", "700"],
+  weights: ["200", "300", "400", "500", "600", "700"],
   subsets: ["latin"],
 });
 const { fontFamily: monoFamilyLoaded } = loadJetBrainsMono("normal", {
@@ -36,7 +42,12 @@ const { fontFamily: monoFamilyLoaded } = loadJetBrainsMono("normal", {
   subsets: ["latin"],
 });
 
-export const interFamily = interFamilyLoaded;
+// Apple-first stack. On macOS, system-ui → SF Pro Display, matching the
+// canonical older videos. On other platforms, falls back through the
+// platform-appropriate UI font and finally to Inter.
+export const interFamily =
+  `-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", ` +
+  `system-ui, "Segoe UI", ${interFamilyLoaded}, sans-serif`;
 export const monoFamily = monoFamilyLoaded;
 
 // ---------------------------------------------------------------------------
@@ -204,11 +215,17 @@ export const Wordmark: React.FC<{
   fontSize?: number;
   letterSpacing?: number;
   color?: string;
-}> = ({ lines, fontSize = 130, letterSpacing = 8, color = FG }) => (
+  fontWeight?: number | string;
+}> = ({ lines, fontSize = 140, letterSpacing = 2, color = FG, fontWeight = 400 }) => (
+  // Canonical "older video" look: SF Pro Display Regular (or Inter 400
+  // fallback on non-macOS hosts), tight letter-spacing, ~140px. Matches
+  // 03-agent-generation / 06-memory / 09-x402-payments after side-by-side
+  // letterform comparison. Weight calibration history: 200 was too thin,
+  // 700 was too bold, 500 was still slightly too bold, 400 matches.
   <div
     style={{
       fontFamily: interFamily,
-      fontWeight: 200,
+      fontWeight,
       fontSize,
       letterSpacing,
       color,
@@ -236,7 +253,7 @@ export const TitleScene: React.FC<{
   titleFontSize?: number;
   /** Letter-spacing for the wordmark. */
   letterSpacing?: number;
-}> = ({ titleLines, tagline, titleFontSize = 130, letterSpacing = 8 }) => {
+}> = ({ titleLines, tagline, titleFontSize = 140, letterSpacing = 2 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const logoOp = fadeIn(frame, fps, 0, 0.6);
@@ -390,7 +407,8 @@ export const OutroScene: React.FC = () => {
         />
       </div>
       <div style={{ opacity: wordmarkOp, marginTop: 8 }}>
-        <Wordmark lines={["AETHER", "FORGE"]} fontSize={108} letterSpacing={6} />
+        {/* Canonical bold AETHER FORGE wordmark — matches the 00-hero title. */}
+        <Wordmark lines={["AETHER", "FORGE"]} fontSize={120} letterSpacing={2} />
       </div>
       <div
         style={{

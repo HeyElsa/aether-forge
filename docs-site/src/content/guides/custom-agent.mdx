@@ -2,7 +2,7 @@
 
 This guide walks through building a fully customized agent from scratch — choosing your LLM, writing a strategy, configuring data sources, adding MCP tools, and tuning risk.
 
-<video src="/videos/03-agent-generation.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/03-agent-generation.mp4" poster="/video-posters/03-agent-generation.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 > **Note:** Aether Forge is not yet on PyPI. Install from GitHub first:
 > ```bash
@@ -45,13 +45,13 @@ forge generate-fast \
   --strategy-file strategy.md \
   --wallet --autonomous \
   --planner-mode openrouter \
-  --model deepseek/deepseek-r1 \
+  --planner-model deepseek/deepseek-r1 \
   --output ./sol-scalper
 ```
 
 Key flags:
-- `--planner-mode` — force a specific LLM provider (`ollama`, `anthropic`, `openai`, `google`, `openrouter`)
-- `--model` — specify the exact model name
+- `--planner-mode` — force a specific LLM provider (`ollama`, `anthropic`, `openai`, `gemini`, `openrouter`)
+- `--planner-model` — specify the exact model name
 - `--wallet` — provision a real OWS wallet (9 chains)
 - `--autonomous` — enable autonomous decision-making
 - `--no-registry` — skip local registry if you want zero tracking
@@ -84,13 +84,13 @@ Edit the `planner` block or pass flags at runtime:
 
 ```bash
 # Use Claude for complex decisions
-forge run . --planner-mode anthropic --model claude-sonnet-4.5
+forge run . --planner-mode anthropic --planner-model claude-sonnet-4.5
 
 # Switch to local Ollama (free, private)
-forge run . --planner-mode ollama --model gemma4:latest
+forge run . --planner-mode ollama --planner-model gemma4:latest
 
 # Use any OpenRouter model
-forge run . --planner-mode openrouter --model meta-llama/llama-4-maverick
+forge run . --planner-mode openrouter --planner-model meta-llama/llama-4-maverick
 ```
 
 Same agent. Same strategy. Different brain.
@@ -205,7 +205,7 @@ Edit `policy-bundle.json` to set guardrails:
 ## 7. Paper Trade
 
 ```bash
-forge run ./sol-scalper --mode paper \
+forge run ./sol-scalper --environment sandbox --mode paper \
   --auto-approve --autoresearch \
   --knowledge --a2a-port 9001
 ```
@@ -243,7 +243,7 @@ Safety bounds are enforced — the agent can't propose position sizes above 25% 
 ## 9. Go Live
 
 ```bash
-forge run ./sol-scalper --mode live --chain base --a2a-port 9001
+forge run ./sol-scalper --environment production --mode live --chain base --a2a-port 9001
 ```
 
 Same strategy, same LLM, same risk limits. Now with real USDC on Base.

@@ -2,7 +2,7 @@
 
 Register your agent on Base mainnet as an ERC-8004 NFT.
 
-<video src="/videos/20-go-onchain.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/20-go-onchain.mp4" poster="/video-posters/20-go-onchain.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 ## Why Register?
 
@@ -30,11 +30,11 @@ The agent is now an NFT on the ERC-8004 IdentityRegistry at `0x8004A169FB4a33251
 ## Discovery
 
 ```bash
-# Find agents by capability
-forge agent-discover --capability get-token-price
+# Inspect one on-chain agent by token ID
+forge agent-discover --agent-id 1
 
-# Filter by verification status
-forge agent-discover --capability get-token-price --verified-only
+# Count agents owned by an address
+forge agent-discover --address 0x...
 ```
 
 ## Trust Tiers

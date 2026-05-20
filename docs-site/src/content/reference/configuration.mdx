@@ -1,5 +1,7 @@
 # Configuration Reference
 
+<video src="/videos/21-cli.mp4" poster="/video-posters/21-cli.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
+
 Every agent's runtime behavior is controlled by `aether-forge.json` in the agent directory.
 
 ---
@@ -96,20 +98,48 @@ Every agent's runtime behavior is controlled by `aether-forge.json` in the agent
 
 ### Auto-Detection Priority
 
-When no `planner.mode` is specified, Aether Forge probes in order:
+When no `planner.mode` is specified (and `AETHER_FORGE_PLANNER_MODE` is not set), Aether Forge probes in order (changed in v0.21.0 — cloud now wins over Ollama by default):
 
-1. Ollama at `localhost:11434` → if running, use it
+1. **`AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`** override — Ollama wins even when a cloud key is present.
 2. `ANTHROPIC_API_KEY` env var → Anthropic
 3. `OPENAI_API_KEY` env var → OpenAI
 4. `GEMINI_API_KEY` / `GOOGLE_API_KEY` → Google
 5. `OPENROUTER_API_KEY` → OpenRouter
-6. Heuristic fallback (no LLM)
+6. **Ollama** at `localhost:11434` — only when no cloud key is set (local-dev convenience).
+7. Heuristic fallback (no LLM) — emits a `[planner] WARNING:` line at generation time.
+
+**Why the change?** Before v0.21.0, Ollama was probed first. A production host with both a cloud key and a stray Ollama daemon silently picked Ollama. The new order makes production deploys deterministic. To force Ollama with a cloud key present, set `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`. Generated configs also stamp `planner.source` (`"explicit"` or `"autodetected"`) and `planner.detectedAt` so `forge doctor` and log greppers can audit the choice post-hoc.
+
+### Provenance Fields (v0.21.0+)
+
+Each generated `aether-forge.json` records how the planner was chosen:
+
+```jsonc
+{
+  "planner": {
+    "mode": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "source": "autodetected",                 // or "explicit" when --planner-mode / AETHER_FORGE_PLANNER_MODE was used
+    "detectedAt": "2026-05-16T18:00:00+00:00"
+  }
+}
+```
+
+`forge doctor` surfaces three states: `explicit` → "production-safe"; `autodetected` → advisory under `local` and hard fail under `staging` or `production`; `unstamped` (legacy v0.20.0 configs) → advisory to regenerate. `AETHER_FORGE_PLANNER_MODE` is treated as an explicit operator choice and stamps `planner.source: "explicit"` in generated configs.
+
+```bash
+AETHER_FORGE_PLANNER_MODE=anthropic \
+AETHER_FORGE_PLANNER_MODEL=claude-sonnet-4-5 \
+AETHER_FORGE_PLANNER_API_KEY_ENV=ANTHROPIC_API_KEY \
+forge generate-fast --name "Research Agent" --idea "daily research brief" --output ./research-agent
+```
 
 ### Custom modes via plugins
 
 If `mode` doesn't match any built-in, Aether Forge looks it up in the
 `aether_forge.planners` entry-point group (third-party plugins installed
-from PyPI). See [Extending the Framework](/guides/extending) for the full
+from PyPI). See [Extending the Framework](/docs/guides/extending) for the full
 walkthrough. A failing plugin is logged and skipped — it cannot crash the
 runtime.
 
@@ -269,6 +299,7 @@ These are read at runtime and can override config:
 | `AETHER_FORGE_PLANNER_BASE_URL` | Default API endpoint |
 | `AETHER_FORGE_PLANNER_API_KEY` | API key passed directly (less common — prefer `AETHER_FORGE_PLANNER_API_KEY_ENV`) |
 | `AETHER_FORGE_PLANNER_API_KEY_ENV` | Name of the env var that holds the API key (indirection — keeps the key out of process listings) |
+| `AETHER_FORGE_DEPLOYMENT_PROFILE` | Default deployment profile (`local`, `staging`, or `production`) |
 | `AETHER_FORGE_CRYPTO_ROUTER` | Default `runtime.cryptoRouter` mode |
 
 ---

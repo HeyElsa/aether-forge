@@ -1,5 +1,6 @@
-__version__ = "0.1.0"
+from typing import Final, Literal
 
+from ._version import __version__
 from .artifacts import LoadedArtifact, validate_artifact_directory
 from .config import build_planner_factory, load_config_file
 from .crypto import MockCryptoExecutionRouter
@@ -26,7 +27,8 @@ from .exceptions import (
     SecurityError,
     ValidationError,
 )
-from .generator import GeneratedArtifactSet, generate_fast_artifact_set
+from .facade import Forge, ForgeProject
+from .generator import FastGenerateRequest, GeneratedArtifactSet, generate_fast_artifact_set
 from .http import HttpError, RetryPolicy, http_get_json, http_post_json
 from .market_data import (
     BinanceVenue,
@@ -36,12 +38,28 @@ from .market_data import (
     MockVenue,
     build_market_data_router,
 )
-from .memory import InMemoryMemoryStore, MemoryPromotionPolicy, MemoryRecord, MemoryStore
+from .memory import (
+    InMemoryMemoryStore,
+    MemoryPromotionPolicy,
+    MemoryPromotionRequest,
+    MemoryPromotionResult,
+    MemoryQuery,
+    MemoryRecord,
+    MemoryStore,
+)
 from .models import (
     AnthropicPlanningModel,
     GeminiPlanningModel,
     OpenAICompatiblePlanningModel,
     StaticPlanningModel,
+)
+from .observability import (
+    CompositeEventSink,
+    EventSink,
+    JsonlEventSink,
+    ListEventSink,
+    LoggingEventSink,
+    ObservabilityEvent,
 )
 from .planner import HeuristicPlanner, PlanningModel, PromptDrivenPlanner
 from .policy import NativePolicyGate, PolicyDecision
@@ -71,8 +89,19 @@ from .usage import TokenUsage, UsageTracker, estimate_session_cost
 from .versioning import SemanticVersion, assess_artifact_set_compatibility
 from .x402_client import HaltedError, PaymentBudgetError, PaymentRequirement, X402Client, X402Config, X402Error
 
+_ApiStability = Literal["stable", "experimental", "internal"]
+
 __all__ = [
     "__version__",
+    "API_STABILITY",
+    "Forge",
+    "ForgeProject",
+    "ObservabilityEvent",
+    "EventSink",
+    "ListEventSink",
+    "LoggingEventSink",
+    "JsonlEventSink",
+    "CompositeEventSink",
     # Extension Protocols (build your own planner / router / memory / data source)
     "Planner",
     "ExecutionRouter",
@@ -92,6 +121,9 @@ __all__ = [
     "HeuristicPlanner",
     "PromptDrivenPlanner",
     "MemoryRecord",
+    "MemoryQuery",
+    "MemoryPromotionRequest",
+    "MemoryPromotionResult",
     "InMemoryMemoryStore",
     "MemoryPromotionPolicy",
     "validate_artifact_directory",
@@ -99,6 +131,7 @@ __all__ = [
     "evaluate_scenario_pack",
     "build_promotion_evidence",
     "generate_fast_artifact_set",
+    "FastGenerateRequest",
     "GeneratedArtifactSet",
     "assess_artifact_set_compatibility",
     "SemanticVersion",
@@ -164,3 +197,107 @@ __all__ = [
     "HaltedError",
     "PaymentRequirement",
 ]
+
+API_STABILITY: Final[dict[str, _ApiStability]] = {
+    "__version__": "stable",
+    "API_STABILITY": "stable",
+    "Forge": "stable",
+    "ForgeProject": "stable",
+    "ObservabilityEvent": "experimental",
+    "EventSink": "experimental",
+    "ListEventSink": "experimental",
+    "LoggingEventSink": "experimental",
+    "JsonlEventSink": "experimental",
+    "CompositeEventSink": "experimental",
+    "Planner": "stable",
+    "ExecutionRouter": "stable",
+    "PlanningModel": "stable",
+    "MemoryStore": "stable",
+    "DataSource": "stable",
+    "Subscription": "stable",
+    "RuntimeSession": "stable",
+    "ArtifactBundle": "stable",
+    "StepProposal": "stable",
+    "ExecutionResult": "stable",
+    "StepLedgerEntry": "stable",
+    "RuntimeReplay": "stable",
+    "NativePolicyGate": "stable",
+    "PolicyDecision": "stable",
+    "HeuristicPlanner": "stable",
+    "PromptDrivenPlanner": "stable",
+    "MemoryRecord": "stable",
+    "MemoryQuery": "stable",
+    "MemoryPromotionRequest": "stable",
+    "MemoryPromotionResult": "stable",
+    "InMemoryMemoryStore": "stable",
+    "MemoryPromotionPolicy": "stable",
+    "validate_artifact_directory": "stable",
+    "LoadedArtifact": "stable",
+    "evaluate_scenario_pack": "stable",
+    "build_promotion_evidence": "stable",
+    "generate_fast_artifact_set": "stable",
+    "FastGenerateRequest": "stable",
+    "GeneratedArtifactSet": "stable",
+    "assess_artifact_set_compatibility": "stable",
+    "SemanticVersion": "stable",
+    "MockCryptoExecutionRouter": "stable",
+    "load_config_file": "stable",
+    "build_planner_factory": "stable",
+    "SqliteMemoryStore": "stable",
+    "AnthropicPlanningModel": "stable",
+    "GeminiPlanningModel": "stable",
+    "OpenAICompatiblePlanningModel": "stable",
+    "StaticPlanningModel": "stable",
+    "SecretsProvider": "stable",
+    "EnvSecretsProvider": "stable",
+    "FileSecretsProvider": "stable",
+    "ChainSecretsProvider": "stable",
+    "build_secrets_provider": "stable",
+    "DataResult": "stable",
+    "DataRouter": "stable",
+    "DataSourceCost": "stable",
+    "HTTPDataSource": "stable",
+    "WebSocketDataSource": "stable",
+    "McpDataSource": "stable",
+    "MockDataSource": "stable",
+    "ForgeError": "stable",
+    "ValidationError": "stable",
+    "PolicyError": "stable",
+    "PolicyDeniedError": "stable",
+    "CryptoError": "stable",
+    "SecurityError": "stable",
+    "ProviderError": "stable",
+    "ConfigError": "stable",
+    "AgentRunner": "stable",
+    "RunnerConfig": "stable",
+    "MemoryEncryption": "stable",
+    "MarketDataVenue": "experimental",
+    "MarketDataRouter": "experimental",
+    "BinanceVenue": "experimental",
+    "CoinGeckoVenue": "experimental",
+    "MockVenue": "experimental",
+    "build_market_data_router": "experimental",
+    "generate_slow_artifact_set": "experimental",
+    "SlowGenerateResult": "experimental",
+    "SlowGenerateRequest": "experimental",
+    "search_skills": "experimental",
+    "install_skill_to_project": "experimental",
+    "SkillInfo": "experimental",
+    "InstalledSkill": "experimental",
+    "X402Client": "experimental",
+    "X402Config": "experimental",
+    "X402Error": "experimental",
+    "PaymentBudgetError": "experimental",
+    "HaltedError": "experimental",
+    "PaymentRequirement": "experimental",
+    "X402DataSource": "experimental",
+    "TokenUsage": "experimental",
+    "UsageTracker": "experimental",
+    "estimate_session_cost": "experimental",
+    "http_get_json": "internal",
+    "http_post_json": "internal",
+    "RetryPolicy": "internal",
+    "HttpError": "internal",
+    "StrategyConfig": "internal",
+    "load_scaffold_router": "internal",
+}

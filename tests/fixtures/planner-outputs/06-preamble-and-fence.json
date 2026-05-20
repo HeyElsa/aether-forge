@@ -1,0 +1,17 @@
+{
+  "description": "Combined reasoning preamble + JSON-fenced block + trailing prose. The realistic shape of a Claude/GPT response in default chat mode.",
+  "input": "I'll need to read the basis first. Here's the plan:\n```json\n{\"steps\": [{\"kind\": \"use-capability\", \"description\": \"Read basis.\", \"capabilityId\": \"cap-market-basis\", \"payload\": {\"basis_bps\": 20}}]}\n```\nLet me know if you want me to adjust.",
+  "expected": {
+    "outcome": "parsed",
+    "value": {
+      "steps": [
+        {
+          "kind": "use-capability",
+          "description": "Read basis.",
+          "capabilityId": "cap-market-basis",
+          "payload": {"basis_bps": 20}
+        }
+      ]
+    }
+  }
+}

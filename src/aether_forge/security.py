@@ -96,6 +96,60 @@ class SessionKeyPolicy:
             ),
         )
 
+    def permits(
+        self,
+        *,
+        chain_id: int | str | None = None,
+        contract_address: str | None = None,
+        spend_usd: float | None = None,
+    ) -> tuple[bool, str]:
+        """Check whether a signing intent satisfies this session-key policy
+        (Sprint 2.3 / FP-3).
+
+        Returns ``(True, "permitted")`` on success or ``(False, reason)`` when
+        any constraint is violated. Designed to be called by
+        :class:`aether_forge.crypto.signers.SessionKeyConstrainedSigner`
+        before delegating to an inner signer.
+
+        Fail-closed semantics:
+        - Expired policy refuses everything.
+        - A populated ``allowed_chains`` / ``allowed_contracts`` list with a
+          ``None`` intent value refuses (intent must declare every constrained
+          field). Empty lists permit any value for that field — opt-in scoping.
+        - Spend exceeding ``max_spend_per_tx_usd`` refuses. A ``None`` spend
+          intent is permitted (callers may legitimately sign non-payment
+          typed-data; constrain via policy.spend if required).
+        """
+        if self.is_expired():
+            return False, f"session key {self.key_id!r} has expired"
+        if self.allowed_chains and chain_id is None:
+            return False, "policy restricts chains but intent did not declare chain_id"
+        if self.allowed_chains and chain_id is not None:
+            chain_str = str(chain_id)
+            target_int = _coerce_chain_id(chain_id)
+            matches = chain_str in self.allowed_chains or any(
+                target_int is not None and _coerce_chain_id(allowed) == target_int
+                for allowed in self.allowed_chains
+            )
+            if not matches:
+                return False, f"chain {chain_id} not in policy allowed_chains={self.allowed_chains}"
+        if self.allowed_contracts and contract_address is None:
+            return False, "policy restricts contracts but intent did not declare contract_address"
+        if self.allowed_contracts and contract_address is not None:
+            target = contract_address.lower()
+            if not any(addr.lower() == target for addr in self.allowed_contracts):
+                return False, f"contract {contract_address} not in policy allowed_contracts"
+        if spend_usd is not None and spend_usd > self.max_spend_per_tx_usd:
+            return False, f"intent spend ${spend_usd:.4f} exceeds policy cap ${self.max_spend_per_tx_usd:.4f}"
+        return True, "permitted"
+
+
+def _coerce_chain_id(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Budget control

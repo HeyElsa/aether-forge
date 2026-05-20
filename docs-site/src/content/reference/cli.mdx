@@ -2,7 +2,7 @@
 
 All commands are available via the `forge` CLI after installing `aether-forge`.
 
-<video src="/videos/21-cli.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/21-cli.mp4" poster="/video-posters/21-cli.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 ## Agent Lifecycle
 
@@ -20,7 +20,7 @@ forge generate-fast \
   --autonomous \
   --skills elsa:trading \
   --planner-mode openrouter \
-  --model deepseek/deepseek-r1 \
+  --planner-model deepseek/deepseek-r1 \
   --no-registry
 ```
 
@@ -33,8 +33,8 @@ forge generate-fast \
 | `--wallet` | Provision a real OWS wallet |
 | `--autonomous` | Enable autonomous mode |
 | `--skills` | Skills from registries (e.g., `elsa:trading`) |
-| `--planner-mode` | LLM provider (`ollama`, `anthropic`, `openai`, `google`, `openrouter`) |
-| `--model` | Specific model name |
+| `--planner-mode` | LLM provider (`ollama`, `anthropic`, `openai`, `gemini`, `openrouter`) |
+| `--planner-model` | Specific model name |
 | `--no-registry` | Skip local registry |
 
 ### `forge generate-slow`
@@ -68,6 +68,7 @@ Run an agent continuously.
 
 ```bash
 forge run ./my-agent \
+  --environment sandbox \
   --mode paper \
   --interval 30 \
   --auto-approve \
@@ -81,7 +82,8 @@ forge run ./my-agent \
 
 | Flag | Description |
 |---|---|
-| `--mode` | `paper` or `live` |
+| `--environment` | Policy/runtime environment, such as `sandbox`, `paper`, `canary-live`, or `production` |
+| `--mode` | Crypto scaffold backend: `simulated`, `paper`, or `live` |
 | `--interval` | Seconds between ticks |
 | `--auto-approve` | Skip human approval prompts |
 | `--autoresearch` | Enable self-improvement loop |
@@ -90,7 +92,7 @@ forge run ./my-agent \
 | `--health-port` | Health check HTTP server |
 | `--json-log` | Path for structured JSON logs |
 | `--planner-mode` | Override LLM provider |
-| `--model` | Override model |
+| `--planner-model` | Override model |
 
 ### `forge promote-draft`
 
@@ -104,8 +106,8 @@ forge promote-draft ./my-agent --target paper --approver "ops-team"
 
 ```bash
 forge strategy view ./my-agent        # Show parameters + performance
-forge strategy accept <proposal-id>   # Apply improvement proposal
-forge strategy reject <proposal-id>   # Discard proposal
+forge strategy accept ./my-agent <proposal-id>   # Apply improvement proposal
+forge strategy reject ./my-agent <proposal-id>   # Discard proposal
 ```
 
 ## Wallet
@@ -131,7 +133,8 @@ forge agent-list                      # List all agents
 forge agent-info <id>                 # Show details
 forge agent-remove <id>              # Archive agent
 forge agent-register <id>           # Register on Base mainnet
-forge agent-discover --capability X  # Find agents on-chain
+forge agent-discover --agent-id 1    # Inspect one on-chain agent
+forge agent-discover --address 0x... # Count agents owned by an address
 forge agent-send <url> --capability X --payload '{}'
 ```
 
@@ -195,6 +198,26 @@ forge artifact-migration-plan ./my-agent-v1 ./my-agent-v2 \
     --artifact-type capability-manifest
 ```
 
+### `forge migrate`
+
+Dry-run or apply a migration contract. `--apply` is required for any mutation.
+
+```bash
+# Memory database migration; default is dry-run
+forge migrate memory ./my-agent \
+    --contract ./my-agent/migration-contract.json
+
+# Apply after reviewing the dry-run report
+forge migrate memory ./my-agent \
+    --contract ./my-agent/migration-contract.json \
+    --apply
+
+# Single artifact migration
+forge migrate artifact ./my-agent/agent-spec.json \
+    --target agent-spec \
+    --contract ./migration-contract.json
+```
+
 ## Scaffold
 
 The `scaffold-*` commands operate on the generated agent project (the
@@ -236,12 +259,13 @@ forge scaffold-live-status ./my-agent
 
 Resume a runtime session from a tick replay file. The session
 re-hydrates from `step_ledger`, `working_set`, and `pending_approvals`,
-then continues from the hold point. Pair with `--approval-token` to
+then continues from the hold point. Pair with `--approve` to
 auto-approve a held step.
 
 ```bash
-forge resume-replay ./my-agent/replays/tick_0008.json \
-    --approval-token approver-cli-2026-05-02
+forge resume-replay ./my-agent \
+    --replay ./my-agent/replays/tick_0008.json \
+    --approve approver-cli-2026-05-02
 ```
 
 ## Payments
@@ -253,9 +277,12 @@ Respects the agent's persistent budget (`x402_state.json`), the halt
 file, and the audit log.
 
 ```bash
-forge x402-call --endpoint get-swap-quote \
-    --payload '{"in":"USDC","out":"WETH","amount":"100"}' \
-    --agent-dir ./my-agent --max-usd 0.05
+forge x402-call ./my-agent \
+    --url https://api.example.com/paid/swap-quote \
+    --method POST \
+    --body '{"in":"USDC","out":"WETH","amount":"100"}' \
+    --max-per-call-usd 0.05 \
+    --confirm-live
 ```
 
 ## Models & Config
@@ -268,7 +295,7 @@ model for the planner block in `aether-forge.json`.
 ```bash
 forge models-list --provider openrouter --query claude
 forge models-list --provider ollama
-forge models-list --provider anthropic
+forge models-list --provider openai
 ```
 
 ### `forge config-validate`
@@ -288,7 +315,7 @@ without running the full generator.
 
 ```bash
 forge init                                # in cwd
-forge init ./my-existing-project
+forge init --output ./my-existing-project/aether-forge.json
 ```
 
 ## Wallet (extra)

@@ -213,6 +213,6 @@ def index():
 
 
 if __name__ == "__main__":
-    print(f"Dashboard at http://localhost:5000")
+    print("Dashboard at http://localhost:5000")
     print(f"Reading agents from: {DEMO_DIR}")
     app.run(host="127.0.0.1", port=5000, debug=False)

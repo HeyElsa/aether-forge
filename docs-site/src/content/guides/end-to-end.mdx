@@ -2,7 +2,7 @@
 
 This tutorial walks through creating, configuring, testing, and deploying an ETH swing trading agent from absolute zero. Every command is real. Every output is what you'll actually see.
 
-<video src="/videos/16-custom-agent-flow.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/16-custom-agent-flow.mp4" poster="/video-posters/16-custom-agent-flow.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 ---
 
@@ -295,6 +295,7 @@ Now run the agent with **real market data** but **simulated orders**:
 
 ```bash
 forge run ./eth-swing \
+  --environment sandbox \
   --mode paper \
   --interval 30 \
   --auto-approve \
@@ -396,7 +397,9 @@ EOF
 Verify:
 
 ```bash
-forge doctor ./eth-swing/aether-forge.json
+cd ./eth-swing
+forge doctor
+cd ..
 ```
 
 ```
@@ -524,7 +527,7 @@ Agents registered: 0 → 1
 Your agent is now an NFT on the ERC-8004 registry. Other agents can discover it:
 
 ```bash
-forge agent-discover --capability cap-exchange-order
+forge agent-discover --agent-id 1
 ```
 
 ---
@@ -555,6 +558,7 @@ forge security-check ./eth-swing --harden
 
 ```bash
 forge run ./eth-swing \
+  --environment production \
   --mode live \
   --chain base \
   --interval 60 \

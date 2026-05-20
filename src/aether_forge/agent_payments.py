@@ -614,13 +614,15 @@ def _rpc_call(rpc_url: str, method: str, params: list) -> str:
     import json as _json
     from urllib import request as _ur
 
+    from ._version import __version__
+
     body = _json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
     req = _ur.Request(
         rpc_url,
         data=body,
         headers={
             "Content-Type": "application/json",
-            "User-Agent": "aether-forge/0.1.0 (+https://github.com/HeyElsa/aether-forge)",
+            "User-Agent": f"aether-forge/{__version__} (+https://github.com/HeyElsa/aether-forge)",
             "Accept": "application/json",
         },
     )

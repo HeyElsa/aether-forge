@@ -16,11 +16,13 @@ Practical recipes for common tasks. Each recipe is self-contained — copy, adap
 
 ```python
 from pathlib import Path
-from aether_forge.runner import AgentRunner, RunnerConfig
+from aether_forge import AgentRunner, RunnerConfig
 
-runner = AgentRunner(Path("./my-agent"), RunnerConfig(environment="paper", auto_approve=True))
-runner._initialize()
-result = runner.tick()
+runner = AgentRunner(
+    Path("./my-agent"),
+    config=RunnerConfig(environment="sandbox", auto_approve=True),
+)
+result = runner.tick(scenario_inputs={"source": "manual"})
 print(result)
 ```
 
@@ -51,7 +53,7 @@ curl -s "https://mainnet.base.org" \
 
 ```bash
 # Terminal 1
-forge run ./my-agent --mode paper --health-port 8080 --json-log /tmp/agent.jsonl
+forge run ./my-agent --environment sandbox --health-port 8080 --json-log /tmp/agent.jsonl
 
 # Terminal 2
 watch -n 1 'curl -s localhost:8080/status | jq'

@@ -2,7 +2,7 @@
 
 Every Aether Forge agent is **LLM-driven by default**. On each tick, the planner assembles a prompt from six sections, sends it to your chosen model, and validates the structured JSON response.
 
-<video src="/videos/04-llm-planner.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/04-llm-planner.mp4" poster="/video-posters/04-llm-planner.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 ## Prompt Assembly
 
@@ -45,22 +45,22 @@ When you run `forge generate-fast`, the planner auto-detects the best available 
 
 | Priority | Provider | Example model |
 |---|---|---|
-| 1 | Ollama (local) | `gemma4:latest` |
-| 2 | Anthropic | `claude-sonnet-4.5` |
-| 3 | OpenAI | `gpt-4o` |
-| 4 | Google | `gemini-2.5-flash` |
-| 5 | OpenRouter | Any of 200+ models |
+| 1 | Anthropic | `claude-sonnet-4.5` |
+| 2 | OpenAI | `gpt-4o` |
+| 3 | Google | `gemini-2.5-flash` |
+| 4 | OpenRouter | Any of 200+ models |
+| 5 | Ollama (local fallback) | `gemma4:latest` |
 | 6 | Heuristic | Rule-based fallback |
 
-The detected config is baked into `aether-forge.json` so anyone running the agent later gets the same model.
+The detected config is baked into `aether-forge.json` so anyone running the agent later gets the same model. Ollama is probed only when no cloud key is set, unless `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1` is set.
 
 ## Override at Runtime
 
 ```bash
 # Use a different model without changing config
-forge run . --planner-mode anthropic --model claude-sonnet-4.5
-forge run . --planner-mode ollama --model gemma4:latest
-forge run . --planner-mode openrouter --model meta-llama/llama-4-maverick
+forge run . --planner-mode anthropic --planner-model claude-sonnet-4.5
+forge run . --planner-mode ollama --planner-model gemma4:latest
+forge run . --planner-mode openrouter --planner-model meta-llama/llama-4-maverick
 ```
 
 ## Runtime Loop

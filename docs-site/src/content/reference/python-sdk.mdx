@@ -1,6 +1,6 @@
 # Python SDK
 
-<video src="/videos/32-python-sdk.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/32-python-sdk.mp4" poster="/video-posters/32-python-sdk.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 Aether Forge is fully importable. You can run agents, build prompts, query memory, and verify attestations from your own Python code without the CLI.
 
@@ -16,14 +16,14 @@ Requires Python 3.12+.
 
 ```python
 from pathlib import Path
-from aether_forge.runner import AgentRunner, RunnerConfig
+from aether_forge import AgentRunner, RunnerConfig
 
 runner = AgentRunner(
-    agent_directory=Path("./my-agent"),
+    Path("./my-agent"),
     config=RunnerConfig(
         interval_seconds=30.0,
         max_ticks=10,
-        environment="paper",
+        environment="sandbox",
         auto_approve=True,
         enable_autoresearch=True,
         health_port=8080,
@@ -40,11 +40,31 @@ for tick in results:
 
 ## Generate an Agent
 
+For the common path, use the `Forge` facade:
+
+```python
+from aether_forge import Forge
+
+project = Forge.generate_fast(
+    name="research-agent",
+    idea="summarize a webpage and save a short note",
+    output="./research-agent",
+    planner="heuristic",
+)
+
+project.validate()
+project.eval_pack()
+project.run(environment="sandbox", max_ticks=1)
+```
+
+The lower-level generation function remains available when you need full
+control over the request object:
+
 ```python
 from pathlib import Path
-from aether_forge.generator import generate_fast, FastGenerateRequest
+from aether_forge import FastGenerateRequest, generate_fast_artifact_set
 
-result = generate_fast(FastGenerateRequest(
+result = generate_fast_artifact_set(FastGenerateRequest(
     name="my-agent",
     idea="ETH swing trader using momentum signals",
     output_directory=Path("./my-agent"),
@@ -61,24 +81,29 @@ print(f"Wallet: {result.wallet_address}")
 ## Run a Single Tick
 
 ```python
-from aether_forge.runner import AgentRunner, RunnerConfig
+from pathlib import Path
+
+from aether_forge import AgentRunner, RunnerConfig
 
 runner = AgentRunner(
-    agent_directory=Path("./my-agent"),
-    config=RunnerConfig(environment="paper", auto_approve=True),
+    Path("./my-agent"),
+    config=RunnerConfig(environment="sandbox", auto_approve=True),
 )
-runner._initialize()  # one-time setup
 
-result = runner.tick()
+result = runner.tick(scenario_inputs={"source": "manual"})
 print(f"Status: {result.session_status}")
 print(f"Steps: {result.steps_executed}")
 print(f"Working set keys: {result.working_set_keys}")
 ```
 
+`scenario_inputs` are request-scoped. Use them for webhook payloads,
+queue messages, cron metadata, and tenant context that should be visible
+to the planner for the current tick.
+
 ## Query Memory
 
 ```python
-from aether_forge.storage import SqliteMemoryStore, MemoryQuery
+from aether_forge import MemoryQuery, SqliteMemoryStore
 
 store = SqliteMemoryStore("./my-agent/memory.db")
 
@@ -257,19 +282,23 @@ from aether_forge import (
 
 For full walkthroughs (custom planner, custom data source, custom
 memory store, PyPI plugin distribution), see the
-[Extending the Framework](/guides/extending) guide. Plugin discovery is
-documented in the [Configuration reference](/reference/configuration#custom-modes-via-plugins).
+[Extending the Framework](/docs/guides/extending) guide. Plugin discovery is
+documented in the [Configuration reference](/docs/reference/configuration#custom-modes-via-plugins).
 
 ## Stable vs Experimental
 
-| Module | Stability |
-|---|---|
-| `runner` | Stable |
-| `generator` | Stable |
-| `storage` | Stable |
-| `prompting` | Stable |
-| `defi_safety` | Beta — API may evolve |
-| `agent_payments` | Beta |
-| `protocols.erc8183` | Experimental — contract not deployed |
+Every top-level export has a stability label in `aether_forge.API_STABILITY`.
+Use the top-level `aether_forge` imports for stable extension contracts and
+high-level application surfaces. Importing lower-level modules directly is
+allowed, but only the documented stable surface carries compatibility intent.
 
-See [CHANGELOG.md](https://github.com/HeyElsa/aether-forge/blob/main/CHANGELOG.md) for breaking changes.
+```python
+import aether_forge
+
+assert aether_forge.API_STABILITY["FastGenerateRequest"] == "stable"
+assert aether_forge.API_STABILITY["X402Client"] == "experimental"
+```
+
+See the [Stable API boundary](/docs/reference/stable-api) for the full table and
+[CHANGELOG.md](https://github.com/HeyElsa/aether-forge/blob/main/CHANGELOG.md)
+for breaking changes.

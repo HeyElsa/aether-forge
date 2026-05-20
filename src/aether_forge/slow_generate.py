@@ -18,6 +18,7 @@ from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
+from ._version import __version__
 from .evals import ScenarioPackEvaluationSummary, evaluate_scenario_pack
 from .generator import FastGenerateRequest, generate_fast_artifact_set
 
@@ -208,7 +209,7 @@ def _build_research_record(
         "title": f"{title} Research Record",
         "generator": {
             "name": "aether-forge",
-            "version": "0.1.0",
+            "version": __version__,
             "inputDigest": f"sha256:{artifact_set_id}:slow-mode",
         },
         "compatibility": {

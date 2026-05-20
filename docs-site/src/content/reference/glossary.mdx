@@ -36,7 +36,7 @@ Every term that appears in Aether Forge docs, defined in one place.
 
 **DataRouter** — Unified dispatch surface for data sources (HTTP, x402, MCP, WebSocket). Tries sources in priority order; first success wins.
 
-**DataSource** — ABC for any data backend the `DataRouter` can dispatch to. Subclass it to add a private API, oracle, or alternative price feed. Built-in implementations: `HTTPDataSource`, `X402DataSource`, `WebSocketDataSource`, `McpDataSource`, `MockDataSource`. Exported from `aether_forge`. See [Extending the Framework](/guides/extending).
+**DataSource** — ABC for any data backend the `DataRouter` can dispatch to. Subclass it to add a private API, oracle, or alternative price feed. Built-in implementations: `HTTPDataSource`, `X402DataSource`, `WebSocketDataSource`, `McpDataSource`, `MockDataSource`. Exported from `aether_forge`. See [Extending the Framework](/docs/guides/extending).
 
 **Deep Health Check** — Readiness check (`/ready`) that returns 503 if planner is failing or kill switch is active. Distinct from liveness (`/health`) which always returns 200.
 

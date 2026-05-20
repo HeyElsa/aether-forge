@@ -142,6 +142,13 @@ stopping. The runner re-enters with a fresh session each interval.
 while status == RUNNING and step_counter < max_steps:
     1. Hydrate memory_context from MemoryStore + KnowledgeStore
     2. proposals = planner.propose_plan(self)        # may be []
+       │  On parse failure / model error / empty plan (v0.21.0+):
+       │  session.session_state["last_planner_parse_failure"] = {
+       │      "kind": "parse-failure"|"parse-exception"|"model-error"|"empty-plan",
+       │      "detail": "…", "responsePreview": "≤500 chars…",
+       │      "recordedAt": "<iso8601>",
+       │  }
+       │  then fall through to HeuristicPlanner (labeled, never silent)
     3. for proposal in proposals (FIFO):
          if halt_file_exists: ABORT                  # kill switch
          decision = policy_gate.evaluate_action(...) # 8 checks
@@ -156,7 +163,11 @@ while status == RUNNING and step_counter < max_steps:
 
 The planner is consulted **once per tick** — the proposals are queued and
 executed in order. A planner that wants iterative replanning emits a
-`REPLAN` step.
+`REPLAN` step. Provider HTTP calls (Anthropic / OpenAI-compatible / Gemini)
+flow through `models._with_retry` since v0.21.0: jittered exponential
+backoff on `URLError`, `TimeoutError`, and HTTP `{408, 425, 429, 500, 502,
+503, 504}`, honoring `Retry-After` on 429/503; non-transient codes raise
+immediately. Opt out per-model with `retry_attempts=1`.
 
 ### 3. Planning prompt — `prompting.py`
 

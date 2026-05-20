@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -139,11 +140,20 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--planner-mode",
         choices=["heuristic", "static", "openai-compatible", "function-call", "anthropic", "gemini", "openai", "openrouter", "ollama"],
-        help="LLM provider to bake into the generated agent's aether-forge.json. Default: auto-detect (Ollama if reachable, else first available cloud key, else heuristic).",
+        help=(
+            "LLM provider to bake into the generated agent's aether-forge.json. "
+            "Default: auto-detect cloud keys first "
+            "(Anthropic, OpenAI, Gemini, OpenRouter), then Ollama if no cloud key is set, else heuristic."
+        ),
     )
     generate_parser.add_argument("--planner-model", help="Model name to bake into the generated agent's planner config.")
     generate_parser.add_argument("--planner-base-url", help="Base URL to bake into the generated agent's planner config (e.g. http://localhost:11434 for Ollama).")
     generate_parser.add_argument("--planner-api-key-env", help="Env var name the generated agent should read its planner API key from.")
+    generate_parser.add_argument(
+        "--deployment-profile",
+        choices=["local", "staging", "production"],
+        help="Deployment profile baked into aether-forge.json (default: local). 'production' forbids autodetect and heuristic; explicit --planner-mode required.",
+    )
 
     slow_parser = subparsers.add_parser("generate-slow", help="Generate a slow-mode artifact set with autoresearch from an idea")
     slow_parser.add_argument("--name", required=True, help="Agent name")
@@ -187,6 +197,23 @@ def build_parser() -> argparse.ArgumentParser:
     wallet_restore_parser.add_argument("backup_file", help="Path to the backup JSON")
     wallet_restore_parser.add_argument("--into", required=True, help="Agent directory to restore into")
     wallet_restore_parser.add_argument("--passphrase", help="Decryption passphrase (will prompt if backup is encrypted and omitted)")
+
+    migrate_parser = subparsers.add_parser("migrate", help="Apply a schema migration contract (v0.22.0+, FP-4)")
+    migrate_sub = migrate_parser.add_subparsers(dest="migrate_command")
+
+    migrate_memory_parser = migrate_sub.add_parser("memory", help="Apply a migration contract to an agent's memory.db")
+    migrate_memory_parser.add_argument("artifact_directory", help="Path to the agent directory containing memory.db")
+    migrate_memory_parser.add_argument("--contract", required=True, help="Path to a migration-contract.schema.json document")
+    migrate_memory_parser.add_argument("--memory-db", help="Override path to memory.db (default: <artifact_directory>/memory.db)")
+    migrate_memory_parser.add_argument("--apply", action="store_true", help="Actually mutate the database (default: dry-run)")
+    migrate_memory_parser.add_argument("--lossy-ok", action="store_true", help="Override deny-by-default policy for contracts with lossyFields")
+
+    migrate_artifact_parser = migrate_sub.add_parser("artifact", help="Apply a migration contract to a single artifact JSON file")
+    migrate_artifact_parser.add_argument("artifact_file", help="Path to the artifact JSON file to migrate")
+    migrate_artifact_parser.add_argument("--contract", required=True, help="Path to a migration-contract.schema.json document")
+    migrate_artifact_parser.add_argument("--target", required=True, help="Artifact type identifier the contract targets (e.g. agent-spec)")
+    migrate_artifact_parser.add_argument("--apply", action="store_true", help="Actually rewrite the file (default: dry-run)")
+    migrate_artifact_parser.add_argument("--lossy-ok", action="store_true", help="Override deny-by-default policy for contracts with lossyFields")
 
     halt_parser = subparsers.add_parser("halt", help="Activate kill switch — blocks all live x402 calls")
     halt_parser.add_argument("artifact_directory", help="Path to the agent directory")
@@ -496,22 +523,71 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         # Aether Forge is an LLM-driven agent framework — heuristic is only a
         # last-resort fallback for environments with neither a local model
         # nor any cloud key.
-        planner_mode = getattr(args, "planner_mode", None)
-        planner_model = getattr(args, "planner_model", None)
-        planner_base_url = getattr(args, "planner_base_url", None)
-        planner_api_key_env = getattr(args, "planner_api_key_env", None)
+        planner_mode_arg = getattr(args, "planner_mode", None)
+        planner_mode = planner_mode_arg or os.getenv("AETHER_FORGE_PLANNER_MODE")
+        planner_model = getattr(args, "planner_model", None) or os.getenv("AETHER_FORGE_PLANNER_MODEL")
+        planner_base_url = getattr(args, "planner_base_url", None) or os.getenv("AETHER_FORGE_PLANNER_BASE_URL")
+        planner_api_key_env = getattr(args, "planner_api_key_env", None) or os.getenv("AETHER_FORGE_PLANNER_API_KEY_ENV")
+        planner_source = "explicit" if planner_mode else None
+        planner_detected_at: str | None = None
+
+        # Resolve the deployment profile (CLI > env > default). Sprint 2.2 / FP-2:
+        # 'production' refuses any autodetected planner choice — the generated
+        # agent must declare its provider explicitly so prod startup is
+        # deterministic and 'forge doctor' can fail fast.
+        from .config import resolve_deployment_profile
+        deployment_profile = resolve_deployment_profile(
+            profile=getattr(args, "deployment_profile", None),
+        )
+
         if planner_mode is None:
+            if deployment_profile == "production":
+                print(
+                    "[planner] ERROR: production deployment profile forbids autodetected planners. "
+                    "Pass --planner-mode (or set AETHER_FORGE_PLANNER_MODE) so the generated agent "
+                    "has a deterministic provider on startup.",
+                    file=sys.stderr,
+                )
+                return 2
             detected = _autodetect_planner()
             planner_mode = detected["mode"]
             planner_model = planner_model or detected.get("model")
             planner_base_url = planner_base_url or detected.get("base_url")
             planner_api_key_env = planner_api_key_env or detected.get("api_key_env")
+            planner_source = "autodetected"
+            planner_detected_at = datetime.now(UTC).isoformat()
+            origin = detected.get("source", "?")
             print(
-                f"[planner] auto-detected: mode={planner_mode}"
+                f"[planner] auto-detected ({origin}): mode={planner_mode}"
                 + (f" model={planner_model}" if planner_model else "")
                 + (f" baseUrl={planner_base_url}" if planner_base_url else "")
                 + (f" apiKeyEnv={planner_api_key_env}" if planner_api_key_env else "")
             )
+            if planner_mode == "heuristic":
+                if deployment_profile == "staging":
+                    print(
+                        "[planner] ERROR: heuristic fallback not allowed in staging profile. "
+                        "Configure an LLM provider (cloud key or local Ollama) before generating.",
+                        file=sys.stderr,
+                    )
+                    return 2
+                print(
+                    "[planner] WARNING: heuristic fallback selected — no LLM is configured. "
+                    "Set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY, "
+                    "or run a local Ollama daemon, before generating a production agent."
+                )
+        else:
+            # Explicit planner mode chosen. The 'heuristic' string still bypasses
+            # autodetect but is rejected in non-local profiles for the same
+            # determinism reason: a prod agent that explicitly opts into no-LLM
+            # is almost always a misconfiguration.
+            if planner_mode == "heuristic" and deployment_profile != "local":
+                print(
+                    f"[planner] ERROR: heuristic planner is not allowed in {deployment_profile} profile. "
+                    "Pick an LLM-backed planner (anthropic / openai / gemini / openrouter / ollama).",
+                    file=sys.stderr,
+                )
+                return 2
 
         request = FastGenerateRequest(
             name=args.name,
@@ -525,6 +601,9 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
             planner_model=planner_model,
             planner_base_url=planner_base_url,
             planner_api_key_env=planner_api_key_env,
+            planner_source=planner_source,
+            planner_detected_at=planner_detected_at,
+            deployment_profile=deployment_profile,
         )
         generated = generate_fast_artifact_set(request)
         if generated.agent_summary:
@@ -642,8 +721,12 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         )
         results = runner.run()
 
-        # Print portfolio summary if available
-        if hasattr(scaffold_router, "engine"):
+        # Print portfolio summary only for crypto-style agents. General
+        # agents may still carry the generic scaffold router, but showing
+        # balances/P&L for a document or support agent is misleading.
+        agent_spec = json.loads((directory_path / "agent-spec.json").read_text(encoding="utf8"))
+        domain = agent_spec.get("metadata", {}).get("domain", "")
+        if "crypto" in domain and hasattr(scaffold_router, "engine"):
             portfolio = scaffold_router.engine.portfolio_summary()
             print(f"\n  Portfolio: ${portfolio['total_value_usd']:,.2f} (P&L: ${portfolio['pnl_usd']:+,.2f})")
         return 0
@@ -1045,6 +1128,9 @@ def _dispatch_command(args: argparse.Namespace, parser: argparse.ArgumentParser)
         except Exception as error:
             print(f"Error: {error}", file=sys.stderr)
             return 1
+
+    if args.command == "migrate":
+        return _dispatch_migrate(args)
 
     if args.command == "halt":
         directory = Path(args.artifact_directory).resolve()
@@ -1543,28 +1629,49 @@ def main_cli() -> None:
 def _autodetect_planner() -> dict[str, str | None]:
     """Pick the best planner available on this machine for a freshly built agent.
 
-    Aether Forge agents are LLM-driven by design. Try, in order:
-      1. Local Ollama daemon — if reachable AND has at least one model, use it.
-         No API key, no cost, no network round-trip beyond localhost.
-      2. Anthropic — if ``ANTHROPIC_API_KEY`` is set.
-      3. OpenAI — if ``OPENAI_API_KEY`` is set.
-      4. Gemini — if ``GOOGLE_API_KEY`` or ``GEMINI_API_KEY`` is set.
-      5. OpenRouter — if ``OPENROUTER_API_KEY`` is set.
-      6. Heuristic fallback — last resort, no LLM, no real planning.
+    Aether Forge agents are LLM-driven by design. Resolution order (Sprint 1.2,
+    FP-2 fix — was Ollama-first):
+
+      1. Cloud provider via env var — Anthropic, OpenAI, Gemini, OpenRouter.
+         If ANY cloud key is set, cloud wins. Production deploys with a host
+         Ollama daemon no longer silently get picked up.
+      2. Local Ollama daemon — only when NO cloud key is set, and only if
+         reachable AND has at least one model. Preserves the local-dev
+         convenience case.
+      3. Heuristic fallback — last resort, no LLM, no real planning.
+
+    Force Ollama even when cloud keys exist by setting
+    ``AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`` or by passing
+    ``--planner-mode ollama`` explicitly (the latter bypasses this function).
+
+    Returns a dict with ``mode``, ``model``, ``base_url``, ``api_key_env``, and
+    a ``source`` discriminant ("cloud", "ollama", "heuristic") so callers can
+    stamp the choice into the generated config for later audit.
     """
     import json as _json
     import os as _os
     from urllib import error as _urllib_error
     from urllib import request as _urllib_request
 
-    # 1. Local Ollama
-    base_url = _os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
-    try:
-        req = _urllib_request.Request(f"{base_url}/api/tags")
-        with _urllib_request.urlopen(req, timeout=2) as resp:  # noqa: S310
-            payload = _json.loads(resp.read().decode("utf8"))
-            models = payload.get("models") or []
-            if models:
+    allow_ollama_override = _is_truthy_env("AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT")
+    cloud_chain = [
+        ("anthropic", "ANTHROPIC_API_KEY", "claude-sonnet-4-5"),
+        ("openai", "OPENAI_API_KEY", "gpt-4o"),
+        ("gemini", "GOOGLE_API_KEY", "gemini-2.5-flash"),
+        ("gemini", "GEMINI_API_KEY", "gemini-2.5-flash"),
+        ("openrouter", "OPENROUTER_API_KEY", "anthropic/claude-sonnet-4.5"),
+    ]
+    cloud_keys_present = any(_os.getenv(env_var) for _, env_var, _ in cloud_chain)
+
+    def _try_ollama() -> dict[str, str | None] | None:
+        base_url = _os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
+        try:
+            req = _urllib_request.Request(f"{base_url}/api/tags")
+            with _urllib_request.urlopen(req, timeout=2) as resp:  # noqa: S310
+                payload = _json.loads(resp.read().decode("utf8"))
+                models = payload.get("models") or []
+                if not models:
+                    return None
                 # Prefer a Gemma model if present, otherwise first available.
                 preferred = next(
                     (m["name"] for m in models if "gemma" in m.get("name", "").lower()),
@@ -1575,18 +1682,18 @@ def _autodetect_planner() -> dict[str, str | None]:
                     "model": preferred,
                     "base_url": base_url,
                     "api_key_env": None,
+                    "source": "ollama",
                 }
-    except (_urllib_error.URLError, _urllib_error.HTTPError, TimeoutError, OSError, ValueError):
-        pass
+        except (_urllib_error.URLError, _urllib_error.HTTPError, TimeoutError, OSError, ValueError):
+            return None
 
-    # 2-5. Cloud provider via env var
-    cloud_chain = [
-        ("anthropic", "ANTHROPIC_API_KEY", "claude-sonnet-4-5"),
-        ("openai", "OPENAI_API_KEY", "gpt-4o"),
-        ("gemini", "GOOGLE_API_KEY", "gemini-2.5-flash"),
-        ("gemini", "GEMINI_API_KEY", "gemini-2.5-flash"),
-        ("openrouter", "OPENROUTER_API_KEY", "anthropic/claude-sonnet-4.5"),
-    ]
+    # 0. Explicit override — Ollama wins even with cloud keys present.
+    if allow_ollama_override:
+        ollama = _try_ollama()
+        if ollama is not None:
+            return ollama
+
+    # 1. Cloud provider — first cloud key wins (Anthropic → OpenAI → Gemini → OpenRouter).
     for mode, env_var, default_model in cloud_chain:
         if _os.getenv(env_var):
             return {
@@ -1594,15 +1701,33 @@ def _autodetect_planner() -> dict[str, str | None]:
                 "model": default_model,
                 "base_url": None,
                 "api_key_env": env_var,
+                "source": "cloud",
             }
 
-    # 6. Heuristic fallback
+    # 2. Ollama as fallback only when no cloud key is present.
+    if not cloud_keys_present:
+        ollama = _try_ollama()
+        if ollama is not None:
+            return ollama
+
+    # 3. Heuristic fallback.
     return {
         "mode": "heuristic",
         "model": None,
         "base_url": None,
         "api_key_env": None,
+        "source": "heuristic",
     }
+
+
+def _is_truthy_env(name: str) -> bool:
+    """Common env-flag predicate: ``"1"``, ``"true"``, ``"yes"``, ``"on"`` (case-insensitive)."""
+    import os as _os
+
+    value = _os.getenv(name)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _add_planner_options(parser: argparse.ArgumentParser) -> None:
@@ -1741,3 +1866,84 @@ def _memory_store_from_args(args: argparse.Namespace, *, artifact_directory: Pat
 def _ows_adapter_from_args(args: argparse.Namespace) -> OpenWalletStandardAdapter:
     vault_path = getattr(args, "vault_path", None)
     return OpenWalletStandardAdapter(vault_path=vault_path)
+
+
+def _dispatch_migrate(args: argparse.Namespace) -> int:
+    """Dispatch ``forge migrate <memory|artifact>`` (Sprint 2.4 / FP-4).
+
+    The runner consults an in-process :class:`TransformRegistry` populated
+    via the ``aether_forge.migrations`` plugin entry-point group (future
+    work — for v0.22.0 the registry is empty unless a downstream package
+    has registered transforms in its own startup). The CLI therefore acts
+    as the executor; transform authoring is a deliberate per-project act.
+    """
+    from .migrations import MigrationContract, MigrationRunner, TransformRegistry
+    from .plugins import GROUP_MIGRATIONS, iter_entry_points
+
+    sub = getattr(args, "migrate_command", None)
+    if sub not in {"memory", "artifact"}:
+        print(
+            "Error: `forge migrate` requires a sub-command (memory or artifact). "
+            "Run `forge migrate --help` for usage.",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Build the registry from every installed plugin in aether_forge.migrations.
+    # Each plugin entry point MUST resolve to a callable that takes a single
+    # TransformRegistry and registers its transforms. Plugin failures are
+    # logged + skipped per the framework-wide non-negotiable; the iterator
+    # already swallows load errors.
+    registry = TransformRegistry()
+    for name, target in iter_entry_points(GROUP_MIGRATIONS):
+        if not callable(target):
+            logger.warning("migrations plugin %r is not callable; ignoring", name)
+            continue
+        try:
+            target(registry)
+        except Exception as error:  # pragma: no cover — plugin contract is logged-and-skipped
+            logger.warning("migrations plugin %r failed during registration: %r", name, error)
+
+    try:
+        contract = MigrationContract.from_path(args.contract)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"Error: could not load migration contract: {error}", file=sys.stderr)
+        return 2
+
+    runner = MigrationRunner(registry)
+
+    if sub == "memory":
+        directory = Path(args.artifact_directory).resolve()
+        db_path = Path(args.memory_db).resolve() if args.memory_db else directory / "memory.db"
+        if not db_path.exists():
+            print(f"Error: memory database not found at {db_path}", file=sys.stderr)
+            return 2
+        store = SqliteMemoryStore(db_path)
+        try:
+            report = runner.apply_to_memory_store(
+                store,
+                contract,
+                dry_run=not args.apply,
+                lossy_ok=args.lossy_ok,
+            )
+        finally:
+            store.close()
+    else:
+        report = runner.apply_to_artifact_file(
+            args.artifact_file,
+            contract,
+            target=args.target,
+            dry_run=not args.apply,
+            lossy_ok=args.lossy_ok,
+        )
+
+    mode = "dry-run" if report.dry_run else "apply"
+    print(
+        f"[migrate] {report.target} {report.from_version} → {report.to_version} ({mode}): "
+        f"scanned={report.records_scanned} migrated={report.records_migrated} skipped={report.records_skipped}"
+    )
+    if report.backup_path:
+        print(f"[migrate] backup: {report.backup_path}")
+    for issue in report.issues:
+        print(f"[migrate] issue: {issue}", file=sys.stderr)
+    return 0 if report.ok else 1

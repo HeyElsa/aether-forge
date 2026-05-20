@@ -2,7 +2,7 @@
 
 Aether Forge agents have **four typed memory layers** with distinct lifetimes and purposes. The LLM reads three of them in the planning prompt on every tick.
 
-<video src="/videos/06-memory.mp4" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="metadata" />
+<video src="/videos/06-memory.mp4" poster="/video-posters/06-memory.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
 
 ## The Four Layers
 
@@ -68,10 +68,10 @@ SELECT * FROM triples WHERE subject = 'eth';
 
 ```bash
 # With memory only (Layers 1-3)
-forge run ./my-agent --mode paper
+forge run ./my-agent --environment sandbox --mode paper
 
 # With knowledge layer (all 4 layers)
-forge run ./my-agent --mode paper --knowledge
+forge run ./my-agent --environment sandbox --mode paper --knowledge
 ```
 
 ## How Memory Appears in the LLM Prompt
@@ -149,13 +149,12 @@ CREATE TABLE memory_records (
 ### Query memory programmatically
 
 ```python
-from aether_forge.storage import SqliteMemoryStore, MemoryQuery
+from aether_forge import MemoryQuery, SqliteMemoryStore
 
 store = SqliteMemoryStore("./my-agent/memory.db")
 records = store.read(MemoryQuery(
     memory_type="decision-history",
     limit=10,
-    order_by="created_at DESC",
 ))
 for r in records:
     print(f"[{r.created_at}] {r.summary}")

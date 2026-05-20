@@ -1,0 +1,58 @@
+# Choose Your Path
+
+Use this page when you know what you want to build but do not know which Aether Forge guide to follow.
+
+## Start Here
+
+| Goal | Start with | Why |
+|---|---|---|
+| Try the framework safely | [First 10 Minutes](/docs/guides/first-10-minutes) | No API key, no wallet, no live funds |
+| Install the right package set | [Install Matrix](/docs/reference/install-matrix) | Pick only the extras your agent actually needs |
+| Understand generated files | [Generated Agent Anatomy](/docs/reference/generated-agent-anatomy) | Know which files are specs, code, config, and state |
+| Build a normal non-crypto agent | [Getting Started](/docs/getting-started) | Validated artifact loop and one sandbox tick |
+| Add an LLM planner | [Getting Started - Add an LLM Planner](/docs/getting-started#add-an-llm-planner) | Explicit provider setup and planner provenance |
+| Build a crypto agent | [End-to-End Tutorial](/docs/guides/end-to-end) | Sandbox first, paper mode before live capital |
+| Write a strategy file | [Writing Strategies](/docs/guides/strategy-writing) | Plain-English strategy shape and generated parameters |
+| Embed agents in a SaaS app | [Multi-Tenant Integration](/docs/guides/multi-tenant-integration) | Per-tenant paths, memory, policy, and observability |
+| Run multiple agents together | [Multi-Agent Teams](/docs/guides/multi-agent) | A2A ports, cards, tasks, and team topology |
+| Accept x402 payments | [Accept Payments](/docs/guides/accept-payments) | Payment gates, budgets, and verification |
+| Extend the framework | [Extending the Framework](/docs/guides/extending) | Plugin entry points and public Protocols |
+| Prepare for production | [Production Readiness](/docs/guides/production-readiness) | Doctor, rollout evidence, incidents, memory, and secrets |
+
+## Recommended Sequence
+
+For most developers:
+
+1. [First 10 Minutes](/docs/guides/first-10-minutes)
+2. [Generated Agent Anatomy](/docs/reference/generated-agent-anatomy)
+3. [Getting Started](/docs/getting-started)
+4. [CLI Reference](/docs/reference/cli)
+5. One feature guide for your use case
+
+For production or live-capital work:
+
+1. [First 10 Minutes](/docs/guides/first-10-minutes)
+2. [Install Matrix](/docs/reference/install-matrix)
+3. [End-to-End Tutorial](/docs/guides/end-to-end)
+4. [Production Readiness](/docs/guides/production-readiness)
+5. [Troubleshooting](/docs/help/troubleshooting)
+
+## Which Runtime Mode Should I Use?
+
+| Situation | Command shape |
+|---|---|
+| General local test | `forge run ./agent --environment sandbox --auto-approve` |
+| Crypto scaffold, no live orders | `forge run ./agent --environment sandbox --mode paper --auto-approve` |
+| Production profile, no crypto | `forge run ./agent --environment production` |
+| Production crypto, live capital | `forge run ./agent --environment production --mode live` |
+
+`--environment` controls policy and promotion context. `--mode` controls the crypto scaffold trading backend.
+
+## What to Read Later
+
+Skip these until the need appears:
+
+- [Open Agent Economy](/docs/reference/open-agent-economy) if you are using ERC-8004, ERC-8126, x402, or A2A trust flows.
+- [Skills & Registries](/docs/reference/skills) if you are adding `SKILL.md` packages.
+- [Stable API](/docs/reference/stable-api) if you are writing integration code against `aether_forge`.
+- [Upgrading](/docs/guides/upgrading) when moving existing generated agents to a newer framework version.

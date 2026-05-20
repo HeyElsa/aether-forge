@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
@@ -34,6 +35,46 @@ from aether_forge.runtime import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = REPO_ROOT / "examples" / "delta-neutral-btc"
+
+
+def test_generate_fast_help_documents_cloud_first_autodetect(capsys) -> None:
+    parser = cli_module.build_parser()
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["generate-fast", "--help"])
+
+    output = " ".join(capsys.readouterr().out.split())
+    assert exc_info.value.code == 0
+    assert "auto-detect cloud keys first" in output
+    assert "then Ollama if no cloud key is set" in output
+    assert "Ollama if reachable, else first available cloud key" not in output
+
+
+def test_documented_cli_reference_examples_parse() -> None:
+    parser = cli_module.build_parser()
+    commands = [
+        'generate-fast --name "My Agent" --idea "ETH swing trader" --output ./my-agent --strategy-file ./strategy.md --wallet --autonomous --skills elsa:trading --planner-mode openrouter --planner-model deepseek/deepseek-r1 --no-registry',
+        "generate-slow --name 'My Agent' --idea 'basis capture' --output ./my-agent --max-iterations 5",
+        "validate ./my-agent",
+        "eval-pack ./my-agent",
+        "run ./my-agent --mode paper --interval 30 --auto-approve --autoresearch --knowledge --a2a-port 9001 --health-port 8080 --json-log ./logs/agent.jsonl --pid-file ./agent.pid",
+        'promote-draft ./my-agent --target paper --approver "ops-team"',
+        "strategy view ./my-agent",
+        "strategy accept ./my-agent prop_abc123",
+        'strategy reject ./my-agent prop_abc123 --reason "too aggressive"',
+        "agent-discover --agent-id 1",
+        "agent-discover --address 0x0000000000000000000000000000000000000001",
+        "resume-replay ./my-agent --replay ./my-agent/replays/tick_0008.json --approve approver-cli-2026-05-02",
+        'x402-call ./my-agent --url https://api.example.com/paid/swap-quote --method POST --body \'{"in":"USDC","out":"WETH","amount":"100"}\' --max-per-call-usd 0.05 --confirm-live',
+        "models-list --provider openrouter --query claude",
+        "models-list --provider ollama",
+        "models-list --provider openai",
+        "init --output ./my-existing-project/aether-forge.json",
+    ]
+
+    for command in commands:
+        parsed = parser.parse_args(shlex.split(command))
+        assert parsed.command
 
 
 def test_resume_replay_cli_can_approve_and_complete_held_session() -> None:
@@ -111,6 +152,41 @@ def test_scaffold_run_cli_executes_generated_project() -> None:
         exit_code = main(["scaffold-run", str(output_dir)])
 
         assert exit_code == 0
+    finally:
+        rmtree(output_dir)
+
+
+def test_run_cli_omits_portfolio_summary_for_general_agents(capsys) -> None:
+    output_dir = Path(mkdtemp(prefix="aether-forge-general-run-"))
+
+    try:
+        generate_fast_artifact_set(
+            FastGenerateRequest(
+                name="Server Health Agent",
+                idea="Monitor server health metrics and summarize issues.",
+                output_directory=output_dir,
+            )
+        )
+        capsys.readouterr()
+
+        exit_code = main([
+            "run",
+            str(output_dir),
+            "--max-ticks",
+            "1",
+            "--interval",
+            "0",
+            "--auto-approve",
+            "--environment",
+            "sandbox",
+            "--planner-mode",
+            "heuristic",
+        ])
+
+        output = capsys.readouterr().out
+        assert exit_code == 0
+        assert "Portfolio:" not in output
+        assert "P&L:" not in output
     finally:
         rmtree(output_dir)
 

@@ -72,6 +72,8 @@ export default function HomePage() {
       >
         <video
           src="/videos/00-hero.mp4"
+          poster="/video-posters/00-hero.jpg"
+          aria-label="Aether Forge overview video"
           preload="metadata"
           autoPlay
           muted
@@ -80,9 +82,17 @@ export default function HomePage() {
           style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
         />
       </div>
-      <div style={{ display: "flex", gap: "1rem", marginTop: "2rem" }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: "1rem",
+          marginTop: "2rem",
+        }}
+      >
         <Link
-          href="/docs"
+          href="/docs/guides/first-10-minutes"
           style={{
             padding: "0.75rem 2rem",
             background: "#0a84ff",

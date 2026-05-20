@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 from .artifacts import validate_artifact_directory
 from .memory import InMemoryMemoryStore, MemoryPromotionRequest, MemoryQuery, MemoryRecord
+from .observability import EventSink, ObservabilityEvent, emit_observability_event
 from .policy import NativePolicyGate
 
 
@@ -118,17 +119,20 @@ class Planner(Protocol):
     are declared in the agent's ``capability-manifest.json``; undeclared IDs
     are rejected and the planner is asked to ``REPORT_GAP`` instead.
 
+    Canonical signature: ``propose_plan(session: RuntimeSession) ->
+    list[StepProposal]``.
+
     Minimum viable implementation::
 
         class NoOpPlanner:
             def propose_plan(self, session) -> list[StepProposal]:
                 return [StepProposal(kind=StepKind.REASON,
-                                     description="nothing to do",
-                                     mark_complete=True)]
+                                     description="No action needed.",
+                                     payload={"mark_complete": True})]
 
-    Built-in implementations: :class:`aether_forge.HeuristicPlanner` (offline,
-    state-machine), :class:`aether_forge.PromptDrivenPlanner` (LLM-driven via a
-    ``PlanningModel``).
+    Reference implementation: :class:`aether_forge.HeuristicPlanner`
+    (offline state machine). :class:`aether_forge.PromptDrivenPlanner` is the
+    LLM-driven implementation backed by a ``PlanningModel``.
     """
 
     def propose_plan(self, session: RuntimeSession) -> list[StepProposal]: ...
@@ -145,16 +149,19 @@ class ExecutionRouter(Protocol):
     and any cost incurred. Routers must be safe to call concurrently across
     sessions but receive one tick at a time per session.
 
+    Canonical signature: ``execute(session: RuntimeSession, proposal:
+    StepProposal, capability: dict[str, Any]) -> ExecutionResult``.
+
     Minimum viable implementation::
 
         class EchoRouter:
             def execute(self, session, proposal, capability) -> ExecutionResult:
                 return ExecutionResult(success=True,
-                                       result={"echo": proposal.payload})
+                                       output={"echo": proposal.payload})
 
-    Built-in implementations live in :mod:`aether_forge.crypto` —
-    :class:`aether_forge.MockCryptoExecutionRouter` is the default; paper /
-    live / OWS-wallet variants exist for production paths.
+    Reference implementation: :class:`aether_forge.MockCryptoExecutionRouter`
+    in :mod:`aether_forge.crypto`. Paper, live, and OWS-wallet routers extend
+    the same contract for production paths.
     """
 
     def execute(
@@ -175,6 +182,8 @@ class RuntimeSession:
         policy_gate: NativePolicyGate | None = None,
         scenario_inputs: dict[str, Any] | None = None,
         memory_store: InMemoryMemoryStore | None = None,
+        event_sink: EventSink | None = None,
+        tick_number: int | None = None,
     ) -> None:
         self.artifacts = artifacts
         self.environment = environment
@@ -182,6 +191,9 @@ class RuntimeSession:
         self.execution_router = execution_router
         self.policy_gate = policy_gate or NativePolicyGate.from_policy_bundle(artifacts.policy_bundle)
         self.memory_store = memory_store or InMemoryMemoryStore()
+        self.event_sink = event_sink
+        self.tick_number = tick_number
+        self.session_id = f"session_{uuid4().hex}"
         self.status = SessionStatus.RUNNING
         self.session_state: dict[str, Any] = {
             "objective": artifacts.agent_spec["objective"]["primaryGoal"],
@@ -198,9 +210,15 @@ class RuntimeSession:
         self.pending_approvals: list[PendingApproval] = []
         self.step_ledger: list[StepLedgerEntry] = []
         self._step_counter = 0
+        self._last_planner_failure_signature: str | None = None
 
     def run(self, max_steps: int = 20) -> SessionStatus:
         logger.info("RuntimeSession started: environment=%s artifact_set=%s", self.environment, self.artifacts.agent_spec.get("artifactSetId", "unknown"))
+        self._emit_event(
+            "runtime.session.started",
+            message="Runtime session started.",
+            details={"maxSteps": max_steps},
+        )
         while self.status == SessionStatus.RUNNING and self._step_counter < max_steps:
             # Populate memory context for prompting before planner invocation.
             self.session_state["memory_context"] = [
@@ -212,6 +230,7 @@ class RuntimeSession:
 
             if not self.plan_queue:
                 self.plan_queue = self.planner.propose_plan(self)
+                self._emit_planner_fallback_if_needed()
                 if not self.plan_queue:
                     self.status = SessionStatus.COMPLETE if self.session_state.get("goal_satisfied") else SessionStatus.FAILED
                     break
@@ -234,6 +253,12 @@ class RuntimeSession:
                 entry.message = f"Unsupported step kind {proposal.kind}."
                 entry.state_after = self._snapshot_state()
                 self.step_ledger.append(entry)
+                self._emit_event(
+                    "runtime.session.failed",
+                    severity="error",
+                    message=entry.message,
+                    step_id=entry.step_id,
+                )
                 break
 
             entry.lifecycle = StepLifecycle.VALIDATED
@@ -298,6 +323,13 @@ class RuntimeSession:
                 entry.message = f"Capability {proposal.capability_id} is not declared in the manifest."
                 entry.state_after = self._snapshot_state()
                 self.step_ledger.append(entry)
+                self._emit_event(
+                    "action.failed",
+                    severity="error",
+                    message=entry.message,
+                    step_id=entry.step_id,
+                    capability_id=proposal.capability_id,
+                )
                 break
 
             # For memory operations without a manifest entry, use a synthetic capability.
@@ -329,6 +361,13 @@ class RuntimeSession:
                 entry.state_after = self._snapshot_state()
                 self.step_ledger.append(entry)
                 self.status = SessionStatus.FAILED
+                self._emit_event(
+                    "action.failed",
+                    severity="error",
+                    message=entry.message,
+                    step_id=entry.step_id,
+                    capability_id=proposal.capability_id,
+                )
                 break
 
             policy_decision = self.policy_gate.evaluate_action(
@@ -358,6 +397,19 @@ class RuntimeSession:
                 entry.message = ", ".join(policy_decision.reason_ids) or "policy denied action"
                 entry.state_after = self._snapshot_state()
                 self.step_ledger.append(entry)
+                self._emit_event(
+                    "policy.denied",
+                    severity="warning" if policy_decision.final_disposition == "hold" else "error",
+                    message=entry.message,
+                    step_id=entry.step_id,
+                    capability_id=proposal.capability_id,
+                    details={
+                        "finalDisposition": policy_decision.final_disposition,
+                        "reasonIds": list(policy_decision.reason_ids),
+                        "ruleMatches": list(policy_decision.rule_matches),
+                        "decisionId": policy_decision.decision_id,
+                    },
+                )
                 continue
 
             # Route memory.* operations to the built-in handler.
@@ -379,6 +431,14 @@ class RuntimeSession:
                 entry.message = execution_result.failure_reason or "execution failed"
                 entry.state_after = self._snapshot_state()
                 self.step_ledger.append(entry)
+                self._emit_event(
+                    "action.failed",
+                    severity="error",
+                    message=entry.message,
+                    step_id=entry.step_id,
+                    capability_id=proposal.capability_id,
+                    details=self._execution_summary(execution_result),
+                )
                 continue
 
             # Sanitize capability results before they enter the working set
@@ -389,27 +449,48 @@ class RuntimeSession:
             sanitized_output = execution_result.output
             try:
                 from .security import InputSanitizer
+
                 if isinstance(sanitized_output, str):
-                    scan = InputSanitizer.scan(sanitized_output)
-                    if scan.flagged:
+                    is_suspicious, matches = InputSanitizer.scan(sanitized_output)
+                    if is_suspicious:
                         logger.warning(
                             "Prompt injection detected in capability %s result: %s",
                             proposal.capability_id,
-                            [m.pattern_name for m in scan.matches],
+                            matches,
                         )
+                        self._emit_event(
+                            "security.prompt_injection_detected",
+                            severity="warning",
+                            message="Prompt injection detected in capability result.",
+                            step_id=entry.step_id,
+                            capability_id=proposal.capability_id,
+                            details={"matches": list(matches)},
+                        )
+                        sanitized_output = InputSanitizer.sanitize(sanitized_output)
                 elif isinstance(sanitized_output, dict):
+                    sanitized_dict = dict(sanitized_output)
                     for k, v in sanitized_output.items():
                         if isinstance(v, str):
-                            scan = InputSanitizer.scan(v)
-                            if scan.flagged:
+                            is_suspicious, matches = InputSanitizer.scan(v)
+                            if is_suspicious:
                                 logger.warning(
                                     "Prompt injection detected in capability %s result key '%s': %s",
                                     proposal.capability_id,
                                     k,
-                                    [m.pattern_name for m in scan.matches],
+                                    matches,
                                 )
-            except (ImportError, Exception) as error:
-                logger.debug("Input sanitization skipped: %s", error)
+                                self._emit_event(
+                                    "security.prompt_injection_detected",
+                                    severity="warning",
+                                    message="Prompt injection detected in capability result.",
+                                    step_id=entry.step_id,
+                                    capability_id=proposal.capability_id,
+                                    details={"matches": list(matches), "outputKey": k},
+                                )
+                                sanitized_dict[k] = InputSanitizer.sanitize(v)
+                    sanitized_output = sanitized_dict
+            except ImportError as error:
+                logger.debug("Input sanitization unavailable: %s", error)
 
             self.observations.append({
                 "type": "capability-result",
@@ -417,6 +498,15 @@ class RuntimeSession:
                 "output": sanitized_output,
             })
             self.working_set[proposal.capability_id or "unknown-capability"] = sanitized_output
+            if is_memory_op:
+                self._emit_memory_event(proposal, execution_result, entry.step_id)
+            self._emit_event(
+                "action.executed",
+                message="Capability action executed.",
+                step_id=entry.step_id,
+                capability_id=proposal.capability_id,
+                details=self._execution_summary(execution_result),
+            )
 
             if execution_result.requires_replan:
                 self.plan_queue.clear()
@@ -433,6 +523,12 @@ class RuntimeSession:
             self.status = SessionStatus.PAUSED
 
         logger.info("Session %s after %d steps", self.status.value, self._step_counter)
+        self._emit_event(
+            self._session_terminal_event_kind(),
+            severity="error" if self.status == SessionStatus.FAILED else "warning" if self.status in {SessionStatus.HOLD, SessionStatus.PAUSED} else "info",
+            message=f"Runtime session {self.status.value}.",
+            details={"steps": self._step_counter, "status": self.status.value},
+        )
         return self.status
 
     def approve_pending(self, approval_token: str, request_id: str | None = None) -> PendingApproval | None:
@@ -568,6 +664,94 @@ class RuntimeSession:
             ],
             "observation_count": len(self.observations),
         }
+
+    def _emit_event(
+        self,
+        kind: str,
+        *,
+        severity: str = "info",
+        message: str | None = None,
+        details: dict[str, Any] | None = None,
+        step_id: str | None = None,
+        capability_id: str | None = None,
+    ) -> None:
+        emit_observability_event(
+            self.event_sink,
+            ObservabilityEvent(
+                kind=kind,
+                artifact_set_id=self.artifacts.agent_spec.get("artifactSetId"),
+                environment=self.environment,
+                session_id=self.session_id,
+                tick=self.tick_number,
+                step_id=step_id,
+                capability_id=capability_id,
+                severity=severity,
+                message=message,
+                details=details or {},
+            ),
+        )
+
+    def _emit_planner_fallback_if_needed(self) -> None:
+        failure = self.session_state.get("last_planner_parse_failure")
+        if not isinstance(failure, dict):
+            return
+        signature = json.dumps(failure, sort_keys=True, default=str)
+        if signature == self._last_planner_failure_signature:
+            return
+        self._last_planner_failure_signature = signature
+        self._emit_event(
+            "planner.fallback",
+            severity="warning",
+            message="Planner fell back to heuristic planning.",
+            details={"failure": failure},
+        )
+
+    def _emit_memory_event(
+        self,
+        proposal: StepProposal,
+        execution_result: ExecutionResult,
+        step_id: str,
+    ) -> None:
+        cap_id = proposal.capability_id or "memory.unknown"
+        if cap_id not in {"memory.read", "memory.write", "memory.promote"}:
+            return
+        self._emit_event(
+            cap_id,
+            message=f"{cap_id} completed.",
+            step_id=step_id,
+            capability_id=cap_id,
+            details=self._execution_summary(execution_result),
+        )
+
+    def _execution_summary(self, execution_result: ExecutionResult) -> dict[str, Any]:
+        output = execution_result.output
+        if isinstance(output, dict):
+            output_summary: dict[str, Any] = {
+                "outputType": "dict",
+                "outputKeys": sorted(str(key) for key in output),
+            }
+        elif isinstance(output, list):
+            output_summary = {"outputType": "list", "itemCount": len(output)}
+        else:
+            output_summary = {"outputType": type(output).__name__}
+        return {
+            "success": execution_result.success,
+            "markComplete": execution_result.mark_complete,
+            "requiresReplan": execution_result.requires_replan,
+            "failureReason": execution_result.failure_reason,
+            **output_summary,
+        }
+
+    def _session_terminal_event_kind(self) -> str:
+        if self.status == SessionStatus.COMPLETE:
+            return "runtime.session.completed"
+        if self.status == SessionStatus.FAILED:
+            return "runtime.session.failed"
+        if self.status == SessionStatus.HOLD:
+            return "runtime.session.held"
+        if self.status == SessionStatus.PAUSED:
+            return "runtime.session.paused"
+        return "runtime.session.stopped"
 
 
 def load_artifact_bundle(directory_path: str | Path) -> ArtifactBundle:

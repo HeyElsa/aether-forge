@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from aether_forge import __version__
 from aether_forge.data_layer import DataRouter, McpDataSource, build_mcp_source
 from aether_forge.mcp_client import (
     McpHttpClient,
@@ -215,13 +216,16 @@ def test_http_client_initialize() -> None:
     queued: list[dict[str, Any]] = [
         {"status": 200, "body": json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "remote"}}})}
     ]
+    requests: list[dict[str, Any]] = []
     def fake_request(method: str, headers: dict[str, str], body: bytes) -> dict[str, Any]:
+        requests.append(json.loads(body.decode("utf8")))
         return queued.pop(0)
     client = McpHttpClient(config, request_fn=fake_request)
 
     info = client.initialize()
 
     assert info == {"name": "remote"}
+    assert requests[0]["params"]["clientInfo"] == {"name": "aether-forge", "version": __version__}
 
 
 def test_http_client_call_tool() -> None:

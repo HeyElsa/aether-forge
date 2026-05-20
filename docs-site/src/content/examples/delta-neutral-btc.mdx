@@ -1,5 +1,7 @@
 # Delta-Neutral BTC Basis Trader
 
+<video src="/videos/22-artifacts.mp4" poster="/video-posters/22-artifacts.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
+
 A complete reference agent ships with the repo at [`examples/delta-neutral-btc/`](https://github.com/HeyElsa/aether-forge/tree/main/examples/delta-neutral-btc). It captures the **positive basis between BTC spot and perpetual futures** while staying delta-neutral.
 
 This is the canonical example used in unit tests, evaluation runs, and the `forge eval-pack` smoke test.
@@ -87,7 +89,7 @@ forge wallet-create --name basis-trader
 forge validate my-basis-trader/
 
 # Paper trade
-forge run my-basis-trader --mode paper --auto-approve
+forge run my-basis-trader --environment sandbox --mode paper --auto-approve
 ```
 
 ## Promotion record

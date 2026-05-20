@@ -30,6 +30,7 @@ $ forge generate-fast --name "BTC Basis Trader" \
 - [Security](#security)
 - [Agent Registry & Discovery](#agent-registry--discovery)
 - [Open Agent Economy](#open-agent-economy)
+- [Public API Boundary](#public-api-boundary)
 - [Documentation](#documentation)
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
@@ -47,7 +48,7 @@ risk:
 - **You are solely responsible** for any funds loaded into agent wallets,
   any transactions those agents sign, and any losses incurred from bugs,
   LLM hallucinations, market events, exploits, or your own configuration.
-- **Always test in `--mode paper` first** with simulated orders. Set
+- **Always test crypto agents with `--environment sandbox --mode paper` first** with simulated orders. Set
   conservative `x402_budget` caps. Use the kill switch (`forge halt .`).
 - **This is NOT financial advice**, NOT a regulated service, NOT an audited
   smart contract framework. We make no guarantees about correctness,
@@ -97,6 +98,24 @@ pip install 'aether-forge[security]'    # cryptography for encrypted backups
 pip install aether-forge                # Core only — heuristic planner, no extras
 ```
 
+### TypeScript SDK (v0.23.0+)
+
+For JS / TS / browser / edge consumers, the companion `@aether-forge/sdk` package ships validators + types + the cross-language planner-output parser. Lives under [`sdk-ts/`](./sdk-ts/) in this repo, with docs in [`docs-site/src/content/reference/typescript-sdk.mdx`](./docs-site/src/content/reference/typescript-sdk.mdx). Conforms to the same JSON schemas as the Python core.
+
+```bash
+npm install @aether-forge/sdk
+# or: bun add @aether-forge/sdk
+```
+
+```ts
+import { validateAgentSpec, parsePlannerOutput, assertValid } from "@aether-forge/sdk";
+
+const spec = assertValid(validateAgentSpec(jsonFromDisk));
+const plan = parsePlannerOutput(rawLlmResponse);
+```
+
+v0.1.0 is interface-only (no TS runtime tick loop — that stays Python-side). v0.1.1 will add `@aether-forge/sdk/x402` for browser sign-and-relay hosted-marketplace patterns. See [`sdk-ts/README.md`](./sdk-ts/README.md) and the cross-language conformance spec at [`docs/specs/planner-output.md`](./docs/specs/planner-output.md).
+
 Requires Python 3.12+. Single core dependency (`jsonschema`). Verify the install with:
 
 ```bash
@@ -119,17 +138,45 @@ Every check is a functional round-trip, not just an import test. The doctor veri
 
 ## Quick Start
 
-### 1. Generate an agent
+### 1. Generate a zero-risk agent
 
 ```bash
-# Fast mode — instant scaffold. Auto-detects the best LLM planner on your
-# machine (Ollama → Anthropic → OpenAI → Gemini → OpenRouter → heuristic)
-# and bakes it into the generated agent's aether-forge.json. No flags needed.
-forge generate-fast --name "My Agent" --idea "your idea" --output ./my-agent
-# [planner] auto-detected: mode=ollama model=gemma4:latest baseUrl=http://localhost:11434
+forge generate-fast \
+    --name "Hello Agent" \
+    --idea "read an input, reason about it, and report a short summary" \
+    --output ./hello-agent \
+    --planner-mode heuristic
+```
 
-# Slow mode — autoresearch refinement
-forge generate-slow --name "My Agent" --idea "your idea" --output ./my-agent --max-iterations 5
+This first path uses the offline heuristic planner. It does not call an LLM, create a wallet, move money, or require provider credentials.
+
+### 2. Validate
+
+```bash
+forge validate ./hello-agent
+# Validated 5 artifacts in ./hello-agent
+```
+
+### 3. Evaluate
+
+```bash
+forge eval-pack ./hello-agent
+# Scenario pack: total=2 matched=2 pass=1 hold=1 fail=0
+```
+
+### 4. Run one tick
+
+```bash
+forge run ./hello-agent --max-ticks 1 --interval 0 --environment sandbox --auto-approve
+```
+
+### 5. Add LLM, skills, or crypto when ready
+
+```bash
+# Force a specific LLM instead of heuristic or auto-detect
+forge generate-fast --name "Research Agent" --idea "daily research brief" --output ./research-agent \
+    --planner-mode anthropic --planner-model claude-opus-4-6 \
+    --planner-api-key-env ANTHROPIC_API_KEY
 
 # With skills from registries
 forge generate-fast --name "DeFi Bot" --idea "yield monitor" --output ./bot \
@@ -138,34 +185,13 @@ forge generate-fast --name "DeFi Bot" --idea "yield monitor" --output ./bot \
 # With real OWS wallet and autonomous mode
 forge generate-fast --name "DeFi Bot" --idea "yield monitor" --output ./bot \
     --wallet --autonomous
-
-# With a strategy file (English, markdown, or JSON)
-forge generate-fast --name "Spread Trader" --idea "basis capture" --output ./bot \
-    --strategy-file ./my-strategy.md
-
-# Force a specific LLM instead of auto-detect
-forge generate-fast --name "My Agent" --idea "your idea" --output ./my-agent \
-    --planner-mode anthropic --planner-model claude-opus-4-6 \
-    --planner-api-key-env ANTHROPIC_API_KEY
 ```
 
-The auto-detected planner block lands in `./my-agent/aether-forge.json`, so anyone running the agent later — Docker, CI, a teammate — gets the same model with no flags and no JSON edits.
+The explicit or auto-detected planner block lands in `aether-forge.json`, so anyone running the agent later gets the same model with the same environment variables.
 
-### 2. Validate
+### 6. Run continuously
 
-```bash
-forge validate ./my-agent
-# Validated 5 artifacts in ./my-agent
-```
-
-### 3. Evaluate
-
-```bash
-forge eval-pack ./my-agent
-# Scenario pack: total=2 matched=2 pass=1 hold=1 fail=0
-```
-
-### 4. Run continuously
+For general agents:
 
 ```bash
 forge run ./my-agent --interval 30 --auto-approve --environment sandbox
@@ -181,7 +207,14 @@ forge run ./my-agent --autoresearch --eval-interval 6 --auto-approve
 forge run ./my-agent --health-port 8080 --json-log ./logs/agent.jsonl --pid-file ./agent.pid
 ```
 
-### 4b. Manage strategy
+For crypto scaffolds, `--environment` controls policy and promotion context while `--mode` controls the trading backend:
+
+```bash
+forge run ./bot --environment sandbox --mode paper --auto-approve
+forge run ./bot --environment production --mode live
+```
+
+### 6b. Manage strategy
 
 ```bash
 forge strategy view ./my-agent         # Show current parameters + pending proposals
@@ -189,7 +222,7 @@ forge strategy accept ./my-agent       # Apply pending improvement proposal
 forge strategy reject ./my-agent       # Discard pending improvement proposal
 ```
 
-### 5. Promote
+### 7. Promote
 
 ```bash
 forge promote-draft ./my-agent --target paper --approver "ops-team"
@@ -654,10 +687,10 @@ src/aether_forge/
     x402.py              HTTP 402 micropayments
 
 demo.sh                  Canonical 10-section team walk-through (LLM-driven swing trader)
-schemas/                 23 JSON schemas
-tests/                   442 tests across 47 files
+schemas/                 19 JSON schemas
+tests/                   pytest suite across 59 test modules
 examples/                Delta-neutral BTC trading agent
-docs/prd/                versioned PRDs (v0.1.0 — v0.15.0)
+docs/prd/                versioned PRDs (v0.1.0 — v0.23.1)
 ```
 
 ---
@@ -693,20 +726,38 @@ The `mcp_servers:` block is optional — declare one entry per [Model Context Pr
 
 ### LLM Provider Setup
 
-**Aether Forge agents are LLM-driven by default.** `forge generate-fast` auto-detects the best planner on the host machine and bakes the choice into the generated agent's `aether-forge.json`. The probe order is:
+**Aether Forge agents are LLM-driven by default.** `forge generate-fast` auto-detects the best planner on the host machine and bakes the choice into the generated agent's `aether-forge.json`. The probe order is (changed in v0.21.0 — cloud now wins over Ollama by default):
 
-1. **Local Ollama** at `http://localhost:11434` — preferred when present (free, fast, no key, no network). Auto-picks a Gemma model if one is pulled.
+1. **`AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`** — explicit override; Ollama wins even when a cloud key is present (escape hatch for local devs whose shell carries a cloud key from another project).
 2. **`ANTHROPIC_API_KEY`** → Claude Sonnet 4.5
 3. **`OPENAI_API_KEY`** → GPT-4o
 4. **`GOOGLE_API_KEY` / `GEMINI_API_KEY`** → Gemini 2.5 Flash
 5. **`OPENROUTER_API_KEY`** → Claude Sonnet 4.5 via OpenRouter
-6. **`heuristic`** fallback — labeled, not silent. Only used when nothing above is available.
+6. **Local Ollama** at `http://localhost:11434` — only when no cloud key is set (local-dev convenience). Auto-picks a Gemma model if one is pulled.
+7. **`heuristic`** fallback — labeled, not silent. Only used when nothing above is available; `forge generate-fast` emits a `[planner] WARNING:` line in this case.
 
-The auto-detected choice is logged at generation time:
+> Why the change? Before v0.21.0, Ollama was probed first — a production host with both a cloud key and a stray Ollama daemon silently got Ollama. The new order makes production deploys deterministic. To force Ollama with a cloud key present, set `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT=1`.
+
+The auto-detected choice is logged at generation time and stamped into `aether-forge.json` for audit:
 
 ```
-[planner] auto-detected: mode=ollama model=gemma4:latest baseUrl=http://localhost:11434
+[planner] auto-detected (cloud): mode=anthropic model=claude-sonnet-4-5 apiKeyEnv=ANTHROPIC_API_KEY
 ```
+
+```jsonc
+// aether-forge.json (excerpt)
+{
+  "planner": {
+    "mode": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "source": "autodetected",                 // or "explicit" when --planner-mode / AETHER_FORGE_PLANNER_MODE is used
+    "detectedAt": "2026-05-16T18:00:00+00:00"
+  }
+}
+```
+
+Run `forge doctor` against the generated config to surface planner provenance. Autodetected planners are advisory under `deploymentProfile: local`, but hard fail under `staging` and `production`; `AETHER_FORGE_PLANNER_MODE` is treated as an explicit operator choice.
 
 The full provider table:
 
@@ -756,6 +807,8 @@ forge generate-slow --name "My Agent" --idea "your idea" --output ./agent \
 | `AETHER_FORGE_PLANNER_BASE_URL` | Default base URL |
 | `AETHER_FORGE_PLANNER_API_KEY` | API key (direct) |
 | `AETHER_FORGE_PLANNER_API_KEY_ENV` | Name of env var holding the API key (indirect) |
+| `AETHER_FORGE_ALLOW_OLLAMA_AUTODETECT` | When `1`/`true`/`yes`/`on`, force Ollama probe ahead of any cloud key (escape hatch — v0.21.0+) |
+| `AETHER_FORGE_DEPLOYMENT_PROFILE` | Default generated-agent profile (`local`, `staging`, or `production`) |
 | `AETHER_FORGE_CRYPTO_ROUTER` | Default crypto router backend |
 
 ### Memory Store
@@ -826,6 +879,18 @@ See `demo.sh` for the full env-var matrix.
 
 ---
 
+## Public API Boundary
+
+Top-level Python exports are labeled by `aether_forge.API_STABILITY`:
+
+- `stable` — application and extension code can depend on these surfaces.
+- `experimental` — usable, but still being refined before `1.0`.
+- `internal` — compatibility exports for early adopters or generated artifacts.
+
+The `Forge` facade covers the common generate/validate/evaluate/run path. The stable extension contracts are `Planner`, `ExecutionRouter`, `PlanningModel`, `MemoryStore`, and `DataSource`. See the docs site [Stable API boundary](./docs-site/src/content/reference/stable-api.mdx) for the full table.
+
+---
+
 ## Documentation
 
 Full documentation site lives at `docs-site/` (Nextra v4, deployable to Vercel):
@@ -840,6 +905,9 @@ Or browse the markdown directly:
 - [End-to-End Tutorial](docs-site/src/content/guides/end-to-end.mdx)
 - [Build a Custom Agent](docs-site/src/content/guides/custom-agent.mdx)
 - [Writing Strategies](docs-site/src/content/guides/strategy-writing.mdx)
+- [Production Readiness](docs-site/src/content/guides/production-readiness.mdx)
+- [Multi-Tenant Integration](docs-site/src/content/guides/multi-tenant-integration.mdx)
+- [Upgrading](docs-site/src/content/guides/upgrading.mdx)
 - [Extending the Framework](docs-site/src/content/guides/extending.mdx) — custom planners, routers, data sources, memory stores; PyPI plugin distribution
 - [CLI Reference](docs-site/src/content/reference/cli.mdx)
 - [Configuration Reference](docs-site/src/content/reference/configuration.mdx)

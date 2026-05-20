@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ._version import __version__
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -78,7 +80,7 @@ class Attestation:
     capabilities_hash: str  # hex-encoded sha256 of capability-manifest.json
     agent_address: str  # EVM address that signed this
     framework: str = "aether-forge"
-    framework_version: str = "0.1.0"
+    framework_version: str = __version__
     timestamp: int = 0
     signature: str = ""  # hex-encoded EIP-712 signature
     tier: str = "self-attested"  # self-attested | verified | unverified
@@ -102,7 +104,7 @@ class Attestation:
             capabilities_hash=data.get("capabilitiesHash", ""),
             agent_address=data.get("agentAddress", ""),
             framework=data.get("framework", "aether-forge"),
-            framework_version=data.get("frameworkVersion", "0.1.0"),
+            framework_version=data.get("frameworkVersion", __version__),
             timestamp=data.get("timestamp", 0),
             signature=data.get("signature", ""),
             tier=data.get("tier", "unverified"),

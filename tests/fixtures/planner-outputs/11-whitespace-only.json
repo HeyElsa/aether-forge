@@ -1,0 +1,7 @@
+{
+  "description": "Whitespace-only response. Treated as empty — must raise PlannerParseError.",
+  "input": "   \n  ",
+  "expected": {
+    "outcome": "parse-failure"
+  }
+}

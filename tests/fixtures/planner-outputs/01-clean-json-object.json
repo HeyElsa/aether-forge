@@ -1,0 +1,12 @@
+{
+  "description": "Pure JSON object response — the happy path. No fences, no preamble.",
+  "input": "{\"steps\": [{\"kind\": \"reason\", \"description\": \"go\"}]}",
+  "expected": {
+    "outcome": "parsed",
+    "value": {
+      "steps": [
+        {"kind": "reason", "description": "go"}
+      ]
+    }
+  }
+}

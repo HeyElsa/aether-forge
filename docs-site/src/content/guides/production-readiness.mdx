@@ -1,0 +1,217 @@
+# How to Prepare an Agent for Production
+
+<video src="/videos/26-observability.mp4" poster="/video-posters/26-observability.jpg" aria-label="Aether Forge documentation video" controls playsInline style={{width:'100%',aspectRatio:'16/9',background:'#0a0a0a',borderRadius:12,marginTop:16,marginBottom:16,display:'block'}} preload="none" />
+
+This guide takes a generated Aether Forge agent from local validation to a production-ready rollout gate.
+
+## Prerequisites
+
+- A generated agent directory.
+- An explicit cloud planner. Production and staging profiles fail `forge doctor` when the planner is heuristic or autodetected.
+- A secret manager for LLM keys, wallet keys, and paid API credentials.
+- Persistent storage for `memory.db`, `replays/`, `logs/`, and wallet state.
+- An operator who can approve promotion and respond to incidents.
+
+## 1. Pin the Deployment Profile and Planner
+
+Generate new agents with an explicit planner and profile:
+
+```bash
+forge generate-fast \
+  --name "Research Agent" \
+  --idea "summarize trusted sources and produce a daily brief" \
+  --output ./research-agent \
+  --deployment-profile staging \
+  --planner-mode anthropic \
+  --planner-model claude-sonnet-4-5 \
+  --planner-api-key-env ANTHROPIC_API_KEY
+```
+
+Environment variables can also declare the planner explicitly when a deployment platform owns command arguments:
+
+```bash
+export AETHER_FORGE_DEPLOYMENT_PROFILE=staging
+export AETHER_FORGE_PLANNER_MODE=anthropic
+export AETHER_FORGE_PLANNER_MODEL=claude-sonnet-4-5
+export AETHER_FORGE_PLANNER_API_KEY_ENV=ANTHROPIC_API_KEY
+
+forge generate-fast \
+  --name "Research Agent" \
+  --idea "summarize trusted sources and produce a daily brief" \
+  --output ./research-agent
+```
+
+Generated configs from this path stamp `planner.source: "explicit"` because the operator supplied the planner contract through env.
+
+For an existing agent, edit `aether-forge.json` so the top-level profile and planner provenance are explicit:
+
+```json
+{
+  "deploymentProfile": "staging",
+  "planner": {
+    "mode": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "source": "explicit"
+  }
+}
+```
+
+Use `local` for developer machines, `staging` for live-like rehearsal, and `production` only after promotion evidence exists.
+
+## 2. Validate Runtime Dependencies
+
+Run doctor from inside the agent directory so it can inspect `aether-forge.json`:
+
+```bash
+cd research-agent
+forge config-validate ./aether-forge.json
+forge doctor
+```
+
+`forge doctor` checks runtime dependencies only. Contributor tools such as `ruff`, `pytest`, and package build helpers belong in developer extras and should not be required for a generated agent to run.
+
+Hard failures to resolve before staging or production:
+
+| Failure | Required action |
+|---|---|
+| `production profile forbids autodetected planner` | Regenerate or edit config with explicit `planner.mode`, `planner.model`, and `planner.apiKeyEnv` |
+| `heuristic planner is not allowed` | Configure a real LLM planner |
+| invalid `deploymentProfile` | Use `local`, `staging`, or `production` |
+| SQLite memory round-trip failure | Fix the mounted memory path or permissions before running |
+
+## 3. Validate Artifacts and Scenario Evidence
+
+Run the artifact validator and scenario pack before any rollout:
+
+```bash
+forge validate .
+forge eval-pack . --target staging --replay-dir ./promotion-replays
+forge promote-draft . --target staging --approver "ops@example.com" --replay-dir ./promotion-replays
+```
+
+The promotion record should reference the exact artifact set, scenario results, and replay files used for the decision. Do not change the evaluation harness or policy thresholds during the same comparison cycle.
+
+## 4. Review Policy, Capabilities, and Side Effects
+
+Open `capability-manifest.json` and `policy-bundle.json` together.
+
+Check that:
+
+- Every side-effecting capability is denied by default and explicitly allowed only in the intended environments.
+- Wallet, exchange, MCP, A2A, and x402 capabilities all go through policy checks.
+- Idempotency, retry, duplicate-submit, and compensation semantics are declared for side effects.
+- MCP servers pass only a safe baseline environment plus declared `env:` entries.
+- `tools.include` and `tools.exclude` filters match the server's allowed tool surface.
+
+## 5. Configure Secrets and State
+
+Keep secret-bearing material out of specs, prompts, traces, and persisted state. Use credential handles or environment variable names in artifacts, then inject the real values through your deployment platform.
+
+Persist or mount:
+
+| Path | Purpose |
+|---|---|
+| `memory.db` | Durable per-agent memory |
+| `replays/` | Runtime audit trail |
+| `logs/` | JSON logs if `--json-log` is enabled |
+| `.ows/` | Wallet vault for OWS-backed agents |
+| `x402_state.json` and `x402_state.lock` | Shared budget state and lock file |
+
+For wallet-bearing agents, create an encrypted backup before production:
+
+```bash
+forge wallet-backup . --output ./backups/research-agent-wallet.backup.json
+```
+
+## 6. Set Budget and Payment Controls
+
+For x402 or agent-to-agent payments:
+
+- Set per-call, per-session, and daily caps conservatively.
+- Mount `x402_state.json` and `x402_state.lock` on durable storage.
+- Treat one budget as covering Elsa x402 calls and agent-to-agent payment channels.
+- Treat missing chain ids as unsafe when a constrained session-key policy declares allowed chains.
+- Verify paid capability servers reject wrong payer addresses and insufficient amounts before executing work.
+
+## 7. Run a Live-Like Rehearsal
+
+Use `staging` or `canary-live` before production. Keep auto-approval limited to sandbox or paper flows.
+
+```bash
+forge run . \
+  --environment staging \
+  --max-ticks 3 \
+  --planner-mode anthropic \
+  --planner-model claude-sonnet-4-5 \
+  --planner-api-key-env ANTHROPIC_API_KEY \
+  --memory-db ./memory.db \
+  --replay-dir ./replays \
+  --json-log ./logs/agent.jsonl \
+  --health-port 8080
+```
+
+Review the newest replay before increasing exposure:
+
+```bash
+forge replays .
+forge replay-show ./replays/tick_0001.json
+```
+
+## 8. Wire Monitoring and Incident Controls
+
+Expose health and structured logs:
+
+```bash
+curl http://localhost:8080/ready
+curl http://localhost:8080/metrics
+```
+
+Monitor:
+
+- readiness failures,
+- failed tick rate,
+- policy denials,
+- planner fallback events,
+- prompt-injection sanitizer warnings,
+- x402 budget denials,
+- memory write errors,
+- MCP subprocess failures.
+
+For application integrations, attach an `EventSink` and route `aetherEvent.kind` to your metrics or tracing system. For CLI deployments, `--json-log` includes the same events under the `aetherEvent` key.
+
+Test the kill switch before production:
+
+```bash
+forge halt . --reason "production readiness drill"
+forge resume .
+```
+
+The halt file is checked before capability execution and blocks live x402 calls, wallet operations, and MCP tool calls.
+
+## Production Checklist
+
+- [ ] `deploymentProfile` is `production`.
+- [ ] Planner is explicit and cloud-backed; no heuristic or autodetected planner.
+- [ ] `forge config-validate ./aether-forge.json` passes.
+- [ ] `forge doctor` passes from inside the agent directory.
+- [ ] `forge validate .` passes.
+- [ ] `forge eval-pack . --target production` meets expectations.
+- [ ] `promotion-record.json` exists and references replay evidence.
+- [ ] `forge security-check . --harden` passes.
+- [ ] Secret values live in a secret manager, not specs or repo files.
+- [ ] `memory.db`, `replays/`, logs, wallet state, and x402 state are persistent.
+- [ ] Wallet backup is encrypted and stored outside the runtime host.
+- [ ] x402 and agent-to-agent payment budgets are capped and persisted.
+- [ ] MCP server environment pass-through is minimized and tool filters are reviewed.
+- [ ] Prompt injection scanning is enabled in canary and production.
+- [ ] Health endpoint, metrics, and structured logs are wired to monitoring.
+- [ ] `forge halt` and `forge resume` have been tested in the deployed environment.
+
+## Related
+
+- [Deploy to Production](/docs/cookbook/deployment)
+- [Security](/docs/features/security)
+- [MCP Integration](/docs/features/mcp-integration)
+- [Memory Architecture](/docs/features/memory)
+- [x402 Payments](/docs/features/x402-payments)

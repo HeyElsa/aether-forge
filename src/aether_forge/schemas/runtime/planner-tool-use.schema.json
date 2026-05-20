@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/runtime/planner-tool-use.schema.json",
+  "title": "Aether Forge Planner Tool-Use Mapping",
+  "description": "Pins the contract between an Aether Forge capability-manifest and the provider-native tool-use definitions emitted by `adapters.function_call.build_tool_schema_from_manifest`. v0.22.0+ (FP-1 deepening). Used by `PromptDrivenPlanner(tool_mode=True)` to opt out of JSON-string parsing entirely. Each declared capability becomes one tool. The OpenAI shape is canonical (used directly with `OpenAICompatiblePlanningModel.complete_with_tools`); `to_anthropic_tool_schema` adapts it to Anthropic's `input_schema` shape on the way out.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tools"],
+  "properties": {
+    "tools": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/OpenAITool"
+      }
+    }
+  },
+  "$defs": {
+    "OpenAITool": {
+      "type": "object",
+      "required": ["type", "function"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "function",
+          "description": "OpenAI tool-use shape. The Anthropic adapter rewraps this to `{name, description, input_schema}`."
+        },
+        "function": {
+          "type": "object",
+          "required": ["name", "description", "parameters"],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The capability id (matches `capabilityManifest.capabilities[].capabilityId`).",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "description": "Capability description shown to the model; sourced from `description` or `name` on the manifest entry."
+            },
+            "parameters": {
+              "type": "object",
+              "description": "JSON Schema for the tool's input. Sourced from `capabilities[].inputSchema` when present, otherwise an empty permissive object."
+            }
+          }
+        }
+      }
+    }
+  }
+}

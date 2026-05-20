@@ -1,0 +1,69 @@
+# Install Matrix
+
+Aether Forge keeps core runtime dependencies small. Install extras only when your agent needs them.
+
+## Requirements
+
+| Requirement | Value |
+|---|---|
+| Python | 3.12+ |
+| Core runtime dependency | `jsonschema` |
+| CLI | `forge` |
+| Package status | Install from GitHub until PyPI publish |
+
+## End-User Installs
+
+| Need | Command | Includes | Use when |
+|---|---|---|---|
+| Core only | `pip install 'aether-forge @ git+https://github.com/HeyElsa/aether-forge.git'` | CLI, schemas, runtime, policy, SQLite memory | First run, general agents, CI smoke |
+| Wallets | `pip install 'aether-forge[wallet] @ git+https://github.com/HeyElsa/aether-forge.git'` | Core + `open-wallet-standard` | OWS wallet provisioning or signing |
+| Knowledge memory | `pip install 'aether-forge[knowledge] @ git+https://github.com/HeyElsa/aether-forge.git'` | Core + `mempalace` | Layer 4 semantic + temporal memory |
+| Security extras | `pip install 'aether-forge[security] @ git+https://github.com/HeyElsa/aether-forge.git'` | Core + `cryptography` | Encrypted wallet backups and encrypted memory records |
+| A2A | `pip install 'aether-forge[a2a] @ git+https://github.com/HeyElsa/aether-forge.git'` | Core + `a2a-sdk` | Agent-to-agent servers and clients |
+| Production agent | `pip install 'aether-forge[all] @ git+https://github.com/HeyElsa/aether-forge.git'` | Wallets, knowledge, security, A2A | Full agent runtime |
+
+## Framework Contributor Install
+
+Use `[dev]` only when editing Aether Forge itself:
+
+```bash
+git clone https://github.com/HeyElsa/aether-forge.git
+cd aether-forge
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+```
+
+`[dev]` includes contributor tooling such as `pytest`, `ruff`, `mypy`, `build`, and `twine`. Generated agents must not depend on those packages.
+
+## TypeScript SDK
+
+Use the TypeScript SDK when you need schema validation or planner-output parsing from JavaScript runtimes:
+
+```bash
+npm install @aether-forge/sdk
+```
+
+The v0.1.x SDK intentionally does not include the Python runtime tick loop, policy gate, memory stores, autoresearch loop, or signer implementations.
+
+## How `forge doctor` Interprets Extras
+
+| Check | Core install | Extra install |
+|---|---|---|
+| Python version | Required | Required |
+| JSON schema validation | Required | Required |
+| SQLite memory round-trip | Required | Required |
+| OWS wallet SDK | Skipped | Required for wallet workflows |
+| `cryptography` | Skipped | Required for encrypted backups |
+| MemPalace | Skipped | Required for Layer 4 knowledge |
+| Ollama | Advisory | Advisory unless explicitly configured |
+
+Skipped optional checks are expected on a core-only install. A generated agent should only require the extras declared by the features it actually uses.
+
+## Which One Should I Pick?
+
+- Pick **core only** for [First 10 Minutes](/docs/guides/first-10-minutes).
+- Pick **wallet** only when you need a wallet.
+- Pick **all** for a production crypto agent.
+- Pick **dev** only when contributing to the framework repo.
+- Pick **TypeScript SDK** for validation in a JS app, not for running agents.

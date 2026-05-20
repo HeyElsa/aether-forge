@@ -18,6 +18,13 @@ from pathlib import Path
 from typing import Any
 
 from .memory import InMemoryMemoryStore, MemoryRecord
+from .observability import (
+    CompositeEventSink,
+    EventSink,
+    LoggingEventSink,
+    ObservabilityEvent,
+    emit_observability_event,
+)
 from .planner import HeuristicPlanner
 from .policy import NativePolicyGate, PolicyDecision
 from .runtime import (
@@ -108,12 +115,14 @@ class AgentRunner:
         planner_factory: Callable | None = None,
         execution_router_factory: Callable | None = None,
         memory_store: Any = None,
+        event_sink: EventSink | None = None,
     ) -> None:
         self.artifact_directory = Path(artifact_directory).resolve()
         self.config = config or RunnerConfig()
         self.artifacts = load_artifact_bundle(self.artifact_directory)
         self._planner_factory = planner_factory or HeuristicPlanner
         self._execution_router_factory = execution_router_factory
+        self._event_sink: EventSink | None = event_sink
         self._tick_count = 0  # Total ticks (including recovered)
         self._ticks_this_run = 0  # Ticks in current invocation
         self._running = False
@@ -210,6 +219,10 @@ class AgentRunner:
         self._json_log_handler = None
         if self.config.json_log_file:
             self._setup_json_logging(self.config.json_log_file)
+            self._event_sink = CompositeEventSink.from_sinks(
+                self._event_sink,
+                LoggingEventSink(),
+            )
 
         # Crash recovery — load last tick count from replays
         if self.config.crash_recovery and self._replay_dir and self._replay_dir.exists():
@@ -301,14 +314,26 @@ class AgentRunner:
                 break
             yield self.tick()
 
-    def tick(self) -> TickResult:
-        """Execute a single agent tick."""
+    def tick(self, scenario_inputs: dict[str, Any] | None = None) -> TickResult:
+        """Execute a single agent tick.
+
+        ``scenario_inputs`` are copied into the ``RuntimeSession`` state for
+        this tick only. They are the supported programmatic entry point for
+        webhook payloads, queue messages, cron context, and other request-
+        scoped inputs.
+        """
         self._tick_count += 1
         self._ticks_this_run += 1
         tick_num = self._tick_count
         timestamp = datetime.now(UTC).isoformat()
 
         logger.info("Tick %d started at %s", tick_num, timestamp)
+        self._emit_event(
+            "runner.tick.started",
+            tick=tick_num,
+            message=f"Tick {tick_num} started.",
+            details={"maxStepsPerTick": self.config.max_steps_per_tick},
+        )
 
         # Build session for this tick
         planner = self._planner_factory()
@@ -326,7 +351,10 @@ class AgentRunner:
             planner=planner,
             execution_router=router,
             policy_gate=policy_gate,
+            scenario_inputs=scenario_inputs,
             memory_store=self._memory_store,
+            event_sink=self._event_sink,
+            tick_number=tick_num,
         )
 
         # Inject previous working set
@@ -416,6 +444,17 @@ class AgentRunner:
         )
         self._tick_history.append(result)
         logger.info("Tick %d complete: status=%s steps=%d", tick_num, status.value, len(session.step_ledger))
+        self._emit_event(
+            "runner.tick.failed" if status == SessionStatus.FAILED else "runner.tick.completed",
+            severity="error" if status == SessionStatus.FAILED else "info",
+            tick=tick_num,
+            message=f"Tick {tick_num} {status.value}.",
+            details={
+                "status": status.value,
+                "steps": len(session.step_ledger),
+                "pendingApprovals": len(session.pending_approvals),
+            },
+        )
         return result
 
     def stop(self) -> None:
@@ -443,8 +482,21 @@ class AgentRunner:
                 sensitivity="internal",
             )
             self._memory_store.write(record)
+            self._emit_event(
+                "memory.write",
+                tick=tick_num,
+                message="Tick summary memory written.",
+                details={"memoryId": record.memory_id, "source": "agent-runner"},
+            )
         except Exception as error:
             logger.warning("Failed to persist tick memory: %s", error)
+            self._emit_event(
+                "memory.write_failed",
+                severity="warning",
+                tick=tick_num,
+                message="Failed to persist tick memory.",
+                details={"error": repr(error), "source": "agent-runner"},
+            )
 
     def _sleep_interruptible(self, seconds: float) -> None:
         """Sleep in small increments so SIGINT is responsive."""
@@ -711,7 +763,7 @@ class AgentRunner:
         accidentally-emitted mnemonic, API key, or signature is redacted
         before it touches disk.
         """
-        from .security_hardening import sanitize_string
+        from .security_hardening import sanitize_dict, sanitize_string
 
         path = Path(log_path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -726,6 +778,9 @@ class AgentRunner:
                 }
                 if record.exc_info and record.exc_info[0]:
                     entry["exception"] = sanitize_string(self.formatException(record.exc_info))
+                event_payload = getattr(record, "aether_event", None)
+                if isinstance(event_payload, dict):
+                    entry["aetherEvent"] = sanitize_dict(event_payload)
                 return json.dumps(entry)
 
         # Use RotatingFileHandler to prevent unbounded log growth in
@@ -761,6 +816,28 @@ class AgentRunner:
             "pending_approvals": len(result.pending_approvals),
         }
         logger.info("Tick %d: %s", result.tick_number, json.dumps(entry))
+
+    def _emit_event(
+        self,
+        kind: str,
+        *,
+        severity: str = "info",
+        tick: int | None = None,
+        message: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        emit_observability_event(
+            self._event_sink,
+            ObservabilityEvent(
+                kind=kind,
+                artifact_set_id=self.artifacts.agent_spec.get("artifactSetId"),
+                environment=self.config.environment,
+                tick=tick,
+                severity=severity,
+                message=message,
+                details=details or {},
+            ),
+        )
 
     # ------------------------------------------------------------------
     # PID file management
