@@ -10,6 +10,21 @@ These examples show Aether Forge's current product shape: spec-first artifacts, 
 | [`two-agent-marketplace/`](./two-agent-marketplace/) | Agent-to-agent discovery, x402 payment flow, wallet isolation, and marketplace dashboard |
 | [`strategies/`](./strategies/) | Strategy prompts and policy sketches for common agent patterns |
 
+## Strategy Library
+
+The strategy briefs under [`strategies/`](./strategies/) are intentionally more detailed than prompt snippets. Each one names the asset universe, required data, policy defaults, evaluation scenarios, and go-live blockers.
+
+| Strategy | What it demonstrates |
+|---|---|
+| [`btc-funding-arbitrage.md`](./strategies/btc-funding-arbitrage.md) | Delta-neutral spot/perp carry, hedge-ratio control, partial-fill recovery |
+| [`stablecoin-treasury-rebalancer.md`](./strategies/stablecoin-treasury-rebalancer.md) | Conservative stablecoin allocation, depeg response, route controls |
+| [`inventory-skew-market-maker.md`](./strategies/inventory-skew-market-maker.md) | Two-sided quoting, inventory skew, cancel/replace safety |
+| [`dca-eth.md`](./strategies/dca-eth.md) | Scheduled accumulation with gas and spend controls |
+| [`yield-optimizer.md`](./strategies/yield-optimizer.md) | Whitelisted supply-only DeFi allocation |
+| [`multi-agent-team.md`](./strategies/multi-agent-team.md) | A2A oracle/risk/trader coordination with x402 budgets |
+
+Use them as `--strategy-file` inputs, then convert the critical rules into typed policies and scenario tests before live use.
+
 ## Validate From TypeScript
 
 JavaScript and TypeScript hosts can validate example artifacts without running the Python runtime:
