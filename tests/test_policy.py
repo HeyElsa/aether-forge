@@ -88,6 +88,33 @@ def test_policy_gate_denies_wallet_chain_outside_allowed_set() -> None:
     assert "wallet-chain-not-allowed" in decision.reason_ids
 
 
+def test_policy_gate_denies_wallet_action_missing_constrained_chain() -> None:
+    gate = NativePolicyGate(wallet_allowed_chains=["evm"])
+    capability = {
+        "capabilityId": "cap-wallet-manage",
+        "kind": "wallet-action",
+        "provider": "ows-wallet",
+        "allowedEnvironments": ["sandbox"],
+        "providerConstraints": {},
+        "effectSemantics": {
+            "idempotencyClass": "conditionally-idempotent",
+            "duplicateSubmitBehavior": "none",
+            "retryPolicy": {"mode": "bounded", "maxAttempts": 1},
+            "compensationClass": "compensatable",
+        },
+    }
+
+    decision = gate.evaluate_action(
+        capability=capability,
+        credential_handles=[],
+        environment="sandbox",
+        action_payload={"wallet_action": "send-transaction", "amount": 1},
+    )
+
+    assert decision.final_disposition == "deny"
+    assert "wallet-chain-missing" in decision.reason_ids
+
+
 def test_policy_gate_holds_wallet_transfer_above_limit() -> None:
     artifacts = load_artifact_bundle(EXAMPLE_DIR)
     artifacts.policy_bundle["rules"]["maxWalletTransferAmount"] = 2
@@ -115,6 +142,33 @@ def test_policy_gate_holds_wallet_transfer_above_limit() -> None:
 
     assert decision.final_disposition == "hold"
     assert "wallet-transfer-limit" in decision.reason_ids
+
+
+def test_policy_gate_denies_invalid_wallet_transfer_amounts() -> None:
+    gate = NativePolicyGate(wallet_allowed_chains=["evm"], max_wallet_transfer_amount=2)
+    capability = {
+        "capabilityId": "cap-wallet-manage",
+        "kind": "wallet-action",
+        "provider": "ows-wallet",
+        "allowedEnvironments": ["sandbox"],
+        "providerConstraints": {"chain": "evm"},
+        "effectSemantics": {
+            "idempotencyClass": "conditionally-idempotent",
+            "duplicateSubmitBehavior": "none",
+            "retryPolicy": {"mode": "bounded", "maxAttempts": 1},
+            "compensationClass": "compensatable",
+        },
+    }
+
+    for amount in ("1", -1, 0):
+        decision = gate.evaluate_action(
+            capability=capability,
+            credential_handles=[],
+            environment="sandbox",
+            action_payload={"wallet_action": "send-transaction", "chain": "evm", "amount": amount},
+        )
+        assert decision.final_disposition == "deny"
+        assert "wallet-amount-invalid" in decision.reason_ids
 
 
 def test_policy_gate_requires_wallet_approval_in_configured_environment() -> None:

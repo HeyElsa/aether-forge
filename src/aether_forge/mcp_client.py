@@ -182,6 +182,16 @@ class _McpClientBase:
             return False
         return True
 
+    def _assert_tool_allowed(self, name: str) -> None:
+        if self.config.tools_include is not None and name not in self.config.tools_include:
+            raise McpError(
+                f"MCP tool {name!r} is not allowed by tools.include for server {self.config.name!r}"
+            )
+        if name in self.config.tools_exclude:
+            raise McpError(
+                f"MCP tool {name!r} is blocked by tools.exclude for server {self.config.name!r}"
+            )
+
     # ----- public ------------------------------------------------------
     def initialize(self) -> dict[str, Any]:
         """Perform the MCP handshake. Returns the server's info dict."""
@@ -214,6 +224,7 @@ class _McpClientBase:
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Invoke a tool by name with a typed argument payload."""
+        self._assert_tool_allowed(name)
         if not self._initialized:
             self.initialize()
         response = self._rpc("tools/call", {"name": name, "arguments": arguments})
