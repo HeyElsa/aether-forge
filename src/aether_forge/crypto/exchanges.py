@@ -95,10 +95,12 @@ class InMemoryPaperExchangeAdapter:
         requested_notional_usd: float,
         side: str,
         credential_lease: CredentialLease,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         order_id = f"paper_order_{uuid4().hex}"
         self.total_notional_usd += requested_notional_usd
         self.positions[symbol] = PaperPosition(symbol=symbol, notional_usd=requested_notional_usd, side=side)
+        safe_metadata = dict(metadata or {})
         self.orders.append(
             {
                 "orderId": order_id,
@@ -107,6 +109,7 @@ class InMemoryPaperExchangeAdapter:
                 "requestedNotionalUsd": requested_notional_usd,
                 "side": side,
                 "credentialHandleId": credential_lease.handle_id,
+                "metadata": safe_metadata,
             }
         )
         return {
@@ -117,6 +120,7 @@ class InMemoryPaperExchangeAdapter:
             "requested_notional_usd": requested_notional_usd,
             "side": side,
             "paper": True,
+            "metadata": safe_metadata,
         }
 
     def get_account_snapshot(self, *, venue: str, credential_lease: CredentialLease) -> dict[str, Any]:
@@ -136,3 +140,48 @@ class InMemoryPaperExchangeAdapter:
             "credentialHandleId": credential_lease.handle_id,
             "paper": True,
         }
+
+
+def canonical_order_result(
+    raw: dict[str, Any],
+    *,
+    execution_mode: str,
+    venue: str,
+    symbol: str,
+    requested_notional_usd: float,
+    side: str,
+) -> dict[str, Any]:
+    """Return a stable paper/live order result shape while preserving raw fields."""
+    order_id = raw.get("order_id") or raw.get("orderId") or raw.get("venue_order_id") or raw.get("client_order_id")
+    canonical = {
+        **raw,
+        "submitted": bool(raw.get("submitted", bool(order_id))),
+        "order_id": str(order_id or ""),
+        "venue": str(raw.get("venue", venue)),
+        "symbol": str(raw.get("symbol", symbol)),
+        "requested_notional_usd": float(raw.get("requested_notional_usd", raw.get("requestedNotionalUsd", requested_notional_usd))),
+        "side": str(raw.get("side", side)),
+        "execution_mode": execution_mode,
+    }
+    return canonical
+
+
+def canonical_account_snapshot(
+    raw: dict[str, Any],
+    *,
+    execution_mode: str,
+    venue: str,
+) -> dict[str, Any]:
+    """Return a stable paper/live account snapshot shape while preserving raw fields."""
+    positions = raw.get("positions", [])
+    if not isinstance(positions, list):
+        positions = []
+    return {
+        **raw,
+        "venue": str(raw.get("venue", venue)),
+        "balance_usd": float(raw.get("balance_usd", raw.get("balanceUsd", 0.0))),
+        "total_notional_usd": float(raw.get("total_notional_usd", raw.get("totalNotionalUsd", 0.0))),
+        "positions": positions,
+        "order_count": int(raw.get("order_count", raw.get("orderCount", 0))),
+        "execution_mode": execution_mode,
+    }
