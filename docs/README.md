@@ -30,6 +30,8 @@ npm run dev   # → http://localhost:3000
 | End-to-end tutorial | `../docs-site/src/content/guides/end-to-end.mdx` |
 | Build a custom agent | `../docs-site/src/content/guides/custom-agent.mdx` |
 | Writing strategies | `../docs-site/src/content/guides/strategy-writing.mdx` |
+| Production readiness | `../docs-site/src/content/guides/production-readiness.mdx` |
+| Incident response for live agents | `../docs-site/src/content/guides/incident-response.mdx` |
 | Multi-agent / A2A | `../docs-site/src/content/guides/multi-agent.mdx` |
 | Going on-chain (ERC-8004) | `../docs-site/src/content/guides/go-onchain.mdx` |
 | Accepting payments (x402 server) | `../docs-site/src/content/guides/accept-payments.mdx` |

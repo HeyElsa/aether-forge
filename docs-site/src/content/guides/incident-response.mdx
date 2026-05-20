@@ -1,0 +1,174 @@
+# Incident Response for Live Agents
+
+Use this runbook when an Aether Forge agent is in `canary-live` or `production` and something looks unsafe: unexpected wallet activity, repeated policy holds, exchange rejects, x402 budget failures, prompt-injection alerts, stalled ticks, or bad strategy behavior.
+
+The priority order is:
+
+1. Stop side effects.
+2. Preserve evidence.
+3. Classify impact.
+4. Fix root cause.
+5. Add or explicitly decline a regression scenario.
+6. Resume only after approval.
+
+## Before an Incident
+
+Do this before enabling live execution:
+
+- Assign a primary operator and backup operator.
+- Verify both operators can run `forge halt .` and `forge resume .` in the deployed environment.
+- Store wallet backup recovery steps outside the runtime host.
+- Send `logs/agent.jsonl`, `/metrics`, and replay files to durable storage.
+- Document the maximum acceptable loss, spend, open order count, and x402 spend per agent.
+- Keep deployment credentials, wallet credentials, and monitoring credentials separately scoped.
+- Run a halt/resume drill in staging and record the result in the promotion evidence.
+
+## Severity Levels
+
+| Severity | Trigger examples | Default action |
+|---|---|---|
+| SEV-1 | confirmed unauthorized transaction, lost funds, active exploit, wrong live adapter, signer boundary failure | halt immediately, scale down, revoke credentials, page owner |
+| SEV-2 | repeated failed live orders, budget lock errors, payment settlement failures, prompt injection entering external data | halt or pause live mode, preserve replays, investigate before resume |
+| SEV-3 | degraded planner provider, transient MCP failures, delayed ticks, non-live eval regression | keep live caps unchanged, investigate, add monitoring or tests |
+| SEV-4 | docs, alert tuning, non-critical warnings | track normally |
+
+When unsure, treat the incident as the higher severity until evidence says otherwise.
+
+## First Five Minutes
+
+Run these from the agent directory unless your deployment platform wraps the commands.
+
+```bash
+forge halt . --reason "INC-YYYY-MM-DD short description"
+curl -fsS http://localhost:8080/ready || true
+curl -fsS http://localhost:8080/metrics > incident-metrics.txt || true
+forge replays . --limit 10
+```
+
+If the process is still sending side effects after the halt:
+
+```bash
+# Docker
+docker stop <container>
+
+# Kubernetes
+kubectl scale statefulset/<agent-name> --replicas=0
+```
+
+Then preserve evidence:
+
+```bash
+mkdir -p incident-evidence
+cp -R replays logs aether-forge.json policy-bundle.json capability-manifest.json incident-evidence/
+cp memory.db incident-evidence/memory.db 2>/dev/null || true
+cp x402_state.json incident-evidence/x402_state.json 2>/dev/null || true
+```
+
+Do not rotate wallets, delete state, or clear the halt file until evidence is copied.
+
+## Triage Checklist
+
+Check these surfaces in order.
+
+### Wallet and Signer
+
+- Confirm all wallet operations appear in the audit log.
+- Compare wallet activity against the step ledger and replay files.
+- Verify session-key policy constraints: chain, contract, spend, expiry.
+- If a constrained policy declares allowed chains, missing `chain_id` must be treated as unsafe.
+- Revoke or rotate signer credentials if any signature was produced outside expected policy.
+
+### x402 Payments
+
+- Inspect `x402_state.json` and confirm caps were enforced.
+- Confirm `x402_state.lock` is on durable shared storage for multi-process deployments.
+- Check rejected payment headers for wrong payer, wrong receiver, insufficient amount, expired authorization, and nonce replay.
+- Confirm paid capability handlers rejected invalid payment before executing work.
+
+### Exchange or Live Adapter
+
+- Confirm live exchange actions went through the configured project adapter.
+- Compare paper and live outputs for canonical fields: `submitted`, `order_id`, `venue`, `symbol`, `requested_notional_usd`, `side`, and `execution_mode`.
+- Check venue-side order ids against local replay step ids.
+- Lower caps before any canary resume.
+
+### MCP, A2A, and External Tooling
+
+- Confirm MCP `tools.include` and `tools.exclude` matched the intended surface.
+- Inspect external tool outputs for prompt-injection warnings.
+- Verify stdio MCP servers received only the safe baseline env plus declared `env` entries.
+- For A2A calls, confirm peer agent card, trust tier, and payment budget channel.
+
+### Planner and Memory
+
+- Check for `planner.fallback` events.
+- Confirm production did not run with heuristic or autodetected planner provenance.
+- Inspect memory writes for sensitive or policy-restricted records.
+- If memory influenced a bad decision, add the replay and memory record ids to the incident notes.
+
+## Root Cause Notes
+
+Write a short incident note before resuming:
+
+```md
+# INC-YYYY-MM-DD
+
+Severity:
+Agent:
+Environment:
+Started:
+Detected by:
+Halted at:
+Funds or side effects impacted:
+
+Root cause:
+Evidence:
+- replay:
+- policy decision:
+- wallet/x402/exchange reference:
+
+Fix:
+Regression scenario:
+Resume approver:
+```
+
+## Resume Gate
+
+Do not run `forge resume .` until all of these are true:
+
+- [ ] Halt was effective and no side effects are still running.
+- [ ] Evidence is copied to durable storage.
+- [ ] Root cause is known, or the agent remains scaled down.
+- [ ] A regression scenario was added to the scenario pack, or the owner explicitly documented why not.
+- [ ] Policy, budget, signer, adapter, or MCP config changes were reviewed.
+- [ ] Wallet and x402 caps are equal to or lower than pre-incident values for the first canary resume.
+- [ ] The new config passes `forge config-validate`, `forge doctor`, `forge validate`, and `forge eval-pack`.
+- [ ] A named operator approves the resume.
+
+Resume:
+
+```bash
+forge resume .
+forge run . --environment canary-live --mode live --max-ticks 1 --json-log ./logs/agent.jsonl
+```
+
+Review the replay from the canary tick before restoring the normal interval or production caps.
+
+## Post-Incident Closure
+
+Close the incident only after:
+
+- the final replay and logs are linked from the incident note,
+- the regression scenario is committed or explicitly declined,
+- docs or runbook gaps are patched,
+- alert thresholds are updated if detection was late,
+- credentials or wallets are rotated if exposure is possible,
+- the promotion record notes the incident and the resume approval.
+
+## Related
+
+- [Production Readiness](/docs/guides/production-readiness)
+- [Deploy to Production](/docs/cookbook/deployment)
+- [Security](/docs/features/security)
+- [Observability](/docs/features/observability)
+- [x402 Payments](/docs/features/x402-payments)
