@@ -11,6 +11,7 @@ from aether_forge.live_execution import (
     BudgetExceededError,
     CircuitBreakerError,
     LiveExecutionConfig,
+    LiveExecutionNotConfiguredError,
     LiveExecutor,
     build_live_executor,
 )
@@ -30,39 +31,21 @@ def _make_executor(tmp_path: Path, **overrides) -> LiveExecutor:
     defaults.update(overrides)
     config = LiveExecutionConfig(**defaults)
     executor = LiveExecutor(config, agent_directory=tmp_path)
-
-    # Patch signing to avoid OWS dependency in unit tests
-    def fake_sign_message(directory, chain, message):
-        return {"signature": "0xfakesignature" * 4, "recovery_id": 27}
-
-    def fake_sign_and_send(directory, chain, tx_hex, rpc_url=None):
-        return {"tx_hash": "0xfaketxhash" + "0" * 50}
-
-    # Monkey-patch the wallet module functions
-    import aether_forge.wallet as wallet_mod
-    executor._original_sign_message = wallet_mod.sign_message
-    executor._original_sign_and_send = wallet_mod.sign_and_send
-    wallet_mod.sign_message = fake_sign_message
-    wallet_mod.sign_and_send = fake_sign_and_send
-
     return executor
 
 
 def _restore_executor(executor: LiveExecutor) -> None:
-    import aether_forge.wallet as wallet_mod
-    if hasattr(executor, "_original_sign_message"):
-        wallet_mod.sign_message = executor._original_sign_message
-    if hasattr(executor, "_original_sign_and_send"):
-        wallet_mod.sign_and_send = executor._original_sign_and_send
+    _ = executor
 
 
-def test_dry_run_signs_without_broadcast(tmp_path: Path) -> None:
+def test_dry_run_validates_without_placeholder_tx_or_broadcast(tmp_path: Path) -> None:
     executor = _make_executor(tmp_path)
     try:
         result = executor.place_order(side="buy", token="ETH", amount=0.001, limit_price=2000.0)
-        assert result["status"] == "signed_dry_run"
-        assert "signature" in result
-        assert "tx_hex" in result
+        assert result["status"] == "validated_dry_run"
+        assert result["would_submit"] is False
+        assert "signature" not in result
+        assert "tx_hex" not in result
         assert result["dry_run"] is True
     finally:
         _restore_executor(executor)
@@ -78,7 +61,22 @@ def test_per_order_cap_enforced(tmp_path: Path) -> None:
 
 
 def test_session_total_cap_enforced(tmp_path: Path) -> None:
-    executor = _make_executor(tmp_path, max_total_spent_usd=5.0, max_order_size_usd=10.0)
+    submitted: list[dict] = []
+
+    def submit(order: dict) -> dict:
+        submitted.append(order)
+        return {"order_id": f"live-{len(submitted)}"}
+
+    config = LiveExecutionConfig(
+        max_order_size_usd=10.0,
+        max_total_spent_usd=5.0,
+        max_daily_loss_usd=20.0,
+        max_open_orders=3,
+        chain="base-sepolia",
+        dry_run=False,
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+    executor = LiveExecutor(config, agent_directory=tmp_path, submit_order_fn=submit)
     try:
         # First order uses $4
         executor.place_order(side="buy", token="ETH", amount=0.002, limit_price=2000.0)
@@ -90,7 +88,22 @@ def test_session_total_cap_enforced(tmp_path: Path) -> None:
 
 
 def test_max_open_orders_enforced(tmp_path: Path) -> None:
-    executor = _make_executor(tmp_path, max_open_orders=2)
+    submitted: list[dict] = []
+
+    def submit(order: dict) -> dict:
+        submitted.append(order)
+        return {"order_id": f"live-{len(submitted)}"}
+
+    config = LiveExecutionConfig(
+        max_order_size_usd=10.0,
+        max_total_spent_usd=50.0,
+        max_daily_loss_usd=20.0,
+        max_open_orders=2,
+        chain="base-sepolia",
+        dry_run=False,
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+    executor = LiveExecutor(config, agent_directory=tmp_path, submit_order_fn=submit)
     try:
         executor.place_order(side="buy", token="ETH", amount=0.001, limit_price=2000.0)
         executor.place_order(side="buy", token="ETH", amount=0.001, limit_price=2000.0)
@@ -101,12 +114,21 @@ def test_max_open_orders_enforced(tmp_path: Path) -> None:
 
 
 def test_circuit_breaker_trips_after_consecutive_failures(tmp_path: Path) -> None:
-    executor = _make_executor(tmp_path, max_consecutive_failures=2)
-    try:
-        # Make signing fail
-        import aether_forge.wallet as wallet_mod
-        wallet_mod.sign_message = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("sign failed"))
+    def submit(order: dict) -> dict:
+        raise RuntimeError("submit failed")
 
+    config = LiveExecutionConfig(
+        max_order_size_usd=10.0,
+        max_total_spent_usd=50.0,
+        max_daily_loss_usd=20.0,
+        max_open_orders=3,
+        max_consecutive_failures=2,
+        chain="base-sepolia",
+        dry_run=False,
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+    executor = LiveExecutor(config, agent_directory=tmp_path, submit_order_fn=submit)
+    try:
         # First failure
         with pytest.raises(RuntimeError):
             executor.place_order(side="buy", token="ETH", amount=0.001, limit_price=2000.0)
@@ -122,11 +144,21 @@ def test_circuit_breaker_trips_after_consecutive_failures(tmp_path: Path) -> Non
 
 
 def test_circuit_breaker_reset(tmp_path: Path) -> None:
-    executor = _make_executor(tmp_path, max_consecutive_failures=1)
-    try:
-        import aether_forge.wallet as wallet_mod
-        wallet_mod.sign_message = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("fail"))
+    def submit(order: dict) -> dict:
+        raise RuntimeError("fail")
 
+    config = LiveExecutionConfig(
+        max_order_size_usd=10.0,
+        max_total_spent_usd=50.0,
+        max_daily_loss_usd=20.0,
+        max_open_orders=3,
+        max_consecutive_failures=1,
+        chain="base-sepolia",
+        dry_run=False,
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+    executor = LiveExecutor(config, agent_directory=tmp_path, submit_order_fn=submit)
+    try:
         with pytest.raises(RuntimeError):
             executor.place_order(side="buy", token="ETH", amount=0.001, limit_price=2000.0)
         assert executor.state.circuit_tripped
@@ -172,7 +204,7 @@ def test_status_reports_state(tmp_path: Path) -> None:
         assert status["transactions"] == 1
         assert status["dry_run"] is True
         assert status["chain"] == "base-sepolia"
-        assert status["budget_remaining_usd"] > 0
+        assert status["budget_remaining_usd"] == 50.0
     finally:
         _restore_executor(executor)
 
@@ -194,6 +226,48 @@ def test_daily_loss_cap(tmp_path: Path) -> None:
             executor.place_order(side="buy", token="ETH", amount=0.001, limit_price=2000.0)
     finally:
         _restore_executor(executor)
+
+
+def test_live_mode_requires_explicit_submitter(tmp_path: Path) -> None:
+    executor = _make_executor(tmp_path, dry_run=False)
+
+    with pytest.raises(LiveExecutionNotConfiguredError, match="explicit submit_order_fn"):
+        executor.place_order(side="buy", token="ETH", amount=0.001, limit_price=2000.0)
+
+
+def test_live_mode_delegates_to_explicit_submitter(tmp_path: Path) -> None:
+    submitted: list[dict] = []
+
+    def submit(order: dict) -> dict:
+        submitted.append(order)
+        return {"venue_order_id": "venue-123"}
+
+    config = LiveExecutionConfig(
+        max_order_size_usd=10.0,
+        max_total_spent_usd=50.0,
+        max_daily_loss_usd=20.0,
+        max_open_orders=3,
+        chain="base-sepolia",
+        dry_run=False,
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+    executor = LiveExecutor(config, agent_directory=tmp_path, submit_order_fn=submit)
+
+    result = executor.place_order(side="buy", token="eth", amount=0.001, limit_price=2000.0)
+
+    assert result["status"] == "submitted"
+    assert result["venue_order_id"] == "venue-123"
+    assert submitted == [{
+        "side": "buy",
+        "token": "ETH",
+        "amount": 0.001,
+        "limit_price": 2000.0,
+        "notional_usd": 2.0,
+        "chain": "base-sepolia",
+        "dry_run": False,
+    }]
+    assert executor.state.total_spent_usd == 2.0
+    assert executor.state.open_order_count == 1
 
 
 def test_audit_log_persists_to_jsonl(tmp_path: Path) -> None:
