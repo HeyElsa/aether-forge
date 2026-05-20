@@ -22,6 +22,8 @@ from aether_forge.planner import HeuristicPlanner, PromptDrivenPlanner
 from aether_forge.runner import AgentRunner, RunnerConfig
 from aether_forge.scaffold_router import StrategyConfig, load_scaffold_router
 
+pytestmark = pytest.mark.network
+
 
 def _ollama_available() -> bool:
     try:
@@ -41,10 +43,11 @@ def _binance_available() -> bool:
         return False
 
 
-requires_live = pytest.mark.skipif(
-    not (_ollama_available() and _binance_available()),
-    reason="Requires Ollama + Binance API access",
-)
+def _require_live_dependencies() -> None:
+    if not _ollama_available():
+        pytest.skip("Ollama is not running")
+    if not _binance_available():
+        pytest.skip("Binance API is not reachable")
 
 
 def _build_ollama_planner():
@@ -56,9 +59,10 @@ def _build_ollama_planner():
     return PromptDrivenPlanner(model=model, fallback_planner=HeuristicPlanner(), max_plan_steps=5)
 
 
-@requires_live
 def test_paper_trading_with_live_prices(tmp_path: Path) -> None:
     """Agent trades ETH with real Binance prices, momentum data, and paper P&L."""
+    _require_live_dependencies()
+
     output = tmp_path / "agent"
     generate_fast_artifact_set(FastGenerateRequest(
         name="ETH Paper Trader",

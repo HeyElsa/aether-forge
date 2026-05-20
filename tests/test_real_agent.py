@@ -24,6 +24,8 @@ from aether_forge.runtime import RuntimeSession, load_artifact_bundle
 from aether_forge.scaffold_router import StrategyConfig, load_scaffold_router
 from aether_forge.storage import SqliteMemoryStore
 
+pytestmark = pytest.mark.network
+
 
 def _ollama_available() -> bool:
     try:
@@ -34,7 +36,9 @@ def _ollama_available() -> bool:
         return False
 
 
-requires_ollama = pytest.mark.skipif(not _ollama_available(), reason="Ollama not running")
+def _require_ollama() -> None:
+    if not _ollama_available():
+        pytest.skip("Ollama is not running")
 
 
 def _build_ollama_planner():
@@ -53,9 +57,10 @@ def _build_strategy_config():
     )
 
 
-@requires_ollama
 def test_single_tick_ollama_plans_real_steps(tmp_path: Path) -> None:
     """Ollama should produce valid planning steps for an ETH trading agent."""
+    _require_ollama()
+
     output = tmp_path / "agent"
     generate_fast_artifact_set(FastGenerateRequest(
         name="ETH Swing Trader",
@@ -100,9 +105,10 @@ def test_single_tick_ollama_plans_real_steps(tmp_path: Path) -> None:
     print(f"Capabilities used: {cap_ids}")
 
 
-@requires_ollama
 def test_multi_tick_agent_with_memory(tmp_path: Path) -> None:
     """Agent runs 3 ticks, persists memory, and adapts based on price history."""
+    _require_ollama()
+
     output = tmp_path / "agent"
     generate_fast_artifact_set(FastGenerateRequest(
         name="ETH Swing Trader",
@@ -152,9 +158,10 @@ def test_multi_tick_agent_with_memory(tmp_path: Path) -> None:
     assert all(r.steps_executed > 0 for r in results)
 
 
-@requires_ollama
 def test_full_trading_cycle(tmp_path: Path) -> None:
     """End-to-end: generate → validate → run with LLM → check orders placed."""
+    _require_ollama()
+
     output = tmp_path / "agent"
     generate_fast_artifact_set(FastGenerateRequest(
         name="ETH Limit Trader",

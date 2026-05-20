@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
 from aether_forge.runner import AgentRunner, RunnerConfig, TickResult
 from aether_forge.runtime import StepKind, StepProposal
+
+pytestmark = pytest.mark.integration
 
 
 def test_runner_executes_ticks(tmp_path: Path) -> None:
