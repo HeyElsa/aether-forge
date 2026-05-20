@@ -86,7 +86,7 @@ npm run dev   # → http://localhost:3000
 | Path | What |
 |---|---|
 | [`./mcp.md`](./mcp.md) | Standalone MCP user guide (linked from the README; kept as plain markdown for offline reading) |
-| [`./prd/`](./prd/) | Product Requirements Documents — versioned (`v0.1.0` … `v0.23.0`). The latest version in `prd/README.md` is canonical when in conflict with anything else. |
+| [`./prd/`](./prd/) | Product Requirements Documents — versioned (`v0.1.0` ... `v0.24.0`). The latest version in `prd/README.md` is canonical when in conflict with anything else. |
 | [`./plans/`](./plans/) | Design exploration, planning notes, schema design drafts. Reference material; the corresponding PRD wins on conflicts. |
 
 ## Editing rules

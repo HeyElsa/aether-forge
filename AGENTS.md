@@ -13,16 +13,22 @@ The initial wedge is crypto, but the core framework must remain general enough t
 Read these before making product, architecture, or documentation changes:
 
 1. `docs/prd/README.md`
-2. `docs/prd/aether-forge-prd-v0.15.0.md`
-3. `docs/prd/aether-forge-prd-v0.14.0.md`
-4. `docs/prd/aether-forge-prd-v0.12.0.md`
-5. `docs/prd/CHANGELOG.md`
-6. `docs/plans/2026-04-06-aether-forge-research.md`
-7. `docs/plans/2026-04-06-aether-forge-prd-autoresearch.md`
-8. `docs/plans/2026-04-06-aether-forge-prd-exact-autoresearch.md`
-9. `docs/plans/2026-04-06-aether-forge-schema-design.md`
-10. `docs/plans/2026-04-06-aether-forge-v0.6.0-implementation-plan.md`
-11. `docs/plans/2026-04-06-aether-forge-design.md`
+2. `docs/prd/aether-forge-prd-v0.24.0.md`
+3. `docs/prd/aether-forge-prd-v0.23.1.md`
+4. `docs/prd/aether-forge-prd-v0.23.0.md`
+5. `docs/prd/aether-forge-prd-v0.22.0.md`
+6. `docs/prd/aether-forge-prd-v0.21.0.md`
+7. `docs/prd/aether-forge-prd-v0.20.0.md`
+8. `docs/prd/aether-forge-prd-v0.15.0.md`
+9. `docs/prd/aether-forge-prd-v0.14.0.md`
+10. `docs/prd/aether-forge-prd-v0.12.0.md`
+11. `docs/prd/CHANGELOG.md`
+12. `docs/plans/2026-04-06-aether-forge-research.md`
+13. `docs/plans/2026-04-06-aether-forge-prd-autoresearch.md`
+14. `docs/plans/2026-04-06-aether-forge-prd-exact-autoresearch.md`
+15. `docs/plans/2026-04-06-aether-forge-schema-design.md`
+16. `docs/plans/2026-04-06-aether-forge-v0.6.0-implementation-plan.md`
+17. `docs/plans/2026-04-06-aether-forge-design.md`
 
 If the PRD and the earlier design draft differ, the versioned PRD wins.
 
@@ -101,6 +107,13 @@ Do not drift away from these without explicitly updating the PRD:
 - (v0.23.0) The TypeScript SDK's ajv instance MUST pre-register every JSON schema published under `src/aether_forge/schemas/` — runtime network fetches for `$ref` resolution are a contract violation (the SDK MUST work in air-gapped, browser, and edge runtimes alike). New schemas added to the Python side MUST also be imported and addSchema'd in `sdk-ts/src/validate/index.ts`.
 - (v0.23.0) `parsePlannerOutput` is a pure function with zero dependencies beyond the JavaScript stdlib. It MUST remain so as the SDK grows so it stays embeddable in any TS runtime. The same purity rule applies to the Python `_extract_json`.
 - (v0.23.0) `@aether-forge/sdk` v0.1.x ships ZERO runtime behavior beyond schema validation and the planner-output parser. The runtime tick loop (`AgentRunner`), policy gate (`NativePolicyGate`), memory store implementations, autoresearch loop, and signer reference implementations are explicitly Python-only until cross-language usage data justifies porting any of them. They are the highest lockstep surfaces in the framework.
+- (v0.24.0) Risky crypto tests MUST use explicit `integration`, `network`, `testnet`, and `live_capital` markers. Default contributor tests MUST NOT touch networks, testnets, or live capital.
+- (v0.24.0) Network, testnet, and live-capital tests MUST require explicit operator opt-in and credentials. Missing enablement MUST skip, not silently call external providers.
+- (v0.24.0) Runtime code MUST NOT synthesize fake live exchange fills or transaction IDs for non-dry-run live mode. Non-dry-run live execution requires an explicit submitter or project-specific exchange adapter.
+- (v0.24.0) Generated agents MUST fail closed when live exchange adapters are absent, disabled, or misconfigured.
+- (v0.24.0) Exchange-backed strategies SHOULD produce paper/live parity evidence before canary or production promotion.
+- (v0.24.0) Live-capital documentation MUST include an explicit "Do Not Go Live Until" checklist and incident response path.
+- (v0.24.0) Realistic crypto strategy examples MUST stay sandbox-first and document risks, permissions, policy limits, parity expectations, and live-readiness gates.
 
 ## 4. Documentation Rules
 
