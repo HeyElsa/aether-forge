@@ -1,5 +1,37 @@
 # PRD Changelog
 
+## v0.24.0 - 2026-05-20
+
+Battle-ready crypto readiness release. This minor release captures the product contract behind the six-part rollout for live-capital safety, exchange integration, operational readiness, and realistic strategy examples.
+
+### Risky crypto test gates
+- Added a release requirement that tests touching external services, testnets, or live capital use explicit `integration`, `network`, `testnet`, and `live_capital` markers.
+- Default contributor tests must remain offline. Network, testnet, and live-capital checks require explicit operator opt-in and credentials.
+- CI should separate offline correctness from optional network/testnet/live-capital readiness jobs.
+
+### Fail-closed security boundaries
+- x402 payment gates must structurally validate payment headers before executing paid capabilities.
+- Wrong receiver, wrong network, unsupported asset, insufficient amount, replayed nonce, and missing settlement configuration must be rejected.
+- x402 budget check, payment execution, and budget updates must be atomic under a file lock.
+- Session-key constrained signing and wallet transfer intents must reject missing or invalid required fields.
+- MCP direct tool execution must honor configured include/exclude filters.
+- External capability results must be recursively scanned for prompt-injection patterns before entering planner prompt context.
+
+### Live execution adapter contract
+- Aether Forge must not synthesize fake live exchange fills or transaction IDs in non-dry-run live mode.
+- Non-dry-run live exchange execution requires an explicit live submitter or project-specific exchange adapter.
+- Generated agents must fail closed when live adapters are absent, disabled, or misconfigured.
+
+### Paper/live parity
+- Exchange adapters should expose canonical order and account snapshot shapes.
+- Paper/live parity reports should compare identifiers, symbols, side, quantity, notional, status, fees, fills, balances, and divergence severity.
+- Exchange-backed strategy promotion should require parity evidence before canary or full live rollout.
+
+### Production docs and examples
+- The documentation site must include production readiness, incident response, stop conditions, rollback/kill-switch procedures, post-incident evidence collection, and operator approval gates for live-capital agents.
+- The docs must include an explicit "Do Not Go Live Until" checklist.
+- Realistic crypto strategy examples must stay sandbox-first and document market thesis, data dependencies, execution surfaces, policy limits, wallet/exchange permissions, parity expectations, failure modes, and live-readiness gates.
+
 ## v0.23.1 - 2026-05-19
 
 Patch release for docs and contract hardening after the v0.23.0 TypeScript SDK release.
