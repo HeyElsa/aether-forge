@@ -10,6 +10,7 @@ must be isolated per test.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,55 @@ from aether_forge import (
 )
 from aether_forge.generator import FastGenerateRequest
 from aether_forge.runtime import load_artifact_bundle
+
+LIVE_CAPITAL_ACK = "I_UNDERSTAND_THIS_CAN_MOVE_FUNDS"
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _network_enabled() -> bool:
+    return _env_truthy("AETHER_FORGE_RUN_NETWORK") or _env_truthy("RUN_NETWORK_TESTS")
+
+
+def _testnet_enabled() -> bool:
+    return _env_truthy("AETHER_FORGE_RUN_TESTNET")
+
+
+def _live_capital_enabled() -> bool:
+    return (
+        _env_truthy("AETHER_FORGE_RUN_LIVE_CAPITAL")
+        and os.environ.get("AETHER_FORGE_LIVE_CAPITAL_ACK", "") == LIVE_CAPITAL_ACK
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    del config
+    skip_network = pytest.mark.skip(
+        reason="set AETHER_FORGE_RUN_NETWORK=1 to enable external-network tests"
+    )
+    skip_testnet = pytest.mark.skip(
+        reason="set AETHER_FORGE_RUN_TESTNET=1 to enable public-testnet tests"
+    )
+    skip_live_capital = pytest.mark.skip(
+        reason=(
+            "set AETHER_FORGE_RUN_LIVE_CAPITAL=1 and "
+            f"AETHER_FORGE_LIVE_CAPITAL_ACK={LIVE_CAPITAL_ACK!r} to enable live-capital tests"
+        )
+    )
+
+    network_enabled = _network_enabled()
+    testnet_enabled = _testnet_enabled()
+    live_capital_enabled = _live_capital_enabled()
+
+    for item in items:
+        if item.get_closest_marker("live_capital") and not live_capital_enabled:
+            item.add_marker(skip_live_capital)
+        if item.get_closest_marker("testnet") and not testnet_enabled:
+            item.add_marker(skip_testnet)
+        if item.get_closest_marker("network") and not network_enabled:
+            item.add_marker(skip_network)
 
 # ---------------------------------------------------------------------------
 # Agent directory

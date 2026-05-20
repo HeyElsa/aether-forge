@@ -98,6 +98,12 @@ forge = "aether_forge.cli:main_cli"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "integration: multi-component local integration tests that do not use external network or funds",
+  "network: tests that call external internet services but do not move funds or mutate external state",
+  "testnet: tests that may use public testnet RPCs or faucet-funded testnet wallets",
+  "live_capital: manual-only tests that can move real funds, pay x402, broadcast mainnet transactions, or place real exchange orders",
+]
 
 # mypy is informational for now — public-API surface is checked but the
 # rest of the codebase has not been swept for strict typing yet. Flip

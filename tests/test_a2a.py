@@ -16,6 +16,8 @@ import pytest
 
 from aether_forge.a2a_server import A2AServer, build_agent_card
 
+pytestmark = pytest.mark.integration
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

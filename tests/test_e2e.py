@@ -10,11 +10,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from aether_forge.artifacts import validate_artifact_directory
 from aether_forge.cli import main
 from aether_forge.evals import build_promotion_evidence, create_promotion_record_artifact, evaluate_scenario_pack
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
 from aether_forge.storage import SqliteMemoryStore
+
+pytestmark = pytest.mark.integration
 
 
 def test_e2e_generate_validate_eval_promote_crypto(tmp_path: Path) -> None:
