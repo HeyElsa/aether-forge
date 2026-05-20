@@ -1095,6 +1095,7 @@ def _live_exchange_docs(title: str) -> str:
         "3. Flip `adapters.liveExchange.enabled` to `true` in `aether-forge.json`.\n"
         "4. Run the project with `--crypto-router scaffold-live`.\n"
         "5. Do not enable live execution before policy and promotion evidence are ready.\n\n"
+        "The generated runtime does not build placeholder transactions or sign synthetic order payloads. If the adapter is disabled or missing, live exchange actions fail closed.\n\n"
         "## Safety Expectations\n\n"
         "- All live actions must still pass runtime policy checks.\n"
         "- Credential handling must stay behind the framework's credential resolver.\n"
@@ -1916,7 +1917,7 @@ def _project_makefile(slug: str) -> str:
         "\t@echo '  make test         — run pytest in tests/'\n"
         "\t@echo '  make run-paper    — run continuously in paper mode (real prices, simulated orders)'\n"
         "\t@echo '  make run-sandbox  — run continuously in sandbox (mock everything)'\n"
-        "\t@echo '  make run-live     — run continuously in LIVE mode (real money — be careful!)'\n"
+        "\t@echo '  make run-live     — run continuously in LIVE mode (requires enabled live adapter)'\n"
         "\t@echo '  make doctor       — diagnostic round-trip checks'\n"
         "\t@echo '  make halt         — activate kill switch (blocks all live x402 calls)'\n"
         "\t@echo '  make resume       — clear kill switch'\n"
@@ -1935,7 +1936,7 @@ def _project_makefile(slug: str) -> str:
         "run-sandbox:\n"
         "\tforge run . --auto-approve --environment sandbox --mode simulated --interval 30\n\n"
         "run-live:\n"
-        "\t@echo '⚠  Live mode signs real transactions. Confirm by setting CONFIRM_LIVE=yes.'\n"
+        "\t@echo '⚠  Live mode requires an enabled live adapter and may submit real venue orders. Confirm by setting CONFIRM_LIVE=yes.'\n"
         "\t@[ \"$$CONFIRM_LIVE\" = \"yes\" ] || (echo 'aborted' && exit 1)\n"
         "\tforge run . --environment production --mode live --interval 30 "
         "--health-port 8080 --json-log ./logs/agent.jsonl\n\n"
@@ -2321,7 +2322,7 @@ class AgentExecutionRouter:
         if kind == "data-source":
             return self._handle_data_source(cap_id, payload, capability)
         if kind == "exchange-action":
-            return self._handle_exchange_action(cap_id, payload, capability)
+            return self._handle_exchange_action(session, cap_id, payload, capability)
         if kind == "wallet-action":
             return self._handle_wallet_action(cap_id, payload, capability)
         if kind == "tool":
@@ -2451,10 +2452,10 @@ class AgentExecutionRouter:
     # Exchange action handlers (side effects — orders, swaps)
     # ------------------------------------------------------------------
 
-    def _handle_exchange_action(self, cap_id: str, payload: dict, capability: dict) -> ExecutionResult:
-        # Live mode: route through LiveExecutor with budget caps and circuit breaker
+    def _handle_exchange_action(self, session: RuntimeSession, cap_id: str, payload: dict, capability: dict) -> ExecutionResult:
+        # Live mode: route through the project-local live exchange adapter.
         if self.mode == "live":
-            return self._handle_live_exchange_action(cap_id, payload, capability)
+            return self._handle_live_exchange_action(session, cap_id, payload, capability)
 
         # Create order (limit or market) — paper/simulated mode
         if "create" in cap_id or ("order" in cap_id and "cancel" not in cap_id and "get" not in cap_id):
@@ -2487,40 +2488,67 @@ class AgentExecutionRouter:
     # Wallet + tool handlers
     # ------------------------------------------------------------------
 
-    def _handle_live_exchange_action(self, cap_id: str, payload: dict, capability: dict) -> ExecutionResult:
-        """Live mode: route through LiveExecutor with budget caps."""
-        from aether_forge.live_execution import build_live_executor, BudgetExceededError, CircuitBreakerError
+    def _handle_live_exchange_action(self, session: RuntimeSession, cap_id: str, payload: dict, capability: dict) -> ExecutionResult:
+        """Live mode: route through the project-local live exchange adapter."""
+        from aether_forge.crypto import ManifestCredentialResolver
+        from aether_forge.scaffold import load_scaffold_live_exchange_adapter
         from pathlib import Path
 
-        # Lazily build executor (caches between ticks)
-        if not hasattr(self, "_live_executor"):
-            project_root = Path(__file__).resolve().parents[2]
-            self._live_executor = build_live_executor(
-                project_root,
-                chain="base-sepolia",  # Stage 1: testnet
-                dry_run=True,  # Stage 1: sign without broadcast
-                max_order_size_usd=1.0,
-                max_total_spent_usd=20.0,
-                max_daily_loss_usd=10.0,
+        project_root = Path(__file__).resolve().parents[2]
+        adapter = load_scaffold_live_exchange_adapter(project_root)
+        if adapter is None:
+            return ExecutionResult(
+                success=False,
+                failure_reason=(
+                    "Live exchange execution is disabled. Implement src/runtime/live_exchange.py, "
+                    "set LIVE_EXCHANGE_ENABLED=True, and enable adapters.liveExchange in aether-forge.json."
+                ),
             )
 
-        # Only handle order creation in live mode for now
+        handle_id = capability.get("credentialHandleId")
+        if not isinstance(handle_id, str):
+            return ExecutionResult(success=False, failure_reason="Live exchange capability is missing credentialHandleId")
+        try:
+            lease = ManifestCredentialResolver().resolve(
+                handle_id,
+                session.environment,
+                session.artifacts.capability_manifest,
+            )
+        except Exception as error:
+            return ExecutionResult(success=False, failure_reason=f"Live exchange credential resolution failed: {error}")
+
+        venue = capability.get("providerConstraints", {}).get("venue", capability.get("provider", "live-exchange"))
+
         if "create" in cap_id or ("order" in cap_id and "cancel" not in cap_id):
             try:
-                result = self._live_executor.place_order(
-                    side=payload.get("side", "buy"),
-                    token=payload.get("token", "ETH"),
-                    amount=float(payload.get("amount", 0.001)),
-                    limit_price=float(payload.get("limit_price", 0)),
+                token = payload.get("token") or payload.get("symbol") or capability.get("providerConstraints", {}).get("symbol", "ETH")
+                symbol = self._symbol(str(token))
+                amount = float(payload.get("amount", 0.0))
+                limit_price = float(payload.get("limit_price", payload.get("price", 0.0)))
+                requested_notional_usd = float(payload.get("requested_notional_usd", amount * limit_price))
+                result = adapter.place_order(
+                    venue=str(venue),
+                    symbol=symbol,
+                    requested_notional_usd=requested_notional_usd,
+                    side=str(payload.get("side", "buy")),
+                    credential_lease=lease,
+                    metadata={"capabilityId": cap_id, "payload": payload},
                 )
                 return ExecutionResult(success=True, output=result)
-            except (BudgetExceededError, CircuitBreakerError) as error:
-                return ExecutionResult(success=False, failure_reason=str(error))
             except Exception as error:
                 return ExecutionResult(success=False, failure_reason=f"Live execution failed: {error}")
 
-        # Other actions fall through to paper engine
-        return ExecutionResult(success=True, output={"capability": cap_id, "live_mode": True, "handled": False})
+        if "cancel" in cap_id:
+            try:
+                return ExecutionResult(success=True, output=adapter.cancel_order(
+                    venue=str(venue),
+                    order_id=str(payload.get("order_id", "")),
+                    credential_lease=lease,
+                ))
+            except Exception as error:
+                return ExecutionResult(success=False, failure_reason=f"Live cancel failed: {error}")
+
+        return ExecutionResult(success=False, failure_reason=f"Live exchange action {cap_id} is not implemented by the generated router")
 
     def _handle_wallet_action(self, cap_id: str, payload: dict, capability: dict) -> ExecutionResult:
         return ExecutionResult(success=True, output={"capability": cap_id, "wallet": True, "mock": True})

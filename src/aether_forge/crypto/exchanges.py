@@ -95,10 +95,12 @@ class InMemoryPaperExchangeAdapter:
         requested_notional_usd: float,
         side: str,
         credential_lease: CredentialLease,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         order_id = f"paper_order_{uuid4().hex}"
         self.total_notional_usd += requested_notional_usd
         self.positions[symbol] = PaperPosition(symbol=symbol, notional_usd=requested_notional_usd, side=side)
+        safe_metadata = dict(metadata or {})
         self.orders.append(
             {
                 "orderId": order_id,
@@ -107,6 +109,7 @@ class InMemoryPaperExchangeAdapter:
                 "requestedNotionalUsd": requested_notional_usd,
                 "side": side,
                 "credentialHandleId": credential_lease.handle_id,
+                "metadata": safe_metadata,
             }
         )
         return {
@@ -117,6 +120,7 @@ class InMemoryPaperExchangeAdapter:
             "requested_notional_usd": requested_notional_usd,
             "side": side,
             "paper": True,
+            "metadata": safe_metadata,
         }
 
     def get_account_snapshot(self, *, venue: str, credential_lease: CredentialLease) -> dict[str, Any]:
