@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -117,6 +118,7 @@ class X402PaymentGate:
         self.total_received_usd: float = 0.0
         self.total_payments: int = 0
         self._payment_log: list[dict[str, Any]] = []
+        self._seen_nonces: set[str] = set()
 
     def requires_payment(self, capability: str) -> bool:
         """Check if a capability requires payment."""
@@ -163,6 +165,8 @@ class X402PaymentGate:
         self,
         payment_header: str | dict[str, Any],
         capability: str,
+        *,
+        record_nonce: bool = True,
     ) -> tuple[bool, str]:
         """Verify an x402 payment header.
 
@@ -188,9 +192,15 @@ class X402PaymentGate:
             else:
                 return False, "Invalid payment header type"
 
+            if not isinstance(payment, dict):
+                return False, "Invalid payment header payload"
+
             # Check x402 version
             if payment.get("x402Version") not in (1, "1"):
                 return False, f"Unsupported x402 version: {payment.get('x402Version')}"
+
+            if payment.get("scheme") != "exact":
+                return False, f"Unsupported x402 scheme: {payment.get('scheme')}"
 
             # Check network
             if payment.get("network") != self.chain:
@@ -198,21 +208,54 @@ class X402PaymentGate:
 
             # Check pay-to address
             payload = payment.get("payload", {})
+            if not isinstance(payload, dict):
+                return False, "Missing payment payload"
             auth = payload.get("authorization", {})
-            to_addr = auth.get("to", "").lower()
-            if to_addr and to_addr != self.wallet_address.lower():
+            if not isinstance(auth, dict):
+                return False, "Missing payment authorization"
+
+            from_addr = auth.get("from")
+            if not isinstance(from_addr, str) or not _looks_like_evm_address(from_addr):
+                return False, "Missing or invalid payer address"
+
+            to_raw = auth.get("to")
+            if not isinstance(to_raw, str) or not _looks_like_evm_address(to_raw):
+                return False, "Missing or invalid pay-to address"
+            to_addr = to_raw.lower()
+            if to_addr != self.wallet_address.lower():
                 return False, f"Payment to wrong address: {to_addr} (expected {self.wallet_address})"
 
             # Check amount
             value = int(auth.get("value", "0"))
+            if value <= 0:
+                return False, f"Invalid payment amount: {value}"
             required = self.price_raw(capability)
             if value < required:
                 return False, f"Insufficient payment: {value} < {required} micro-USDC"
 
+            # Check validity window.
+            valid_after = int(auth.get("validAfter", "0"))
+            valid_before = int(auth.get("validBefore", "0"))
+            now = int(time.time())
+            if valid_after > now:
+                return False, "Payment authorization is not valid yet"
+            if valid_before <= now:
+                return False, "Payment authorization has expired"
+
+            nonce = auth.get("nonce")
+            if not isinstance(nonce, str) or not _looks_like_bytes32(nonce):
+                return False, "Missing or invalid payment nonce"
+            nonce_key = f"{self.chain}:{from_addr.lower()}:{nonce.lower()}"
+            if nonce_key in self._seen_nonces:
+                return False, "Payment authorization nonce replayed"
+
             # Check signature exists
-            if not payment.get("payload", {}).get("signature"):
+            signature = payload.get("signature")
+            if not isinstance(signature, str) or not _looks_like_signature(signature):
                 return False, "Missing payment signature"
 
+            if record_nonce:
+                self._seen_nonces.add(nonce_key)
             return True, "ok"
 
         except (json.JSONDecodeError, base64.binascii.Error) as error:
@@ -249,7 +292,7 @@ class X402PaymentGate:
         Returns (success, reason_or_tx_hash).
         """
         # Step 1: structural verification first (fast, catches obvious errors)
-        ok, reason = self.verify_payment(payment_header, capability)
+        ok, reason = self.verify_payment(payment_header, capability, record_nonce=False)
         if not ok:
             return False, reason
 
@@ -326,12 +369,7 @@ class X402PaymentGate:
 
         # Step 4: sign and send via OWS wallet
         if agent_directory is None:
-            # Can't submit without a wallet — fall back to structural-only
-            logger.warning(
-                "No agent_directory provided — cannot submit payment on-chain. "
-                "Falling back to structural verification only."
-            )
-            return True, "structural-only (no wallet for on-chain submission)"
+            return False, "agent_directory is required for on-chain settlement"
 
         try:
             from .wallet import sign_and_send
@@ -339,6 +377,10 @@ class X402PaymentGate:
 
             if result and result.get("tx_hash"):
                 tx_hash = result["tx_hash"]
+                nonce = auth.get("nonce")
+                from_addr = auth.get("from")
+                if isinstance(nonce, str) and isinstance(from_addr, str):
+                    self._seen_nonces.add(f"{self.chain}:{from_addr.lower()}:{nonce.lower()}")
                 logger.info(
                     "Payment submitted on-chain: tx=%s, from=%s, to=%s, amount=%s",
                     tx_hash, auth.get("from"), auth.get("to"), auth.get("value"),
@@ -349,8 +391,7 @@ class X402PaymentGate:
                 return False, f"Transaction submission returned no hash: {result}"
 
         except ImportError:
-            logger.warning("OWS wallet not available — falling back to structural verification")
-            return True, "structural-only (OWS SDK not installed)"
+            return False, "OWS wallet is required for on-chain settlement"
         except Exception as error:
             return False, f"On-chain submission failed: {error}"
 
@@ -446,7 +487,7 @@ def build_paid_task_handler(
 
             if payment_data:
                 # Verify the payment — two modes:
-                if verify_onchain and agent_directory:
+                if verify_onchain:
                     # Production: submit transferWithAuthorization on-chain
                     ok, result = gate.verify_and_settle_onchain(
                         payment_data, capability,
@@ -497,6 +538,23 @@ SEL_TRANSFER_WITH_AUTH = "e3ee160e"
 def _pad32(hex_str: str) -> str:
     """Left-pad a hex string to 32 bytes (64 hex chars)."""
     return hex_str.replace("0x", "").rjust(64, "0")
+
+
+def _looks_like_hex(value: str) -> bool:
+    return all(char in "0123456789abcdefABCDEF" for char in value)
+
+
+def _looks_like_evm_address(value: str) -> bool:
+    return value.startswith("0x") and len(value) == 42 and _looks_like_hex(value[2:])
+
+
+def _looks_like_bytes32(value: str) -> bool:
+    return value.startswith("0x") and len(value) == 66 and _looks_like_hex(value[2:])
+
+
+def _looks_like_signature(value: str) -> bool:
+    signature = value[2:] if value.startswith("0x") else value
+    return len(signature) >= 130 and _looks_like_hex(signature)
 
 
 def _encode_transfer_with_authorization(

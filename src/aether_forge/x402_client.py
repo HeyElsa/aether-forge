@@ -21,7 +21,8 @@ import json
 import logging
 import secrets
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -63,6 +64,37 @@ def _chain_id_for_network(network: str | None) -> int | None:
     if not network:
         return None
     return CHAIN_IDS.get(network.lower())
+
+
+def _network_key(network: str | None) -> str | None:
+    if not network:
+        return None
+    raw = network.lower()
+    if raw in CHAIN_IDS:
+        return raw
+    if raw.startswith("eip155:"):
+        try:
+            chain_id = int(raw.split(":", 1)[1])
+        except ValueError:
+            return None
+        for name, known_id in CHAIN_IDS.items():
+            if chain_id == known_id:
+                return name
+    return None
+
+
+def _network_matches(target_network: str, offered_network: str) -> bool:
+    target_key = _network_key(target_network)
+    offered_key = _network_key(offered_network)
+    return target_key is not None and offered_key is not None and target_key == offered_key
+
+
+def _looks_like_hex(value: str) -> bool:
+    return all(char in "0123456789abcdefABCDEF" for char in value)
+
+
+def _looks_like_evm_address(value: str) -> bool:
+    return value.startswith("0x") and len(value) == 42 and _looks_like_hex(value[2:])
 
 
 def _micros_to_usd(micros: int) -> float:
@@ -197,6 +229,7 @@ class X402Client:
 
         # Persistent state — survives restarts
         self._state_path = self.agent_directory / "x402_state.json"
+        self._state_lock_path = self.agent_directory / "x402_state.lock"
         self.state = self._load_state()
 
     # ------------------------------------------------------------------
@@ -266,6 +299,22 @@ class X402Client:
             self._audit("payment_parse_failed", {"url": url, "error": str(error)})
             raise X402Error(f"Could not parse 402 response: {error}") from error
 
+        # Budget check, payment execution, and state mutation are one critical
+        # section. This prevents concurrent processes from using stale budget
+        # state to overspend the same x402 session or daily cap.
+        with self._state_lock():
+            self.state = self._load_state()
+            self.state.total_calls += 1
+            return self._execute_paid_call(method, url, headers, body, requirement)
+
+    def _execute_paid_call(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        body: dict[str, Any] | None,
+        requirement: PaymentRequirement,
+    ) -> dict[str, Any]:
         # 4. Budget check
         amount_usd = requirement.amount_usd
         self._check_budget(amount_usd, requirement)
@@ -379,8 +428,7 @@ class X402Client:
 
         rpc_url = self.config.rpc_url or self.DEFAULT_RPCS.get(self.config.chain)
         if not rpc_url:
-            logger.warning("No RPC URL for chain %s, skipping balance check", self.config.chain)
-            return float("inf")
+            raise PaymentBudgetError(f"No RPC URL configured for balance check on chain {self.config.chain}")
 
         # ERC-20 balanceOf(address) — function selector 0x70a08231 + 32-byte address
         addr_no_prefix = from_address.lower().replace("0x", "")
@@ -408,8 +456,7 @@ class X402Client:
             # USDC has 6 decimals
             return raw_balance / 1_000_000
         except Exception as error:
-            logger.warning("Balance check failed for %s: %s", from_address, error)
-            return float("inf")  # Don't block call on RPC failure — only block on confirmed insufficient funds
+            raise PaymentBudgetError(f"Balance check failed for {from_address}: {error}") from error
 
     def _check_budget(self, amount_usd: float, requirement: PaymentRequirement) -> None:
         if amount_usd <= 0:
@@ -472,23 +519,60 @@ class X402Client:
         if not accepts:
             raise X402Error("No payment options in 402 response")
 
-        # Pick option matching our chain
+        # Pick option matching our chain. Do not silently fall back to another
+        # network; that could sign a valid authorization for the wrong asset.
         target_network = self.config.chain
         chosen = None
         for option in accepts:
-            net = option.get("network", "").lower()
-            if target_network in net or net in target_network or str(CHAIN_IDS.get(target_network, "")) in net:
+            if not isinstance(option, dict):
+                continue
+            net = str(option.get("network", ""))
+            if _network_matches(target_network, net):
                 chosen = option
                 break
         if chosen is None:
-            chosen = accepts[0]
+            networks = [
+                str(option.get("network", "<missing>"))
+                for option in accepts
+                if isinstance(option, dict)
+            ]
+            raise X402Error(
+                f"No payment option matched configured chain {target_network!r}; "
+                f"offered networks: {networks}"
+            )
+
+        scheme = chosen.get("scheme")
+        if scheme != "exact":
+            raise X402Error(f"Unsupported x402 payment scheme: {scheme}")
+
+        amount_raw = str(chosen.get("maxAmountRequired", chosen.get("amount", "0")))
+        try:
+            amount_int = int(amount_raw)
+        except (TypeError, ValueError) as error:
+            raise X402Error(f"Invalid payment amount: {amount_raw!r}") from error
+        if amount_int <= 0:
+            raise X402Error(f"Invalid payment amount: {amount_raw!r}")
+
+        pay_to = str(chosen.get("payTo", chosen.get("recipient", "")))
+        if not _looks_like_evm_address(pay_to):
+            raise X402Error(f"Invalid payment recipient address: {pay_to!r}")
+
+        expected_asset = USDC_CONTRACTS.get(target_network)
+        asset = str(chosen.get("asset", chosen.get("token", "")))
+        if not asset:
+            raise X402Error("Payment option missing USDC asset address")
+        if expected_asset and asset.lower() != expected_asset.lower():
+            raise X402Error(
+                f"Payment option asset {asset} does not match configured "
+                f"{target_network} USDC contract {expected_asset}"
+            )
 
         return PaymentRequirement(
-            scheme=chosen.get("scheme", "exact"),
+            scheme=scheme,
             network=chosen.get("network", target_network),
-            max_amount_required=str(chosen.get("maxAmountRequired", chosen.get("amount", "0"))),
-            pay_to=chosen.get("payTo", chosen.get("recipient", "")),
-            asset=chosen.get("asset", chosen.get("token", USDC_CONTRACTS.get(target_network, ""))),
+            max_amount_required=amount_raw,
+            pay_to=pay_to,
+            asset=asset,
             resource=chosen.get("resource", url),
             description=chosen.get("description", ""),
             extra=chosen.get("extra", {}),
@@ -703,6 +787,19 @@ class X402Client:
     # ------------------------------------------------------------------
     # Persistent state
     # ------------------------------------------------------------------
+
+    @contextmanager
+    def _state_lock(self) -> Iterator[None]:
+        """Hold an interprocess lock across budget check and payment submit."""
+        import fcntl
+
+        self._state_lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._state_lock_path.open("a+", encoding="utf8") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _load_state(self) -> X402State:
         """Load persisted state from disk, or return fresh state."""

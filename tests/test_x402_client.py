@@ -67,6 +67,19 @@ def _make_client(tmp_path: Path, **config_overrides) -> X402Client:
     return client
 
 
+def _base_payment_option(**overrides) -> dict[str, str]:
+    option = {
+        "scheme": "exact",
+        "network": "base",
+        "maxAmountRequired": "1000",
+        "payTo": "0x" + "b" * 40,
+        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "resource": "https://api.example.com/data",
+    }
+    option.update(overrides)
+    return option
+
+
 def test_simple_get_no_402(tmp_path: Path) -> None:
     client = _make_client(tmp_path)
     client._fake_responses.append({"status": 200, "headers": {}, "body": {"result": "ok"}})
@@ -148,6 +161,28 @@ def test_session_cap_blocks_repeated_payments(tmp_path: Path) -> None:
     add_402_pair()
     client.get("https://api.example.com/data")  # 0.002 spent
     add_402_pair()
+    with pytest.raises(PaymentBudgetError, match="session cap"):
+        client.get("https://api.example.com/data")
+
+
+def test_budget_check_reloads_persisted_state_before_payment(tmp_path: Path) -> None:
+    client = _make_client(tmp_path, max_session_usd=0.0015)
+    (tmp_path / "x402_state.json").write_text(
+        json.dumps({
+            "session_spent_usd": 0.001,
+            "daily_spent_usd": {},
+            "total_calls": 0,
+            "total_payments": 1,
+            "total_failures": 0,
+        }),
+        encoding="utf8",
+    )
+    client._fake_responses.append({
+        "status": 402,
+        "headers": {},
+        "body": {"accepts": [_base_payment_option(maxAmountRequired="1000")]},
+    })
+
     with pytest.raises(PaymentBudgetError, match="session cap"):
         client.get("https://api.example.com/data")
 
@@ -279,3 +314,72 @@ def test_invalid_402_no_accepts(tmp_path: Path) -> None:
     })
     with pytest.raises(X402Error, match="parse 402"):
         client.get("https://api.example.com/data")
+
+
+def test_402_rejects_unmatched_network_without_fallback(tmp_path: Path) -> None:
+    client = _make_client(tmp_path)
+    client._fake_responses.append({
+        "status": 402,
+        "headers": {},
+        "body": {
+            "accepts": [
+                _base_payment_option(
+                    network="ethereum",
+                    asset="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+                )
+            ],
+        },
+    })
+
+    with pytest.raises(X402Error, match="No payment option matched configured chain"):
+        client.get("https://api.example.com/data")
+
+
+def test_402_rejects_unsupported_scheme(tmp_path: Path) -> None:
+    client = _make_client(tmp_path)
+    client._fake_responses.append({
+        "status": 402,
+        "headers": {},
+        "body": {"accepts": [_base_payment_option(scheme="transfer")]},
+    })
+
+    with pytest.raises(X402Error, match="Unsupported x402 payment scheme"):
+        client.get("https://api.example.com/data")
+
+
+def test_402_rejects_wrong_chain_asset(tmp_path: Path) -> None:
+    client = _make_client(tmp_path)
+    client._fake_responses.append({
+        "status": 402,
+        "headers": {},
+        "body": {"accepts": [_base_payment_option(asset="0x" + "c" * 40)]},
+    })
+
+    with pytest.raises(X402Error, match="does not match configured"):
+        client.get("https://api.example.com/data")
+
+
+def test_402_rejects_invalid_payment_recipient(tmp_path: Path) -> None:
+    client = _make_client(tmp_path)
+    client._fake_responses.append({
+        "status": 402,
+        "headers": {},
+        "body": {"accepts": [_base_payment_option(payTo="0xnot-an-address")]},
+    })
+
+    with pytest.raises(X402Error, match="Invalid payment recipient"):
+        client.get("https://api.example.com/data")
+
+
+def test_402_accepts_caip2_chain_alias(tmp_path: Path) -> None:
+    client = _make_client(tmp_path)
+    req = client._parse_402_response(
+        {
+            "status": 402,
+            "headers": {},
+            "body": {"accepts": [_base_payment_option(network="eip155:8453")]},
+        },
+        "https://api.example.com/data",
+    )
+
+    assert req.network == "eip155:8453"
