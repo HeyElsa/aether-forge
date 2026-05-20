@@ -5,6 +5,7 @@ export default {
   "custom-agent": "Build a Custom Agent",
   "strategy-writing": "Writing Strategies",
   "production-readiness": "Production Readiness",
+  "incident-response": "Incident Response",
   "multi-tenant-integration": "Multi-Tenant Integration",
   upgrading: "Upgrading",
   "multi-agent": "Multi-Agent Teams",

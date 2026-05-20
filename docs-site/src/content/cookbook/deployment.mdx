@@ -196,6 +196,8 @@ For the full promotion, security, memory, budget, MCP, and incident checklist, s
 
 Before going live:
 
+- [ ] [Production Readiness](/docs/guides/production-readiness) "Do Not Go Live Until" gate is complete
+- [ ] [Incident Response](/docs/guides/incident-response) owner and backup are assigned
 - [ ] `forge security-check . --harden` passes
 - [ ] `OWS_API_KEY` and LLM API keys in secret manager (not env files)
 - [ ] `x402_budget` caps set conservatively
