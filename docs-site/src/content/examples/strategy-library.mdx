@@ -1,0 +1,73 @@
+# Crypto Strategy Library
+
+These are realistic strategy briefs you can use as `--strategy-file` inputs or as design references when writing your own artifacts. They are not financial advice and they are not live-ready by themselves.
+
+Each strategy includes the operational pieces an Aether Forge agent should declare before touching capital:
+
+- mission and non-goals,
+- asset and venue universe,
+- required data sources,
+- entry, exit, or rebalance rules,
+- policy defaults,
+- evaluation scenarios,
+- do-not-go-live gates.
+
+## Available Strategies
+
+| Strategy | Best for | File |
+|---|---|---|
+| BTC perp funding arbitrage | Delta-neutral spot/perp carry with partial-fill handling | [`examples/strategies/btc-funding-arbitrage.md`](https://github.com/HeyElsa/aether-forge/blob/main/examples/strategies/btc-funding-arbitrage.md) |
+| Stablecoin treasury rebalancer | Conservative USDC/USDT/DAI allocation and depeg response | [`examples/strategies/stablecoin-treasury-rebalancer.md`](https://github.com/HeyElsa/aether-forge/blob/main/examples/strategies/stablecoin-treasury-rebalancer.md) |
+| Inventory-skew market maker | Two-sided ETH/USDC quoting with inventory controls | [`examples/strategies/inventory-skew-market-maker.md`](https://github.com/HeyElsa/aether-forge/blob/main/examples/strategies/inventory-skew-market-maker.md) |
+| Personal ETH DCA | Simple scheduled accumulation with gas checks | [`examples/strategies/dca-eth.md`](https://github.com/HeyElsa/aether-forge/blob/main/examples/strategies/dca-eth.md) |
+| DeFi yield optimizer | Whitelisted supply-only yield allocation | [`examples/strategies/yield-optimizer.md`](https://github.com/HeyElsa/aether-forge/blob/main/examples/strategies/yield-optimizer.md) |
+| Multi-agent trading team | A2A oracle, risk engine, and trader coordination | [`examples/strategies/multi-agent-team.md`](https://github.com/HeyElsa/aether-forge/blob/main/examples/strategies/multi-agent-team.md) |
+
+## Generate from a Strategy
+
+```bash
+forge generate-fast \
+  --name "BTC Funding Arb" \
+  --idea "delta-neutral BTC spot/perp funding carry with partial-fill handling" \
+  --strategy-file examples/strategies/btc-funding-arbitrage.md \
+  --output ./btc-funding-arb \
+  --planner-mode anthropic \
+  --planner-model claude-sonnet-4-5 \
+  --planner-api-key-env ANTHROPIC_API_KEY
+```
+
+Then inspect and tighten:
+
+```bash
+forge validate ./btc-funding-arb
+forge eval-pack ./btc-funding-arb
+forge run ./btc-funding-arb --environment sandbox --mode paper --auto-approve
+```
+
+## How to Turn a Brief into a Production Candidate
+
+1. Translate every rule into typed artifacts: capability manifest, policy bundle, scenario pack, and promotion record.
+2. Add scenarios for happy path, stale data, exposure breach, partial execution, and incident response.
+3. Prove paper/live parity for the live adapter output shape before enabling live mode.
+4. Run canary-live with lower caps than production.
+5. Do not increase caps until replay evidence shows the agent obeys policy under realistic failures.
+
+## Minimum Scenario Set
+
+Every crypto strategy should include at least:
+
+| Scenario | Purpose |
+|---|---|
+| Baseline opportunity | The agent acts when all inputs are fresh and inside policy |
+| No-op condition | The agent correctly does nothing when edge is too small |
+| Exposure breach | Policy denies over-sized action |
+| Stale data | Runtime holds before side effects |
+| Venue/API failure | Agent avoids duplicate or partial side effects |
+| Incident drill | Halt/resume and replay evidence are preserved |
+
+## Related
+
+- [Delta-Neutral BTC Trader](/docs/examples/delta-neutral-btc)
+- [Writing Strategies](/docs/guides/strategy-writing)
+- [Production Readiness](/docs/guides/production-readiness)
+- [Incident Response](/docs/guides/incident-response)
