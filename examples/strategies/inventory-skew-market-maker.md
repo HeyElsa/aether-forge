@@ -79,4 +79,3 @@ inventory is overweight USDC, lower ask size and make bid more aggressive.
 - Paper/live parity tests cover order status and account snapshots.
 - The operator has tested a halt while quotes are open.
 - The strategy has a maximum-loss and maximum-inventory incident rule.
-

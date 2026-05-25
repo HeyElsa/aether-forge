@@ -82,4 +82,3 @@ Rebalance only when:
 - Stablecoin depeg alerts reach the operator.
 - The agent can prove daily volume caps from replay evidence.
 - The operator has a manual depeg playbook.
-

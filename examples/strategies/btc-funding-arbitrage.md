@@ -87,4 +87,3 @@ Unwind both legs when any condition is true:
 - The incident runbook includes partial-fill handling.
 - The operator has tested `forge halt .` while an order is open.
 - Venue API keys are scoped to trade only the intended market.
-
