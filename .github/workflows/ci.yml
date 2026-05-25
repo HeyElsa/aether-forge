@@ -5,9 +5,24 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_testnet:
+        description: "Run public testnet smoke tests"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      live_capital_ack:
+        description: "Type I_UNDERSTAND_THIS_CAN_MOVE_FUNDS to run live-capital canary"
+        required: false
+        default: ""
+        type: string
+  schedule:
+    - cron: "17 3 * * *"
 
 jobs:
-  test:
+  python-offline:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -31,11 +46,132 @@ jobs:
         continue-on-error: true
         run: mypy
 
-      - name: Test
-        run: pytest tests/ -x --tb=short
+      - name: Test offline suite
+        run: pytest tests/ -x --tb=short -m "not network and not testnet and not live_capital"
 
       - name: Validate example agent
         run: forge validate examples/delta-neutral-btc/
+
+  python-core-minimal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install core plus contributor tooling
+        run: pip install -e '.[dev]'
+
+      - name: Core runtime smoke
+        run: |
+          pytest \
+            tests/test_doctor.py \
+            tests/test_validate.py \
+            tests/test_generator.py \
+            tests/test_docs_examples.py \
+            -q -m "not network and not testnet and not live_capital"
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package metadata
+        run: twine check dist/*
+
+  network-smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e '.[all,dev]'
+
+      - name: Run external-network smoke tests
+        env:
+          AETHER_FORGE_RUN_NETWORK: "1"
+        run: pytest tests/ -x --tb=short -m "network and not testnet and not live_capital"
+
+  testnet-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_testnet == 'true'
+    runs-on: ubuntu-latest
+    environment: testnet
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e '.[all,dev]'
+
+      - name: Run public-testnet smoke tests
+        env:
+          AETHER_FORGE_RUN_NETWORK: "1"
+          AETHER_FORGE_RUN_TESTNET: "1"
+        run: pytest tests/ -x --tb=short -m "testnet and not live_capital"
+
+  live-capital-canary:
+    if: github.event_name == 'workflow_dispatch' && inputs.live_capital_ack == 'I_UNDERSTAND_THIS_CAN_MOVE_FUNDS'
+    runs-on: ubuntu-latest
+    environment: live-capital
+    concurrency:
+      group: live-capital-canary
+      cancel-in-progress: false
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e '.[all,dev]'
+
+      - name: Run live-capital canary tests
+        env:
+          AETHER_FORGE_RUN_NETWORK: "1"
+          AETHER_FORGE_RUN_TESTNET: "1"
+          AETHER_FORGE_RUN_LIVE_CAPITAL: "1"
+          AETHER_FORGE_LIVE_CAPITAL_ACK: ${{ inputs.live_capital_ack }}
+        run: pytest tests/ -x --tb=short -m "live_capital"
+
+      - name: Upload live-capital audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-capital-audit
+          path: |
+            **/x402_audit.jsonl
+            **/x402_state.json
+            **/audit.jsonl
+            **/replays/*.json
+          if-no-files-found: ignore
 
   docs:
     runs-on: ubuntu-latest

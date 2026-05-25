@@ -15,6 +15,7 @@ import pytest
 from aether_forge import __version__
 from aether_forge.data_layer import DataRouter, McpDataSource, build_mcp_source
 from aether_forge.mcp_client import (
+    McpError,
     McpHttpClient,
     McpProtocolError,
     McpServerConfig,
@@ -204,6 +205,30 @@ def test_stdio_client_tools_filter_include() -> None:
     tools = client.list_tools()
 
     assert [t["name"] for t in tools] == ["read_file"]
+
+
+def test_stdio_client_call_tool_honors_exclude_filter_before_rpc() -> None:
+    config = McpServerConfig(
+        name="fake",
+        command="/bin/echo",
+        tools_exclude=["delete_file"],
+    )
+    client = McpStdioClient(config)
+
+    with pytest.raises(McpError, match="blocked by tools.exclude"):
+        client.call_tool("delete_file", {"path": "/tmp/important"})
+
+
+def test_http_client_call_tool_honors_include_filter_before_rpc() -> None:
+    config = McpServerConfig(
+        name="remote",
+        url="https://mcp.example.com/mcp",
+        tools_include=["read_file"],
+    )
+    client = McpHttpClient(config, request_fn=lambda *args: pytest.fail("should not call RPC"))
+
+    with pytest.raises(McpError, match="not allowed by tools.include"):
+        client.call_tool("write_file", {"path": "/tmp/out"})
 
 
 # ---------------------------------------------------------------------------

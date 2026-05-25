@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
@@ -20,6 +21,14 @@ _DEFAULT_MEMORY_SENSITIVITY_DENIED: dict[str, set[str]] = {
     "canary-live": {"restricted"},
     "production": {"confidential", "restricted"},
 }
+
+
+def _is_finite_number(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
 
 
 @dataclass(slots=True)
@@ -95,9 +104,9 @@ class NativePolicyGate:
         handle = None
         if handle_id is not None:
             for candidate in credential_handles:
-              if candidate.get("handleId") == handle_id:
-                  handle = candidate
-                  break
+                if candidate.get("handleId") == handle_id:
+                    handle = candidate
+                    break
             if handle is None:
                 reasons.append("credential-handle-missing")
                 rule_matches.append("credential.handle.existence")
@@ -145,24 +154,33 @@ class NativePolicyGate:
 
         wallet_action = action_payload.get("wallet_action")
         wallet_chain = action_payload.get("chain") or provider_constraints.get("chain")
-        if kind == "wallet-action" and self.wallet_allowed_chains and isinstance(wallet_chain, str):
-            if wallet_chain not in self.wallet_allowed_chains:
+        if kind == "wallet-action" and self.wallet_allowed_chains:
+            if not isinstance(wallet_chain, str) or not wallet_chain:
+                reasons.append("wallet-chain-missing")
+                rule_matches.append("wallet.allowed-chains")
+                disposition = "deny"
+                severity = "error"
+            elif wallet_chain not in self.wallet_allowed_chains:
                 reasons.append("wallet-chain-not-allowed")
                 rule_matches.append("wallet.allowed-chains")
                 disposition = "deny"
                 severity = "error"
 
         wallet_amount = action_payload.get("amount")
-        if (
-            kind == "wallet-action"
-            and isinstance(wallet_amount, (int, float))
-            and self.max_wallet_transfer_amount is not None
-            and wallet_amount > self.max_wallet_transfer_amount
-        ):
-            reasons.append("wallet-transfer-limit")
-            rule_matches.append("wallet.max-transfer-amount")
-            disposition = "hold"
-            severity = "error"
+        if kind == "wallet-action" and (wallet_amount is not None or wallet_action == "send-transaction"):
+            if not _is_finite_number(wallet_amount) or float(wallet_amount) <= 0:
+                reasons.append("wallet-amount-invalid")
+                rule_matches.append("wallet.amount")
+                disposition = "deny"
+                severity = "error"
+            elif (
+                self.max_wallet_transfer_amount is not None
+                and float(wallet_amount) > self.max_wallet_transfer_amount
+            ):
+                reasons.append("wallet-transfer-limit")
+                rule_matches.append("wallet.max-transfer-amount")
+                disposition = "hold"
+                severity = "error"
 
         if (
             kind == "wallet-action"

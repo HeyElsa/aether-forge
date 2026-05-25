@@ -12,6 +12,23 @@ This guide takes a generated Aether Forge agent from local validation to a produ
 - Persistent storage for `memory.db`, `replays/`, `logs/`, and wallet state.
 - An operator who can approve promotion and respond to incidents.
 
+## Do Not Go Live Until
+
+Do not run a crypto agent with `--environment production --mode live` until every item in this gate is true:
+
+- [ ] `deploymentProfile` is `production` and the planner block is explicit, not heuristic or autodetected.
+- [ ] `forge config-validate ./aether-forge.json`, `forge doctor`, `forge validate .`, and `forge eval-pack . --target production` all pass from the deployed agent directory.
+- [ ] The promotion record references the exact scenario results, policy bundle, artifact set, and replay evidence used for approval.
+- [ ] The live exchange adapter is project-owned, explicitly enabled, and tested against the same canonical output shape as the paper adapter.
+- [ ] Wallet session keys are scoped by chain, contract, spend, and expiry; missing chain information fails closed.
+- [ ] x402 and agent-to-agent payment budgets are persisted, capped, and share one lock file across every process that can spend.
+- [ ] MCP servers have reviewed `tools.include` / `tools.exclude` filters and do not inherit the full parent environment.
+- [ ] Prompt-injection scanning, `/ready`, `/metrics`, structured JSON logs, and replay persistence are enabled.
+- [ ] `forge halt . --reason "readiness drill"` and `forge resume .` were tested in the deployed environment.
+- [ ] An incident owner, backup owner, severity policy, and resume approval path are documented.
+
+If any item is false, stay in `paper`, `staging`, or `canary-live` with lower caps.
+
 ## 1. Pin the Deployment Profile and Planner
 
 Generate new agents with an explicit planner and profile:
@@ -189,6 +206,64 @@ forge resume .
 
 The halt file is checked before capability execution and blocks live x402 calls, wallet operations, and MCP tool calls.
 
+## 9. Production Launch Runbook
+
+Use a narrow canary before broad production:
+
+```bash
+forge run . \
+  --environment production \
+  --mode live \
+  --max-ticks 1 \
+  --memory-db ./memory.db \
+  --replay-dir ./replays \
+  --json-log ./logs/agent.jsonl \
+  --health-port 8080
+```
+
+Review the replay and venue-side records before increasing cadence:
+
+```bash
+forge replays . --limit 3
+forge replay-show ./replays/<latest>.json
+```
+
+Only then move to the normal interval:
+
+```bash
+forge run . \
+  --environment production \
+  --mode live \
+  --interval 30 \
+  --memory-db ./memory.db \
+  --replay-dir ./replays \
+  --json-log ./logs/agent.jsonl \
+  --health-port 8080
+```
+
+Keep first-day caps lower than steady-state caps. Increase limits only after replay review and explicit operator approval.
+
+## 10. Incident Response Drill
+
+Before production, run the incident drill exactly once in staging:
+
+```bash
+forge halt . --reason "staging incident drill"
+curl -fsS http://localhost:8080/ready || true
+forge replays . --limit 5
+forge resume .
+```
+
+Confirm:
+
+- `/ready` reports the halt,
+- no capability execution happens while halted,
+- logs and replays are preserved,
+- the assigned operator can resume intentionally,
+- the incident note template is stored where the on-call operator can find it.
+
+For the full runbook, see [Incident Response](/docs/guides/incident-response).
+
 ## Production Checklist
 
 - [ ] `deploymentProfile` is `production`.
@@ -207,10 +282,12 @@ The halt file is checked before capability execution and blocks live x402 calls,
 - [ ] Prompt injection scanning is enabled in canary and production.
 - [ ] Health endpoint, metrics, and structured logs are wired to monitoring.
 - [ ] `forge halt` and `forge resume` have been tested in the deployed environment.
+- [ ] The [incident response runbook](/docs/guides/incident-response) has an assigned owner and backup.
 
 ## Related
 
 - [Deploy to Production](/docs/cookbook/deployment)
+- [Incident Response](/docs/guides/incident-response)
 - [Security](/docs/features/security)
 - [MCP Integration](/docs/features/mcp-integration)
 - [Memory Architecture](/docs/features/memory)

@@ -438,17 +438,29 @@ def test_x402_client_raises_payment_signing_error_when_refused(tmp_path: Path) -
 # X402PaymentGate.verify_and_settle_onchain(allowed_payers=...)
 # ---------------------------------------------------------------------------
 
+PAYER_A = "0x" + "a" * 40
+PAYER_B = "0x" + "b" * 40
+PAYEE = "0x" + "c" * 40
 
-def _build_payment_header(*, from_addr: str = "0xPayer", to_addr: str, value: int = 1000) -> str:
+
+def _build_payment_header(
+    *,
+    from_addr: str = PAYER_A,
+    to_addr: str = PAYEE,
+    value: int = 1000,
+    nonce: str = "0x" + "0" * 63 + "1",
+    include_to: bool = True,
+) -> str:
     """Build a base64-encoded x402 payment header for testing."""
     auth = {
         "from": from_addr,
-        "to": to_addr,
         "value": str(value),
         "validAfter": "0",
         "validBefore": "9999999999",
-        "nonce": "0x" + "0" * 64,
+        "nonce": nonce,
     }
+    if include_to:
+        auth["to"] = to_addr
     payload = {
         "x402Version": 1,
         "scheme": "exact",
@@ -463,7 +475,7 @@ def _build_payment_header(*, from_addr: str = "0xPayer", to_addr: str, value: in
 
 def _build_gate() -> X402PaymentGate:
     return X402PaymentGate(
-        "0xPayee",
+        PAYEE,
         prices={"cap-test": 0.0005},  # 500 micro-USDC
         chain="base",
     )
@@ -471,11 +483,11 @@ def _build_gate() -> X402PaymentGate:
 
 def test_verify_and_settle_rejects_payer_outside_allowlist(tmp_path: Path) -> None:
     gate = _build_gate()
-    header = _build_payment_header(from_addr="0xRandom", to_addr="0xPayee")
+    header = _build_payment_header(from_addr=PAYER_B, to_addr=PAYEE)
     ok, reason = gate.verify_and_settle_onchain(
         header,
         capability="cap-test",
-        allowed_payers={"0xKnownAllowed"},
+        allowed_payers={PAYER_A},
     )
     assert not ok
     assert "not in allowed_payers" in reason
@@ -484,11 +496,12 @@ def test_verify_and_settle_rejects_payer_outside_allowlist(tmp_path: Path) -> No
 def test_verify_and_settle_accepts_payer_inside_allowlist_case_insensitive(tmp_path: Path) -> None:
     """Address comparison must be case-insensitive (EIP-55 vs lowercase)."""
     gate = _build_gate()
-    header = _build_payment_header(from_addr="0xAaBbCc", to_addr="0xPayee")
+    mixed_case_payer = "0x" + "Aa" * 20
+    header = _build_payment_header(from_addr=mixed_case_payer, to_addr=PAYEE)
     ok, reason = gate.verify_and_settle_onchain(
         header,
         capability="cap-test",
-        allowed_payers={"0xAABBCC"},
+        allowed_payers={mixed_case_payer.lower()},
     )
     # Structural verify passes (correct payee, sufficient value, network).
     # On-chain submit will then fail because we don't have a real OWS wallet
@@ -508,3 +521,38 @@ def test_verify_and_settle_returns_structural_error_before_allowlist(tmp_path: P
     )
     assert not ok
     assert "Failed to decode" in reason or "verification error" in reason
+
+
+def test_verify_payment_rejects_missing_pay_to_address() -> None:
+    gate = _build_gate()
+    header = _build_payment_header(include_to=False)
+
+    ok, reason = gate.verify_payment(header, capability="cap-test")
+
+    assert not ok
+    assert "pay-to address" in reason
+
+
+def test_verify_payment_rejects_replayed_nonce() -> None:
+    gate = _build_gate()
+    header = _build_payment_header(nonce="0x" + "1" * 64)
+
+    ok, reason = gate.verify_payment(header, capability="cap-test")
+    assert ok, reason
+
+    replay_ok, replay_reason = gate.verify_payment(header, capability="cap-test")
+    assert not replay_ok
+    assert "nonce replayed" in replay_reason
+
+
+def test_verify_and_settle_requires_agent_directory_for_onchain_mode() -> None:
+    gate = _build_gate()
+    header = _build_payment_header(nonce="0x" + "2" * 64)
+
+    ok, reason = gate.verify_and_settle_onchain(header, capability="cap-test")
+
+    assert not ok
+    assert "agent_directory is required" in reason
+
+    structural_ok, structural_reason = gate.verify_payment(header, capability="cap-test")
+    assert structural_ok, structural_reason

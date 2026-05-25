@@ -1,20 +1,16 @@
-"""Live execution layer with budget caps, circuit breaker, and audit log.
+"""Live execution guardrails with budget caps, circuit breaker, and audit log.
 
-Wraps OWS sign_and_send and Elsa x402 calls with hard safety rails:
-- Budget cap rejects orders above limit BEFORE signing
-- Circuit breaker auto-stops on N consecutive failures
-- Append-only audit log of every signed payload
-- Daily loss limit
-- Per-tx and per-day spending caps
-
-This module is framework-level. The generated scaffold's router imports it
-and uses it when ``mode=live``. Stage 1 of the production rollout plan.
+This module deliberately does not fabricate exchange transactions. Live order
+submission must be wired through an explicit venue adapter or submitter. The
+guardrail layer only validates budgets, records audit evidence, and delegates
+to that caller-owned live backend.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -93,16 +89,19 @@ class BudgetExceededError(RuntimeError):
     """Raised when an order would exceed configured budget caps."""
 
 
+class LiveExecutionNotConfiguredError(RuntimeError):
+    """Raised when live mode is requested without an explicit venue backend."""
+
+
 class LiveExecutor:
-    """Hard-rails wrapper for OWS signing and x402 payments.
+    """Hard-rails wrapper for caller-owned live order submission.
 
     Every action passes through:
     1. Circuit breaker check
     2. Budget cap check
     3. Audit log entry
-    4. OWS signing
-    5. Broadcast (or skip if dry_run)
-    6. Result audit
+    4. Explicit submitter call (or validation-only dry run)
+    5. Result audit
     """
 
     def __init__(
@@ -110,18 +109,14 @@ class LiveExecutor:
         config: LiveExecutionConfig,
         *,
         agent_directory: Path,
-        sign_and_send_fn: Callable | None = None,
-        sign_message_fn: Callable | None = None,
-        http_request_fn: Callable | None = None,
+        submit_order_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         self.config = config
         self.agent_directory = Path(agent_directory)
         self.state = LiveExecutionState()
 
         # Injectable for testing
-        self._sign_and_send = sign_and_send_fn
-        self._sign_message = sign_message_fn
-        self._http_request = http_request_fn
+        self._submit_order = submit_order_fn
 
         # Audit log location
         if config.audit_log_path:
@@ -148,8 +143,9 @@ class LiveExecutor:
     ) -> dict[str, Any]:
         """Place a limit order with full safety checks.
 
-        Flow: circuit check → budget check → audit → sign → broadcast → audit.
+        Flow: circuit check → budget check → audit → explicit submitter → audit.
         """
+        self._validate_order(side=side, token=token, amount=amount, limit_price=limit_price)
         notional = amount * limit_price
 
         # 1. Circuit breaker
@@ -161,7 +157,7 @@ class LiveExecutor:
         # 3. Pre-sign audit
         order_payload = {
             "side": side,
-            "token": token,
+            "token": token.upper(),
             "amount": amount,
             "limit_price": limit_price,
             "notional_usd": round(notional, 2),
@@ -170,44 +166,40 @@ class LiveExecutor:
         }
         self._audit("order_attempted", order_payload)
 
-        # 4. Build the transaction
-        # In real Elsa: this would call elsa.create_limit_order which returns tx_hex
-        # For Stage 1 we simulate the tx_hex but validate the full sign path
-        tx_hex = self._build_order_tx(order_payload)
-
-        # 5. Sign and (optionally) broadcast
+        # 4. Validate-only dry run, or delegate to a caller-owned live backend.
         try:
             if self.config.dry_run:
-                # Sign only — verify the path works without spending
-                from .wallet import sign_message
-                sig_result = sign_message(self.agent_directory, self._chain_for_signing(), json.dumps(order_payload))
                 result = {
-                    "status": "signed_dry_run",
-                    "signature": sig_result.get("signature", "")[:32] + "..." if sig_result.get("signature") else "",
-                    "tx_hex": tx_hex,
-                    "would_broadcast_to": self.config.rpc_url,
+                    "status": "validated_dry_run",
+                    "would_submit": False,
+                    "requires_live_submitter": True,
                     **order_payload,
                 }
             else:
-                # Real broadcast
-                from .wallet import sign_and_send
-                tx_result = sign_and_send(
-                    self.agent_directory,
-                    self._chain_for_signing(),
-                    tx_hex,
-                    rpc_url=self.config.rpc_url,
-                )
+                if self._submit_order is None:
+                    raise LiveExecutionNotConfiguredError(
+                        "Live execution requires an explicit submit_order_fn or live exchange adapter. "
+                        "Aether Forge will not build or broadcast placeholder transactions."
+                    )
+                submit_result = self._submit_order(dict(order_payload))
+                if not isinstance(submit_result, dict):
+                    raise LiveExecutionNotConfiguredError("Live submitter returned a non-dict result")
+                if not any(submit_result.get(key) for key in ("order_id", "venue_order_id", "tx_hash")):
+                    raise LiveExecutionNotConfiguredError(
+                        "Live submitter must return order_id, venue_order_id, or tx_hash"
+                    )
                 result = {
-                    "status": "broadcast",
-                    "tx_hash": tx_result.get("tx_hash", ""),
+                    "status": "submitted",
+                    **submit_result,
                     **order_payload,
                 }
 
-            # 6. Success audit
+            # 5. Success audit
             self._audit("order_placed", result)
             self.state.consecutive_failures = 0
-            self.state.total_spent_usd += notional
-            self.state.open_order_count += 1
+            if not self.config.dry_run:
+                self.state.total_spent_usd += notional
+                self.state.open_order_count += 1
             self.state.transaction_count += 1
             return result
 
@@ -283,6 +275,16 @@ class LiveExecutor:
                 f"Open orders {self.state.open_order_count} >= cap {self.config.max_open_orders}"
             )
 
+    def _validate_order(self, *, side: str, token: str, amount: float, limit_price: float) -> None:
+        if side not in {"buy", "sell"}:
+            raise ValueError(f"Unsupported order side: {side}")
+        if not token or not isinstance(token, str):
+            raise ValueError("Order token must be a non-empty string")
+        if not math.isfinite(amount) or amount <= 0:
+            raise ValueError(f"Order amount must be positive and finite: {amount}")
+        if not math.isfinite(limit_price) or limit_price <= 0:
+            raise ValueError(f"Limit price must be positive and finite: {limit_price}")
+
     # ------------------------------------------------------------------
     # Audit log (append-only JSONL)
     # ------------------------------------------------------------------
@@ -320,24 +322,6 @@ class LiveExecutor:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _chain_for_signing(self) -> str:
-        """Convert config chain to OWS chain name."""
-        # OWS uses 'ethereum' for EVM chains; the actual chain ID comes from RPC
-        if "sepolia" in self.config.chain or "ethereum" in self.config.chain or "base" in self.config.chain:
-            return "ethereum"
-        return self.config.chain
-
-    def _build_order_tx(self, order: dict[str, Any]) -> str:
-        """Build transaction hex for an order.
-
-        Stage 1: returns a placeholder hex. Stage 2 will build real
-        Elsa-formatted transactions or call create_limit_order endpoint.
-        """
-        # Encode order as a simple hex blob for now
-        order_bytes = json.dumps(order, sort_keys=True).encode("utf8")
-        return "0x" + order_bytes.hex()
-
-
 # ---------------------------------------------------------------------------
 # Factory for scaffold use
 # ---------------------------------------------------------------------------
@@ -350,8 +334,9 @@ def build_live_executor(
     max_order_size_usd: float = 1.0,
     max_total_spent_usd: float = 20.0,
     max_daily_loss_usd: float = 10.0,
+    submit_order_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> LiveExecutor:
-    """Build a live executor with safe defaults for Stage 1 testing."""
+    """Build a live executor with safe defaults."""
     config = LiveExecutionConfig(
         max_order_size_usd=max_order_size_usd,
         max_total_spent_usd=max_total_spent_usd,
@@ -360,4 +345,4 @@ def build_live_executor(
         chain=chain,
         dry_run=dry_run,
     )
-    return LiveExecutor(config, agent_directory=agent_directory)
+    return LiveExecutor(config, agent_directory=agent_directory, submit_order_fn=submit_order_fn)

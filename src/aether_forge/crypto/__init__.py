@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 from .credentials import CredentialResolver, ManifestCredentialResolver
-from .exchanges import DisabledLiveExchangeAdapter, InMemoryPaperExchangeAdapter, LiveExchangeAdapter
+from .exchanges import (
+    DisabledLiveExchangeAdapter,
+    InMemoryPaperExchangeAdapter,
+    LiveExchangeAdapter,
+    canonical_account_snapshot,
+    canonical_order_result,
+)
 from .market_data import BinancePublicMarketDataBackend
+from .parity import ParityReport, compare_account_snapshot_shape, compare_order_result_shape
 from .routers import (
     AuthenticatedPaperTradingCryptoExecutionRouter,
     MockCryptoExecutionRouter,
@@ -35,6 +42,11 @@ __all__ = [
     "LiveExchangeAdapter",
     "DisabledLiveExchangeAdapter",
     "InMemoryPaperExchangeAdapter",
+    "canonical_order_result",
+    "canonical_account_snapshot",
+    "ParityReport",
+    "compare_order_result_shape",
+    "compare_account_snapshot_shape",
     "OWSBindings",
     "InMemorySimWalletAdapter",
     "OpenWalletStandardAdapter",

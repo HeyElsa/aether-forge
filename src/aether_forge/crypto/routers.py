@@ -6,7 +6,13 @@ from typing import Any
 
 from ..runtime import ExecutionResult, RuntimeSession, StepProposal
 from .credentials import CredentialResolver, ManifestCredentialResolver
-from .exchanges import DisabledLiveExchangeAdapter, InMemoryPaperExchangeAdapter, LiveExchangeAdapter
+from .exchanges import (
+    DisabledLiveExchangeAdapter,
+    InMemoryPaperExchangeAdapter,
+    LiveExchangeAdapter,
+    canonical_account_snapshot,
+    canonical_order_result,
+)
 from .market_data import BinancePublicMarketDataBackend
 from .types import RequestFn
 from .wallets import InMemorySimWalletAdapter, OpenWalletStandardAdapter
@@ -159,26 +165,43 @@ class AuthenticatedPaperTradingCryptoExecutionRouter:
             execution_mode = str(proposal.payload.get("execution_mode", capability.get("providerConstraints", {}).get("executionMode", "paper")))
 
             if execution_mode == "live":
-                return ExecutionResult(
-                    success=True,
-                    output=self.live_exchange_adapter.place_order(
-                        venue=str(venue),
-                        symbol=symbol,
-                        requested_notional_usd=requested_notional_usd,
-                        side=side,
-                        credential_lease=lease,
-                        metadata={"capabilityId": capability.get("capabilityId")},
-                    ),
-                )
-
-            return ExecutionResult(
-                success=True,
-                output=self.paper_exchange_adapter.place_order(
+                raw_output = self.live_exchange_adapter.place_order(
                     venue=str(venue),
                     symbol=symbol,
                     requested_notional_usd=requested_notional_usd,
                     side=side,
                     credential_lease=lease,
+                    metadata={"capabilityId": capability.get("capabilityId")},
+                )
+                return ExecutionResult(
+                    success=True,
+                    output=canonical_order_result(
+                        raw_output,
+                        execution_mode="live",
+                        venue=str(venue),
+                        symbol=symbol,
+                        requested_notional_usd=requested_notional_usd,
+                        side=side,
+                    ),
+                )
+
+            raw_output = self.paper_exchange_adapter.place_order(
+                venue=str(venue),
+                symbol=symbol,
+                requested_notional_usd=requested_notional_usd,
+                side=side,
+                credential_lease=lease,
+                metadata={"capabilityId": capability.get("capabilityId")},
+            )
+            return ExecutionResult(
+                success=True,
+                output=canonical_order_result(
+                    raw_output,
+                    execution_mode="paper",
+                    venue=str(venue),
+                    symbol=symbol,
+                    requested_notional_usd=requested_notional_usd,
+                    side=side,
                 ),
             )
 
@@ -188,19 +211,29 @@ class AuthenticatedPaperTradingCryptoExecutionRouter:
             execution_mode = str(proposal.payload.get("execution_mode", capability.get("providerConstraints", {}).get("executionMode", "paper")))
 
             if execution_mode == "live":
+                raw_output = self.live_exchange_adapter.get_account_snapshot(
+                    venue=str(venue),
+                    credential_lease=lease,
+                )
                 return ExecutionResult(
                     success=True,
-                    output=self.live_exchange_adapter.get_account_snapshot(
+                    output=canonical_account_snapshot(
+                        raw_output,
+                        execution_mode="live",
                         venue=str(venue),
-                        credential_lease=lease,
                     ),
                 )
 
+            raw_output = self.paper_exchange_adapter.get_account_snapshot(
+                venue=str(venue),
+                credential_lease=lease,
+            )
             return ExecutionResult(
                 success=True,
-                output=self.paper_exchange_adapter.get_account_snapshot(
+                output=canonical_account_snapshot(
+                    raw_output,
+                    execution_mode="paper",
                     venue=str(venue),
-                    credential_lease=lease,
                 ),
             )
 

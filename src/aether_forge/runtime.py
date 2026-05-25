@@ -346,15 +346,7 @@ class RuntimeSession:
             # Prevents kill-switch bypass via MCP tools or other channels that
             # don't go through X402Client._preflight().
             # (Flagged as HIGH by AI safety audit — MCP could make direct HTTP calls.)
-            halt_path = getattr(self, "_halt_path", None)
-            if halt_path is None and hasattr(self, "artifacts"):
-                # Derive halt path from the artifacts directory if available
-                for attr in ("agent_directory", "_agent_directory"):
-                    d = getattr(self, attr, None)
-                    if d:
-                        from pathlib import Path
-                        halt_path = Path(d) / "halt"
-                        break
+            halt_path = self._resolve_halt_path()
             if halt_path and hasattr(halt_path, "exists") and halt_path.exists():
                 entry.lifecycle = StepLifecycle.FAILED
                 entry.message = "Kill switch active — all capability execution blocked."
@@ -446,51 +438,13 @@ class RuntimeSession:
             # adversarial text designed to manipulate the LLM planner.
             # (Flagged as CRITICAL by AI safety audit — prompt injection via
             # MCP tool results and A2A task messages.)
-            sanitized_output = execution_result.output
-            try:
-                from .security import InputSanitizer
-
-                if isinstance(sanitized_output, str):
-                    is_suspicious, matches = InputSanitizer.scan(sanitized_output)
-                    if is_suspicious:
-                        logger.warning(
-                            "Prompt injection detected in capability %s result: %s",
-                            proposal.capability_id,
-                            matches,
-                        )
-                        self._emit_event(
-                            "security.prompt_injection_detected",
-                            severity="warning",
-                            message="Prompt injection detected in capability result.",
-                            step_id=entry.step_id,
-                            capability_id=proposal.capability_id,
-                            details={"matches": list(matches)},
-                        )
-                        sanitized_output = InputSanitizer.sanitize(sanitized_output)
-                elif isinstance(sanitized_output, dict):
-                    sanitized_dict = dict(sanitized_output)
-                    for k, v in sanitized_output.items():
-                        if isinstance(v, str):
-                            is_suspicious, matches = InputSanitizer.scan(v)
-                            if is_suspicious:
-                                logger.warning(
-                                    "Prompt injection detected in capability %s result key '%s': %s",
-                                    proposal.capability_id,
-                                    k,
-                                    matches,
-                                )
-                                self._emit_event(
-                                    "security.prompt_injection_detected",
-                                    severity="warning",
-                                    message="Prompt injection detected in capability result.",
-                                    step_id=entry.step_id,
-                                    capability_id=proposal.capability_id,
-                                    details={"matches": list(matches), "outputKey": k},
-                                )
-                                sanitized_dict[k] = InputSanitizer.sanitize(v)
-                    sanitized_output = sanitized_dict
-            except ImportError as error:
-                logger.debug("Input sanitization unavailable: %s", error)
+            sanitized_output = self._sanitize_capability_output(
+                execution_result.output,
+                proposal=proposal,
+                step_id=entry.step_id,
+            )
+            if entry.execution_result is not None:
+                entry.execution_result["output"] = sanitized_output
 
             self.observations.append({
                 "type": "capability-result",
@@ -569,6 +523,87 @@ class RuntimeSession:
             if capability.get("capabilityId") == capability_id:
                 return capability
         return None
+
+    def _resolve_halt_path(self) -> Path | None:
+        halt_path = getattr(self, "_halt_path", None)
+        if halt_path is not None:
+            return Path(halt_path)
+        if hasattr(self, "artifacts") and getattr(self.artifacts, "directory_path", None):
+            return self.artifacts.directory_path / "halt"
+        for attr in ("agent_directory", "_agent_directory"):
+            directory = getattr(self, attr, None)
+            if directory:
+                return Path(directory) / "halt"
+        return None
+
+    def _sanitize_capability_output(
+        self,
+        value: Any,
+        *,
+        proposal: StepProposal,
+        step_id: str,
+        path: str = "output",
+    ) -> Any:
+        try:
+            from .security import InputSanitizer
+        except ImportError as error:
+            logger.debug("Input sanitization unavailable: %s", error)
+            return value
+
+        if isinstance(value, str):
+            is_suspicious, matches = InputSanitizer.scan(value)
+            if not is_suspicious:
+                return value
+            output_key = path.removeprefix("output.")
+            if path.startswith("output.") and "." not in output_key and "[" not in output_key:
+                logger.warning(
+                    "Prompt injection detected in capability %s result key '%s': %s",
+                    proposal.capability_id,
+                    output_key,
+                    matches,
+                )
+                details: dict[str, Any] = {"matches": list(matches), "outputKey": output_key}
+            else:
+                logger.warning(
+                    "Prompt injection detected in capability %s result path '%s': %s",
+                    proposal.capability_id,
+                    path,
+                    matches,
+                )
+                details = {"matches": list(matches), "outputPath": path}
+            self._emit_event(
+                "security.prompt_injection_detected",
+                severity="warning",
+                message="Prompt injection detected in capability result.",
+                step_id=step_id,
+                capability_id=proposal.capability_id,
+                details=details,
+            )
+            return InputSanitizer.sanitize(value)
+
+        if isinstance(value, dict):
+            return {
+                key: self._sanitize_capability_output(
+                    nested,
+                    proposal=proposal,
+                    step_id=step_id,
+                    path=f"{path}.{key}",
+                )
+                for key, nested in value.items()
+            }
+
+        if isinstance(value, list):
+            return [
+                self._sanitize_capability_output(
+                    nested,
+                    proposal=proposal,
+                    step_id=step_id,
+                    path=f"{path}[{index}]",
+                )
+                for index, nested in enumerate(value)
+            ]
+
+        return value
 
     def _current_environment(self) -> str:
         return self.artifacts.agent_spec.get("environmentContract", {}).get(

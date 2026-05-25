@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import shlex
 from pathlib import Path
@@ -14,15 +13,6 @@ import aether_forge.cli as cli_module
 from aether_forge.cli import main
 from aether_forge.crypto import MockCryptoExecutionRouter
 from aether_forge.generator import FastGenerateRequest, generate_fast_artifact_set
-
-# Tests that hit real external networks (Binance, etc.) are skipped in CI
-# because public exchange APIs geo-block CI runners (HTTP 451). Run them
-# locally where outbound HTTPS works:
-#     RUN_NETWORK_TESTS=1 pytest tests/test_cli.py
-_skip_network = pytest.mark.skipif(
-    os.environ.get("RUN_NETWORK_TESTS", "") == "",
-    reason="set RUN_NETWORK_TESTS=1 to enable (hits external APIs that geo-block CI)",
-)
 from aether_forge.runtime import (
     RuntimeSession,
     SessionStatus,
@@ -191,7 +181,7 @@ def test_run_cli_omits_portfolio_summary_for_general_agents(capsys) -> None:
         rmtree(output_dir)
 
 
-@_skip_network
+@pytest.mark.network
 def test_scaffold_run_cli_accepts_scaffold_live_router_mode() -> None:
     output_dir = Path(mkdtemp(prefix="aether-forge-scaffold-run-"))
 
