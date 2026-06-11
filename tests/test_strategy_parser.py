@@ -117,3 +117,32 @@ def test_multi_token_extraction() -> None:
     assert "BTC" in tokens
     assert "ETH" in tokens
     assert "SOL" in tokens
+
+
+# ---------------------------------------------------------------------------
+# Parse-report coverage
+# ---------------------------------------------------------------------------
+
+OUT_OF_VOCABULARY_STRATEGY = """
+# Delta-Neutral BTC Basis Capture
+
+If perp-spot basis > 20 bps and 1h realized volatility is low: open 0.5 BTC
+spot long and 0.5 BTC perp short. Exit both legs when basis < 10 bps or
+funding flips negative.
+"""
+
+
+def test_parse_report_counts_extracted_rules() -> None:
+    result = parse_strategy_file(SAMPLE_STRATEGY)
+
+    report = result["parse_report"]
+    assert report["entry_rules_extracted"] == 2
+    assert report["parameters_extracted"] == len(result["parameters"])
+    assert report["llm_assist_used"] is False
+
+
+def test_parse_report_flags_zero_rule_extraction() -> None:
+    result = parse_strategy_file(OUT_OF_VOCABULARY_STRATEGY)
+
+    assert result["entry_rules"] == []
+    assert result["parse_report"]["entry_rules_extracted"] == 0

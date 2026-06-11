@@ -190,3 +190,61 @@ def test_generate_fast_writes_scaffold_code_files() -> None:
         py_compile.compile(str(output_dir / "src" / "runtime" / "live_exchange.py"), doraise=True)
     finally:
         rmtree(output_dir)
+
+
+def test_generate_fast_strategy_file_marks_rule_provenance() -> None:
+    output_dir = Path(mkdtemp(prefix="aether-forge-generate-"))
+    strategy_path = output_dir / "input-strategy.md"
+    strategy_path.write_text(
+        "# Basis capture\n\n"
+        "If perp-spot basis > 20 bps: open 0.5 BTC spot long and 0.5 BTC perp short.\n"
+        "Exit when basis < 10 bps.\n",
+        encoding="utf8",
+    )
+
+    try:
+        generated = generate_fast_artifact_set(
+            FastGenerateRequest(
+                name="Basis Provenance Agent",
+                idea="Delta neutral BTC basis capture on spot and perp markets.",
+                output_directory=output_dir,
+                strategy_file=str(strategy_path),
+            )
+        )
+
+        strategy = json.loads((output_dir / "strategy.json").read_text(encoding="utf8"))
+        # No BUY/SELL lines were extractable — the template rules survive,
+        # and that must be visible in the artifact and the summary card.
+        assert strategy["entry_rules_provenance"] == "template_default"
+        assert strategy["parse_report"]["entry_rules_extracted"] == 0
+        assert generated.agent_summary.strategy_rules_source == "template_default"
+    finally:
+        rmtree(output_dir)
+
+
+def test_generate_fast_strategy_file_with_rules_marks_file_provenance() -> None:
+    output_dir = Path(mkdtemp(prefix="aether-forge-generate-"))
+    strategy_path = output_dir / "input-strategy.md"
+    strategy_path.write_text(
+        "# Momentum\n\n"
+        "- BUY when: momentum turns bearish and price dips 0.3%\n"
+        "- SELL when: momentum turns bullish and price rips 0.3%\n",
+        encoding="utf8",
+    )
+
+    try:
+        generated = generate_fast_artifact_set(
+            FastGenerateRequest(
+                name="Momentum Provenance Agent",
+                idea="Momentum swing trading agent for BTC.",
+                output_directory=output_dir,
+                strategy_file=str(strategy_path),
+            )
+        )
+
+        strategy = json.loads((output_dir / "strategy.json").read_text(encoding="utf8"))
+        assert strategy["entry_rules_provenance"] == "strategy_file"
+        assert strategy["parse_report"]["entry_rules_extracted"] == 2
+        assert generated.agent_summary.strategy_rules_source == "strategy_file"
+    finally:
+        rmtree(output_dir)
