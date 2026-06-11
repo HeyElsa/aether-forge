@@ -336,6 +336,79 @@ export interface ArtifactRef {
   artifactId: string;
   artifactVersion: string;
 }
+/**
+ * Evidence-backed reputation snapshot written after each agent run, optionally extended with confidence, window, identity-binding, claims, and publication blocks (docs/specs/agent-reputation.md). The v0 runtime record validates as-is; extension blocks are additive.
+ */
+export interface ReputationRecord {
+  kind: "aether-forge/reputation-record";
+  version: string;
+  artifactSetId?: string | null;
+  agentName?: string | null;
+  environment?: "sandbox" | "paper" | "canary-live" | "production" | null;
+  snapshot: {
+    score: number;
+    tier: "strong" | "developing" | "weak";
+    components: {
+      [k: string]: {
+        score: number;
+        weight: number;
+      };
+    };
+    unobserved: string[];
+    /**
+     * Raw counts the components were computed from, embedded for recomputability.
+     */
+    inputs: {
+      [k: string]: unknown;
+    };
+    computedAt: string;
+    [k: string]: unknown;
+  };
+  scorer: string;
+  /**
+   * v1 extension — evidence-volume confidence; tier labels are gated on this.
+   */
+  confidence?: {
+    value: number;
+    basis?: string;
+  };
+  /**
+   * v1 extension — the contiguous evidence window the published aggregate covers.
+   */
+  window?: {
+    from?: string;
+    to?: string;
+    runs?: number;
+    contiguous?: boolean;
+  };
+  /**
+   * v1 extension — binds the snapshot to the agent identity; required for any published record.
+   */
+  identity?: {
+    capabilitiesHash: string;
+    agentAddress?: string;
+    attestationRef?: string;
+    signature?: string;
+  };
+  /**
+   * v1 extension — claimed-vs-verified performance triples. ZK-ready via method: zk-proof.
+   */
+  claims?: {
+    metric: string;
+    claimed: number;
+    verified?: number | null;
+    method: "replay-ledger" | "onchain" | "attestor-audit" | "zk-proof";
+    proofRef?: string;
+  }[];
+  /**
+   * v1 extension — where this record was/will be published.
+   */
+  publication?: {
+    target: "local" | "erc8004" | "hosted-index";
+    txRef?: string;
+  };
+  [k: string]: unknown;
+}
 export interface ActiveComparisonContract {
   comparisonId: string;
   evaluatorVersion: string;
