@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/runtime/delegated-signer.schema.json",
+  "title": "Aether Forge Delegated Signer Declaration",
+  "description": "Declarative shape for configuring a signer that fulfills the DelegatedSigner protocol (`aether_forge.crypto.signers`). v0.22.0+ (Sprint 2.3 / FP-3). Used by hosted-marketplace patterns where the agent's own OWS wallet is NOT the EIP-3009 signer (e.g. a browser-side wallet via relay, an HSM-backed delegated secret, or a constrained session key on top of any of the above).",
+  "type": "object",
+  "required": ["kind"],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "description": "Discriminator for the signer implementation. `ows` is the agent-owned OWS wallet (legacy default). `browser-relay` POSTs typed-data payloads to a user-configured HTTP endpoint and expects {\"signature\": \"0x…\"} back. `delegated-secret` resolves a signing callable from a CredentialResolver lease. `mock` is for tests only.",
+      "type": "string",
+      "enum": ["ows", "browser-relay", "delegated-secret", "mock"]
+    },
+    "owsAgentDirectory": {
+      "description": "Required when kind=ows. Path to the forge-provisioned agent directory whose wallet performs the signing.",
+      "type": "string"
+    },
+    "browserRelayUrl": {
+      "description": "Required when kind=browser-relay. HTTPS URL that accepts POST {typedData, intent} and returns {signature}.",
+      "type": "string",
+      "format": "uri"
+    },
+    "browserRelayAuthHeader": {
+      "description": "Optional Authorization header forwarded to the relay (e.g. `Bearer sk_relay_…`).",
+      "type": "string"
+    },
+    "browserRelayTimeoutSeconds": {
+      "type": "number",
+      "minimum": 0,
+      "default": 30
+    },
+    "credentialHandleId": {
+      "description": "Required when kind=delegated-secret. The handle id resolved by CredentialResolver to fetch the actual signing callable.",
+      "type": "string"
+    },
+    "credentialEnvironment": {
+      "description": "Environment passed to CredentialResolver.resolve. Defaults to the runtime session's environment when omitted.",
+      "type": "string",
+      "enum": ["local", "sandbox", "paper", "canary-live", "production"]
+    },
+    "sessionKey": {
+      "description": "Optional SessionKeyConstrainedSigner wrapper applied around the chosen inner signer. Required when the agent's deployment profile is staging or production and the signer is not already inherently scoped.",
+      "type": "object",
+      "required": ["keyId", "walletAddress"],
+      "properties": {
+        "keyId": { "type": "string" },
+        "walletAddress": { "type": "string" },
+        "allowedChains": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "allowedContracts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "maxSpendPerTxUsd": { "type": "number", "minimum": 0 },
+        "maxSpendPerDayUsd": { "type": "number", "minimum": 0 },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "ows" } }, "required": ["kind"] },
+      "then": { "required": ["owsAgentDirectory"] }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "browser-relay" } }, "required": ["kind"] },
+      "then": { "required": ["browserRelayUrl"] }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "delegated-secret" } }, "required": ["kind"] },
+      "then": { "required": ["credentialHandleId"] }
+    }
+  ]
+}
