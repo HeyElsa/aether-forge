@@ -98,6 +98,8 @@ pip install 'aether-forge[security]'    # cryptography for encrypted backups
 pip install aether-forge                # Core only — heuristic planner, no extras
 ```
 
+> **Have Foundry installed?** Its Ethereum tool is also named `forge`, and PATH order decides which one wins. Aether Forge installs a second, collision-free entry point — `aether` — that is the identical CLI: `aether doctor`, `aether generate-fast`, and every other `forge …` command in these docs works as `aether …`.
+
 ### TypeScript SDK (v0.23.0+)
 
 For JS / TS / browser / edge consumers, the companion `@aether-forge/sdk` package ships validators + types + the cross-language planner-output parser. Lives under [`sdk-ts/`](./sdk-ts/) in this repo, with docs in [`docs-site/src/content/reference/typescript-sdk.mdx`](./docs-site/src/content/reference/typescript-sdk.mdx). Conforms to the same JSON schemas as the Python core.
