@@ -457,6 +457,19 @@ forge elsa-list --category perpetuals
 
 Skills auto-map to forge capabilities with correct `kind`, `riskLevel`, `effectSemantics`, and `requiredApproval`. Side-effecting skills (execute-swap, open-perp) require policy approval.
 
+### Drive Forge from your coding agent
+
+The same standard works in the other direction: this repo ships a skill that teaches any SKILL.md-compatible harness (Claude Code, Cursor, and friends) to drive the full Forge lifecycle — generate from a strategy file, validate, eval, run, read `planner.fallback` events, and promote — with the common failure modes baked in.
+
+```bash
+# Claude Code
+cp -r skills/forge-agent-builder ~/.claude/skills/
+
+# then in any session: "turn my strategy.md into a paper-trading forge agent"
+```
+
+See [`skills/forge-agent-builder/SKILL.md`](./skills/forge-agent-builder/SKILL.md).
+
 ---
 
 ## Wallet
