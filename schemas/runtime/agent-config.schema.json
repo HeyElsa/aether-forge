@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/runtime/agent-config.schema.json",
+  "title": "Aether Forge Agent Config (aether-forge.json)",
+  "description": "Per-agent runtime configuration baked at generation time by `forge generate-fast`. Read by every CLI command that resolves planner / runtime / memory settings. Permissive on unknown top-level keys so user-managed sections (e.g. `mcp_servers`, `adapters`) can extend the contract without breaking validation; strict on the v0.21.0+ provenance fields the framework writes itself.",
+  "type": "object",
+  "properties": {
+    "deploymentProfile": {
+      "description": "Risk tier the agent will run under (v0.22.0+, FP-2 deepening). `local` (default) tolerates autodetected planners and heuristic fallback; `staging` requires explicit planner; `production` is strict — `forge doctor` fails when planner.source=autodetected or planner.mode=heuristic.",
+      "type": "string",
+      "enum": ["local", "staging", "production"],
+      "default": "local"
+    },
+    "planner": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Planner backend. `heuristic` is the safe fallback (no LLM); the cloud modes (`anthropic`/`openai`/`gemini`/`openrouter`) and `ollama` are LLM-driven; `function-call` and `openai-compatible` are pluggable provider shims; `static` reads a fixture file (test only).",
+          "type": "string",
+          "enum": [
+            "heuristic",
+            "static",
+            "openai-compatible",
+            "function-call",
+            "anthropic",
+            "gemini",
+            "openai",
+            "openrouter",
+            "ollama"
+          ]
+        },
+        "model": { "type": "string", "description": "Provider-specific model id." },
+        "baseUrl": { "type": "string", "format": "uri", "description": "Override the provider base URL." },
+        "apiKey": { "type": "string", "description": "Direct API key (prefer apiKeyEnv in committed configs)." },
+        "apiKeyEnv": { "type": "string", "description": "Name of the env var that holds the API key." },
+        "staticResponseFile": { "type": "string", "description": "Path to a JSON file for the static planner mode." },
+        "source": {
+          "description": "Provenance of the planner choice (v0.21.0+). `explicit` = operator passed `--planner-mode` or set `AETHER_FORGE_PLANNER_MODE`; `autodetected` = `cli._autodetect_planner` picked it.",
+          "type": "string",
+          "enum": ["explicit", "autodetected"]
+        },
+        "detectedAt": {
+          "description": "ISO-8601 timestamp at which autodetect ran. Present only when source=autodetected.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "toolMode": {
+          "description": "When true, the planner uses provider-native tool-use (Anthropic tool_use / OpenAI function_calling) instead of string-parsed JSON. Sprint 2.1 / FP-1 deepening. Default false.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "cryptoRouter": {
+          "type": "string",
+          "enum": ["mock", "public-market-data", "paper-trading", "sim-wallet", "ows-wallet", "scaffold-live"],
+          "default": "mock"
+        }
+      },
+      "additionalProperties": true
+    },
+    "memory": { "type": "object", "additionalProperties": true },
+    "security": { "type": "object", "additionalProperties": true },
+    "market_data": { "type": "object", "additionalProperties": true },
+    "adapters": { "type": "object", "additionalProperties": true },
+    "mcp_servers": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": true
+}
