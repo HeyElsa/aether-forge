@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import py_compile
+from datetime import UTC, datetime
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
@@ -188,5 +189,50 @@ def test_generate_fast_writes_scaffold_code_files() -> None:
         py_compile.compile(str(output_dir / "src" / "runtime" / "run_agent.py"), doraise=True)
         py_compile.compile(str(output_dir / "src" / "runtime" / "wallet.py"), doraise=True)
         py_compile.compile(str(output_dir / "src" / "runtime" / "live_exchange.py"), doraise=True)
+    finally:
+        rmtree(output_dir)
+
+
+def test_generated_artifacts_stamp_real_provenance_timestamp() -> None:
+    output_dir = Path(mkdtemp(prefix="aether-forge-generate-"))
+
+    try:
+        generate_fast_artifact_set(
+            FastGenerateRequest(
+                name="Provenance Agent",
+                idea="read an input and report a short summary",
+                output_directory=output_dir,
+            )
+        )
+
+        spec = json.loads((output_dir / "agent-spec.json").read_text(encoding="utf8"))
+        created_at = datetime.fromisoformat(spec["provenance"]["createdAt"])
+
+        assert created_at.tzinfo is not None
+        age_seconds = abs((datetime.now(UTC) - created_at).total_seconds())
+        assert age_seconds < 300, (
+            f"provenance.createdAt should be generation time, got {created_at.isoformat()}"
+        )
+    finally:
+        rmtree(output_dir)
+
+
+def test_generated_makefile_test_target_uses_module_pytest() -> None:
+    output_dir = Path(mkdtemp(prefix="aether-forge-generate-"))
+
+    try:
+        generate_fast_artifact_set(
+            FastGenerateRequest(
+                name="Makefile Agent",
+                idea="read an input and report a short summary",
+                output_directory=output_dir,
+            )
+        )
+
+        makefile = (output_dir / "Makefile").read_text(encoding="utf8")
+
+        assert "PYTHON ?= python3" in makefile
+        assert "$(PYTHON) -m pytest tests/ -v" in makefile
+        assert "\n\tpytest tests/" not in makefile
     finally:
         rmtree(output_dir)
