@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/artifacts/reputation-record.schema.json",
+  "description": "Evidence-backed reputation snapshot written after each agent run, optionally extended with confidence, window, identity-binding, claims, and publication blocks (docs/specs/agent-reputation.md). The v0 runtime record validates as-is; extension blocks are additive.",
+  "type": "object",
+  "required": [
+    "kind",
+    "version",
+    "snapshot",
+    "scorer"
+  ],
+  "properties": {
+    "kind": {
+      "const": "aether-forge/reputation-record"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "artifactSetId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "agentName": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "environment": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "sandbox",
+        "paper",
+        "canary-live",
+        "production",
+        null
+      ]
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "score",
+        "tier",
+        "components",
+        "unobserved",
+        "inputs",
+        "computedAt"
+      ],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "strong",
+            "developing",
+            "weak"
+          ]
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "score",
+              "weight"
+            ],
+            "properties": {
+              "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "weight": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "unobserved": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inputs": {
+          "type": "object",
+          "description": "Raw counts the components were computed from, embedded for recomputability."
+        },
+        "computedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "scorer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "object",
+      "description": "v1 extension — evidence-volume confidence; tier labels are gated on this.",
+      "required": [
+        "value"
+      ],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "basis": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "window": {
+      "type": "object",
+      "description": "v1 extension — the contiguous evidence window the published aggregate covers.",
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contiguous": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "identity": {
+      "type": "object",
+      "description": "v1 extension — binds the snapshot to the agent identity; required for any published record.",
+      "required": [
+        "capabilitiesHash"
+      ],
+      "properties": {
+        "capabilitiesHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "agentAddress": {
+          "type": "string"
+        },
+        "attestationRef": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "claims": {
+      "type": "array",
+      "description": "v1 extension — claimed-vs-verified performance triples. ZK-ready via method: zk-proof.",
+      "items": {
+        "type": "object",
+        "required": [
+          "metric",
+          "claimed",
+          "method"
+        ],
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "claimed": {
+            "type": "number"
+          },
+          "verified": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "replay-ledger",
+              "onchain",
+              "attestor-audit",
+              "zk-proof"
+            ]
+          },
+          "proofRef": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "publication": {
+      "type": "object",
+      "description": "v1 extension — where this record was/will be published.",
+      "required": [
+        "target"
+      ],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": [
+            "local",
+            "erc8004",
+            "hosted-index"
+          ]
+        },
+        "txRef": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

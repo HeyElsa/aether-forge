@@ -24,6 +24,7 @@ import researchRecordSchema from "../../../src/aether_forge/schemas/artifacts/re
 import promotionRecordSchema from "../../../src/aether_forge/schemas/artifacts/promotion-record.schema.json" with { type: "json" };
 import memoryRecordSchema from "../../../src/aether_forge/schemas/artifacts/memory-record.schema.json" with { type: "json" };
 import scaffoldManifestSchema from "../../../src/aether_forge/schemas/artifacts/scaffold-manifest.schema.json" with { type: "json" };
+import reputationRecordSchema from "../../../src/aether_forge/schemas/artifacts/reputation-record.schema.json" with { type: "json" };
 
 // Common schemas — referenced by artifact schemas via $id URLs, so they MUST
 // be addSchema'd to the ajv instance up front for cross-refs to resolve.
@@ -51,6 +52,7 @@ import type {
   MemoryRecord,
   ScaffoldManifest,
   MigrationContract,
+  ReputationRecord,
 } from "../schemas/generated/index.js";
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
@@ -80,6 +82,7 @@ for (const schema of [
   promotionRecordSchema,
   memoryRecordSchema,
   scaffoldManifestSchema,
+  reputationRecordSchema,
 ] as Array<{ $id?: string }>) {
   if (schema.$id && !ajv.getSchema(schema.$id)) {
     ajv.addSchema(schema as object);
@@ -108,6 +111,7 @@ export const validateResearchRecord = buildValidator<ResearchRecord>(researchRec
 export const validatePromotionRecord = buildValidator<PromotionRecord>(promotionRecordSchema);
 export const validateMemoryRecord = buildValidator<MemoryRecord>(memoryRecordSchema);
 export const validateScaffoldManifest = buildValidator<ScaffoldManifest>(scaffoldManifestSchema);
+export const validateReputationRecord = buildValidator<ReputationRecord>(reputationRecordSchema);
 export const validateMigrationContract = buildValidator<MigrationContract>(migrationContractSchema);
 export const validatePlannerOutput = buildValidator<unknown>(plannerOutputSchema);
 export const validateDelegatedSigner = buildValidator<unknown>(delegatedSignerSchema);

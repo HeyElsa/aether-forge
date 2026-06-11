@@ -1,0 +1,37 @@
+{
+  "kind": "aether-forge/reputation-record",
+  "version": "0.1.0",
+  "artifactSetId": "aset_basis-trader_4c694942",
+  "agentName": "Basis Trader",
+  "environment": "sandbox",
+  "snapshot": {
+    "score": 100.0,
+    "tier": "strong",
+    "components": {
+      "reliability": {
+        "score": 100.0,
+        "weight": 0.5
+      },
+      "follow_through": {
+        "score": 100.0,
+        "weight": 0.5
+      }
+    },
+    "unobserved": [
+      "trading"
+    ],
+    "inputs": {
+      "ticksTotal": 2,
+      "ticksComplete": 2,
+      "ticksFailed": 0,
+      "stepsExecutedTotal": 5,
+      "approvalsPendingTotal": 0,
+      "tradingObserved": false,
+      "initialBalanceUsd": null,
+      "finalBalanceUsd": null,
+      "realizedPnlUsd": null
+    },
+    "computedAt": "2026-06-11T21:47:11.720983+00:00"
+  },
+  "scorer": "DefaultReputationScorer"
+}
