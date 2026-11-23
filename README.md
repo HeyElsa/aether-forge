@@ -893,12 +893,12 @@ The `Forge` facade covers the common generate/validate/evaluate/run path. The st
 
 ## Documentation
 
-Full documentation site lives at `docs-site/` (Nextra v4, deployable to Vercel):
+The site at `docs-site/` (Next.js, deployed to Vercel) currently serves a "V2 coming soon" page, and the old `/docs` URLs redirect to it. The documentation sources remain under `docs-site/src/content/` and are linked below:
 
 ```bash
 cd docs-site
 npm install
-npm run dev   # → http://localhost:3000
+npm run dev   # → http://localhost:3000 (coming-soon page)
 ```
 
 Or browse the markdown directly:

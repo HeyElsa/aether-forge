@@ -1,0 +1,203 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fafafa;
+  --fg: #1a1a1a;
+  --muted: #5c5f66;
+  --line: #dcdde1;
+  --accent: #0a6cd6;
+  --glow: rgba(10, 132, 255, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08090c;
+    --fg: #f5f5f7;
+    --muted: #9a9ea8;
+    --line: #23262d;
+    --accent: #4da3ff;
+    --glow: rgba(10, 132, 255, 0.2);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.soon {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Soft light behind the mark, over a faint diagonal lattice echoing the logo. */
+.soon-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60rem 34rem at 50% 34%, var(--glow), transparent 70%),
+    repeating-linear-gradient(45deg, var(--line) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(-45deg, var(--line) 0 1px, transparent 1px 44px);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 38%, #000 0%, transparent 68%);
+  mask-image: radial-gradient(ellipse at 50% 38%, #000 0%, transparent 68%);
+  opacity: 0.7;
+}
+
+.soon-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 1.5rem 2rem;
+  text-align: center;
+}
+
+.soon-logo {
+  display: block;
+  width: 88px;
+  height: 88px;
+}
+
+.soon-wordmark {
+  margin: 1.25rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.soon-title {
+  margin: 1.5rem 0 0;
+  font-size: clamp(2.25rem, 7.5vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.soon-v2 {
+  color: var(--accent);
+}
+
+.soon-lede {
+  max-width: 34rem;
+  margin: 1.5rem 0 0;
+  font-size: clamp(1rem, 2.4vw, 1.1875rem);
+  line-height: 1.6;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.soon-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 2.25rem 0 0;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.soon-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: soon-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes soon-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soon-dot {
+    animation: none;
+  }
+}
+
+.soon-link {
+  margin-top: 1.75rem;
+  color: var(--fg);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 0.3em;
+  transition: text-decoration-color 0.15s ease;
+}
+
+.soon-link:hover {
+  text-decoration-color: var(--accent);
+}
+
+.soon-link:focus-visible,
+.soon-by:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.soon-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.soon-sep {
+  opacity: 0.4;
+}
+
+.soon-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.soon-by img {
+  display: block;
+}
