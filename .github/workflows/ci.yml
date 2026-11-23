@@ -63,10 +63,13 @@ jobs:
           trap 'kill $pid 2>/dev/null || true' EXIT
 
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost:3010/docs/getting-started >/tmp/aether-forge-docs.html; then
-              curl -fsS http://localhost:3010/ >/tmp/aether-forge-docs-home.html
-              curl -fsS http://localhost:3010/docs/guides/upgrading >/tmp/aether-forge-docs-upgrading.html
-              curl -fsS http://localhost:3010/docs/features/x402-payments >/tmp/aether-forge-docs-x402.html
+            if curl -fsS http://localhost:3010/ >/tmp/aether-forge-docs-home.html; then
+              # The site is a V2 coming-soon page; old docs and media URLs redirect to it.
+              grep -q "is coming soon" /tmp/aether-forge-docs-home.html
+              for path in /docs /docs/getting-started /docs/features/x402-payments /videos/00-hero.mp4; do
+                location=$(curl -fsS -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:3010$path")
+                test "$location" = "307 http://localhost:3010/"
+              done
               exit 0
             fi
             if ! kill -0 "$pid" 2>/dev/null; then
