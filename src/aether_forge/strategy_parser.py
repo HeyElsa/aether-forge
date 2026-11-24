@@ -35,12 +35,22 @@ def parse_strategy_file(content: str, *, llm_model: Any = None) -> dict[str, Any
     result["success_metrics"] = _extract_success_metrics(content)
 
     # Phase 2: LLM extraction (optional, fills gaps)
+    llm_assist_used = False
     if llm_model is not None:
         try:
             llm_result = _llm_extract(content, llm_model)
             result = _merge_results(result, llm_result)
+            llm_assist_used = True
         except Exception as error:
             logger.debug("LLM strategy parsing failed: %s", error)
+
+    # Coverage report so callers can tell extraction from silent fallback.
+    result["parse_report"] = {
+        "parameters_extracted": len(result["parameters"]),
+        "entry_rules_extracted": len(result["entry_rules"]),
+        "success_metrics_extracted": len(result["success_metrics"]),
+        "llm_assist_used": llm_assist_used,
+    }
 
     logger.info(
         "Strategy parsed: %d parameters, %d entry rules, %d success metrics",

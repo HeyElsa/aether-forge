@@ -81,6 +81,7 @@ class AgentSummary:
     success_metrics: dict[str, float] = field(default_factory=dict)
     output_directory: str = ""
     has_strategy_file: bool = False
+    strategy_rules_source: str = "template"
     has_dockerfile: bool = True
 
     def print_card(self) -> None:
@@ -129,7 +130,13 @@ class AgentSummary:
         print(sp)
         auto_label = "Self-improving (autoresearch)" if self.autonomous else "Fixed (manual edits only)"
         print(r("Mode:", auto_label))
-        print(r("Strategy:", f"v{self.strategy_version}" + (" (from file)" if self.has_strategy_file else " (defaults)")))
+        if not self.has_strategy_file:
+            strategy_label = f"v{self.strategy_version} (defaults)"
+        elif self.strategy_rules_source == "strategy_file":
+            strategy_label = f"v{self.strategy_version} (from file)"
+        else:
+            strategy_label = f"v{self.strategy_version} (file params — TEMPLATE rules!)"
+        print(r("Strategy:", strategy_label))
         print(r("Environment:", self.environment))
 
         # Show key strategy parameters if available
@@ -330,8 +337,24 @@ def generate_fast_artifact_set(request: FastGenerateRequest) -> GeneratedArtifac
             strategy_data["parameters"].update(parsed["parameters"])
         if parsed.get("entry_rules"):
             strategy_data["entry_rules"] = parsed["entry_rules"]
+            strategy_data["entry_rules_provenance"] = "strategy_file"
+        else:
+            # The template's default rules survive untouched — make that
+            # impossible to miss, or the agent silently trades a different
+            # strategy than the one in the user's file.
+            strategy_data["entry_rules_provenance"] = "template_default"
+            logger.warning(
+                "No entry/exit rules could be extracted from %s — the agent keeps "
+                "the TEMPLATE entry rules in strategy.json, which may not match "
+                "your strategy. Rules are recognized from lines like "
+                "'BUY when: <condition>' / 'SELL if: <condition>'. "
+                "Review strategy.json before running.",
+                request.strategy_file,
+            )
         if parsed.get("success_metrics"):
             strategy_data["success_metrics"].update(parsed["success_metrics"])
+        if parsed.get("parse_report"):
+            strategy_data["parse_report"] = parsed["parse_report"]
         strategy_path.write_text(json.dumps(strategy_data, indent=2) + "\n", encoding="utf8")
 
         # Embed strategy description into agent-spec
@@ -420,6 +443,7 @@ def generate_fast_artifact_set(request: FastGenerateRequest) -> GeneratedArtifac
         success_metrics=strategy_data.get("success_metrics", {}),
         output_directory=str(request.output_directory),
         has_strategy_file=request.strategy_file is not None,
+        strategy_rules_source=strategy_data.get("entry_rules_provenance", "template"),
     )
 
     return GeneratedArtifactSet(
