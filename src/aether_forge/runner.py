@@ -65,6 +65,8 @@ class RunnerConfig:
     # Reliability — per-tick timeout (0 = no timeout). Prevents hung LLM calls
     # from stalling the runtime indefinitely.
     tick_timeout_seconds: float = 120.0
+    # Reputation — write reputation-record.json after each run
+    emit_reputation_record: bool = True
     # Circuit breaker — pause for cooldown if N consecutive ticks fail.
     circuit_breaker_threshold: int = 5
     circuit_breaker_cooldown_seconds: float = 60.0
@@ -297,6 +299,7 @@ class AgentRunner:
             self._stop_health_server()
             self._stop_a2a_server()
             self._cleanup_pid_file()
+            self._write_reputation_record()
             self._print_summary()
 
         return self._tick_history
@@ -527,6 +530,51 @@ class AgentRunner:
             statuses[t.session_status] = statuses.get(t.session_status, 0) + 1
         status_str = ", ".join(f"{k}={v}" for k, v in sorted(statuses.items()))
         print(f"\n  {total} ticks completed: {status_str}")
+        reputation = self._agent_status.get("reputation")
+        if reputation:
+            print(
+                f"  Reputation: {reputation['score']:.1f} ({reputation['tier']})"
+                f" — reputation-record.json"
+            )
+
+    def _write_reputation_record(self) -> None:
+        """Score the finished run and persist reputation-record.json.
+
+        Best-effort by design: a reputation failure must never take down a
+        run that otherwise succeeded.
+        """
+        if not self.config.emit_reputation_record or not self._tick_history:
+            return
+        try:
+            from .reputation import (
+                DefaultReputationScorer,
+                build_reputation_record,
+                collect_inputs_from_run,
+                write_reputation_record,
+            )
+
+            inputs = collect_inputs_from_run(
+                self._tick_history,
+                self._working_set,
+                initial_balance_usd=getattr(self.config, "initial_balance_usd", 10_000.0),
+            )
+            snapshot = DefaultReputationScorer().score(inputs)
+            record = build_reputation_record(
+                snapshot,
+                artifact_set_id=self.artifacts.agent_spec.get("artifactSetId"),
+                agent_name=self.artifacts.agent_spec.get("metadata", {}).get("name"),
+                environment=self.config.environment,
+            )
+            path = write_reputation_record(record, self.artifact_directory)
+            self._agent_status["reputation"] = record["snapshot"]
+            self._emit_event(
+                "reputation.snapshot",
+                message=f"Reputation snapshot: {snapshot.score:.1f} ({snapshot.tier})",
+                details=record["snapshot"],
+            )
+            logger.info("Reputation record written to %s", path)
+        except Exception as error:
+            logger.warning("Failed to write reputation record: %s", error)
 
     # ------------------------------------------------------------------
     # Health server (lightweight HTTP on a background thread)
