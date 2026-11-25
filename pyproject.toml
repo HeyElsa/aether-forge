@@ -75,6 +75,10 @@ Issues = "https://github.com/HeyElsa/aether-forge/issues"
 
 [project.scripts]
 forge = "aether_forge.cli:main_cli"
+# Foundry (foundry.rs) also installs a binary named `forge`, and the crypto
+# developers this framework targets usually have it. `aether` is the
+# collision-free alias — identical CLI, pick whichever your PATH prefers.
+aether = "aether_forge.cli:main_cli"
 
 # Plugin entry points — third parties extend Aether Forge by declaring entries
 # in these groups in their own pyproject.toml. See docs-site/.../guides/extending.mdx.
