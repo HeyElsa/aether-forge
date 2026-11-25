@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -814,7 +815,7 @@ def _common_envelope(artifact_set_id: str, title: str) -> dict[str, Any]:
             "migrationRef": None,
         },
         "provenance": {
-            "createdAt": "2026-04-06T12:00:00Z",
+            "createdAt": datetime.now(UTC).isoformat(),
             "sourceMode": "fast",
         },
     }
@@ -1907,6 +1908,9 @@ def _project_dockerignore() -> str:
 def _project_makefile(slug: str) -> str:
     return (
         "# Generated agent Makefile — common workflows\n"
+        "# PYTHON pins test runs to the interpreter that has aether-forge\n"
+        "# installed (override: make test PYTHON=.venv/bin/python)\n"
+        "PYTHON ?= python3\n\n"
         ".PHONY: help validate eval-pack test run-paper run-sandbox run-live "
         "doctor halt resume clean docker-build docker-run\n\n"
         "help:\n"
@@ -1928,7 +1932,7 @@ def _project_makefile(slug: str) -> str:
         "eval-pack:\n"
         "\tforge eval-pack .\n\n"
         "test:\n"
-        "\tpytest tests/ -v\n\n"
+        "\t$(PYTHON) -m pytest tests/ -v\n\n"
         "run-paper:\n"
         "\tforge run . --auto-approve --environment sandbox --mode paper --interval 30 "
         "--health-port 8080 --json-log ./logs/agent.jsonl\n\n"
