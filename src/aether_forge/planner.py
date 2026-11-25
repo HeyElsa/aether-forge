@@ -12,6 +12,7 @@ from typing import Any, Protocol
 logger = logging.getLogger(__name__)
 
 from .memory import MemoryQuery
+from .models import error_body_preview
 from .prompting import build_planning_prompt_from_session
 from .runtime import RuntimeSession, StepKind, StepProposal
 
@@ -176,8 +177,14 @@ class PromptDrivenPlanner:
         try:
             response = self.model.complete(prompt)
         except Exception as error:
-            self._record_planner_failure(session, kind="model-error", detail=repr(error), response=None)
-            logger.warning("Prompt-driven planner model raised, falling back to heuristic")
+            error_body = error_body_preview(error)
+            self._record_planner_failure(
+                session, kind="model-error", detail=repr(error), response=error_body
+            )
+            logger.warning(
+                "Prompt-driven planner model raised, falling back to heuristic%s",
+                f" — provider said: {error_body.splitlines()[0][:160]}" if error_body else "",
+            )
             return self._fallback(session)
 
         try:
@@ -232,8 +239,14 @@ class PromptDrivenPlanner:
         try:
             response = self.model.complete_with_tools(prompt, tools)  # type: ignore[attr-defined]
         except Exception as error:
-            self._record_planner_failure(session, kind="model-error", detail=repr(error), response=None)
-            logger.warning("Tool-mode planner model raised, falling back to heuristic")
+            error_body = error_body_preview(error)
+            self._record_planner_failure(
+                session, kind="model-error", detail=repr(error), response=error_body
+            )
+            logger.warning(
+                "Tool-mode planner model raised, falling back to heuristic%s",
+                f" — provider said: {error_body.splitlines()[0][:160]}" if error_body else "",
+            )
             return self._fallback(session)
 
         translator = FunctionCallTranslator(max_plan_steps=self.max_plan_steps)

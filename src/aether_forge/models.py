@@ -58,6 +58,31 @@ def _retry_after_seconds(error: HTTPError) -> float | None:
         return None
 
 
+def error_body_preview(error: Exception, *, limit: int = 500) -> str | None:
+    """Best-effort body of an HTTP error response, for diagnostics.
+
+    Provider 4xx/5xx bodies usually carry the actionable message ("credit
+    balance is too low", "insufficient_quota", "model not found") that the
+    status line alone hides — without it, every provider failure collapses
+    into an opaque ``HTTPError 400/429``. Returns ``None`` for non-HTTP
+    errors, empty bodies, or any read failure; never raises. Note that
+    reading consumes the underlying response — callers should treat the
+    error as spent afterwards.
+    """
+    if not isinstance(error, HTTPError):
+        return None
+    try:
+        raw = error.read()
+    except Exception:  # noqa: BLE001 — closed/detached file-like ends here
+        return None
+    if not raw:
+        return None
+    text = raw.decode("utf-8", errors="replace").strip()
+    if not text:
+        return None
+    return text if len(text) <= limit else f"{text[:limit]}…"
+
+
 def _backoff_seconds(attempt: int) -> float:
     """Jittered exponential backoff: base * 2^attempt, capped, ±20% jitter."""
     raw = _DEFAULT_BACKOFF_BASE_SECONDS * (2 ** attempt)
@@ -93,9 +118,11 @@ def _with_retry(
             wait = _retry_after_seconds(error)
             if wait is None:
                 wait = _backoff_seconds(attempt)
+            body = error_body_preview(error, limit=160)
             logger.warning(
-                "planning model HTTP %s; retrying in %.2fs (attempt %d/%d)",
+                "planning model HTTP %s%s; retrying in %.2fs (attempt %d/%d)",
                 error.code,
+                f" — {body.splitlines()[0]}" if body else "",
                 wait,
                 attempt + 1,
                 total,
