@@ -36,6 +36,23 @@
       "items": {
         "type": "string"
       }
+    },
+    "transformRef": {
+      "description": "Identifier resolved against `migrations.TransformRegistry` to look up the actual transform callable (v0.22.0+, FP-4). Without this, the migration contract is documentation-only — humans read the transformSteps and apply changes by hand. With it, `MigrationRunner` can execute the transform end-to-end.",
+      "type": "string",
+      "minLength": 1
+    },
+    "policy": {
+      "description": "Execution policy for `MigrationRunner` (v0.22.0+).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lossyOk": {
+          "description": "When false (default), the runner refuses to apply a contract whose `lossyFields` is non-empty. When true, the caller has explicitly acknowledged that fields will be dropped — equivalent to a `_weakens_criteria` override in scope.",
+          "type": "boolean",
+          "default": false
+        }
+      }
     }
   }
 }

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aether-forge.dev/runtime/planner-output.schema.json",
+  "title": "Aether Forge Planner Output",
+  "description": "Pins the JSON shape every planner emits before the runtime translates it into typed StepProposal objects. v0.23.0+ (FP-1, cross-language). The companion `docs/specs/planner-output.md` is the normative behavioral spec for the parser (preamble stripping, balanced-brace recovery, retry semantics); this file is the structural contract any Python or TypeScript planner can validate against. Both the Python `aether_forge.planner._extract_json` recovery path and the TypeScript `@aether-forge/sdk` `parsePlannerOutput` produce values conforming to this schema.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PlannerStep" }
+        }
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "array",
+      "items": { "$ref": "#/$defs/PlannerStep" }
+    }
+  ],
+  "$defs": {
+    "PlannerStep": {
+      "type": "object",
+      "required": ["kind", "description"],
+      "additionalProperties": true,
+      "properties": {
+        "kind": {
+          "description": "One of the five StepKind values. Matches `aether_forge.runtime.StepKind` (Python) and `StepKind` (TypeScript).",
+          "type": "string",
+          "enum": ["reason", "use-capability", "request-approval", "replan", "report-gap"]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capabilityId": {
+          "description": "Required when kind is `use-capability` or `request-approval`. The Python parser also accepts the snake_case alias `capability_id`.",
+          "type": "string"
+        },
+        "capability_id": {
+          "type": "string",
+          "description": "Snake-case alias of `capabilityId` for back-compat with older planners. New planners should emit `capabilityId`."
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Step-specific arguments. For `use-capability` / `request-approval`, payload is forwarded to the capability handler. For `reason` steps, payload may carry `mark_complete: true` to advance session state."
+        }
+      }
+    }
+  }
+}
