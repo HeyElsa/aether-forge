@@ -31,6 +31,7 @@ export {
   validatePromotionRecord,
   validateMemoryRecord,
   validateScaffoldManifest,
+  validateReputationRecord,
   validateMigrationContract,
   validatePlannerOutput,
   validateDelegatedSigner,

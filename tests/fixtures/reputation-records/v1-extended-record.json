@@ -1,0 +1,78 @@
+{
+  "kind": "aether-forge/reputation-record",
+  "version": "0.1.0",
+  "artifactSetId": "aset_basis-trader_4c694942",
+  "agentName": "Basis Trader",
+  "environment": "paper",
+  "snapshot": {
+    "score": 87.5,
+    "tier": "developing",
+    "components": {
+      "reliability": {
+        "score": 100.0,
+        "weight": 0.4
+      },
+      "follow_through": {
+        "score": 75.0,
+        "weight": 0.3
+      },
+      "planner_integrity": {
+        "score": 90.0,
+        "weight": 0.3
+      }
+    },
+    "unobserved": [
+      "trading"
+    ],
+    "inputs": {
+      "ticksTotal": 240,
+      "ticksComplete": 240,
+      "ticksFailed": 0,
+      "stepsExecutedTotal": 1180,
+      "approvalsPendingTotal": 4,
+      "llmPlannedTicks": 216,
+      "tradingObserved": false,
+      "initialBalanceUsd": null,
+      "finalBalanceUsd": null,
+      "realizedPnlUsd": null
+    },
+    "computedAt": "2026-06-11T21:47:11.720983+00:00"
+  },
+  "scorer": "DefaultReputationScorer",
+  "confidence": {
+    "value": 0.79,
+    "basis": "log-depth over 240 ticks across 12 contiguous runs"
+  },
+  "window": {
+    "from": "2026-05-12T00:00:00+00:00",
+    "to": "2026-06-11T00:00:00+00:00",
+    "runs": 12,
+    "contiguous": true
+  },
+  "identity": {
+    "capabilitiesHash": "sha256:9f2b1c4d8e7a6f509f2b1c4d8e7a6f509f2b1c4d8e7a6f509f2b1c4d8e7a6f50",
+    "agentAddress": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+    "attestationRef": "attestation.json",
+    "signature": "0xdeadbeef"
+  },
+  "claims": [
+    {
+      "metric": "realized_pnl_usd_30d",
+      "claimed": 1250.0,
+      "verified": 1187.5,
+      "method": "replay-ledger",
+      "proofRef": "replays/"
+    },
+    {
+      "metric": "sharpe_30d",
+      "claimed": 1.8,
+      "verified": null,
+      "method": "zk-proof",
+      "proofRef": "proofs/sharpe-30d.bin"
+    }
+  ],
+  "publication": {
+    "target": "erc8004",
+    "txRef": "0x0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}
